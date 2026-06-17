@@ -26,7 +26,7 @@ const storage = multer.diskStorage({
     cb(null, `${uniqueSuffix}-${base}${ext}`);
   }
 });
-const MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024; // 50MB
 const allowedUploadExtensions = new Set([
   ".jpg", ".jpeg", ".png", ".gif", ".webp",
   ".pdf", ".txt", ".md", ".csv",
@@ -395,8 +395,10 @@ async function verifyToken(token: string): Promise<{ sub: string } | null> {
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
   const expected = crypto.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
-  if (signature.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  const sigBuffer = Buffer.from(signature, "base64url");
+  const expBuffer = Buffer.from(expected, "base64url");
+  if (sigBuffer.byteLength !== expBuffer.byteLength) return null;
+  if (!crypto.timingSafeEqual(sigBuffer, expBuffer)) return null;
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) return null;
   return parsed;
@@ -1683,24 +1685,12 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
           dbVal.enrolled_at !== e.enrolledAt ||
           dbVal.completed_at !== (e.completedAt || null);
 
-        if (isDirty) {
+        if (isDirty && dbVal) {
+          // Only update completed_at on existing enrollments — status/student_id/course_id
+          // must go through proper payment/admin workflows, not client-side sync
           await client.query(
-            `INSERT INTO enrollments (id, course_id, student_id, status, enrolled_at, completed_at)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (id) DO UPDATE SET
-               course_id = EXCLUDED.course_id,
-               student_id = EXCLUDED.student_id,
-               status = EXCLUDED.status,
-               enrolled_at = EXCLUDED.enrolled_at,
-               completed_at = EXCLUDED.completed_at`,
-            [
-              e.id,
-              e.courseId,
-              e.studentId,
-              e.status,
-              e.enrolledAt,
-              e.completedAt || null
-            ]
+            `UPDATE enrollments SET completed_at = $1 WHERE id = $2`,
+            [e.completedAt || null, e.id]
           );
         }
       }
@@ -1816,7 +1806,7 @@ async function initializeDatabase() {
   await seedAuthUsers(pool);
   await seedCoreLearningData(pool);
   await usersRepository.normalizeSystemUsers(pool);
-  await ensureScheduledSessionsForAllSections(pool);
+  if (process.env.NODE_ENV === "production") await ensureScheduledSessionsForAllSections(pool);
   invalidateStoreCache();
   registerEventHandlers();
   startScheduler();
@@ -3092,6 +3082,10 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["manager", "super_ad
       errors.push({ row, email, reason: "Admins can bulk import student accounts only." });
       continue;
     }
+    if (req.user!.role === "manager" && ["manager", "super_admin"].includes(input.role)) {
+      errors.push({ row, email, reason: "Managers cannot create manager or super_admin accounts." });
+      continue;
+    }
 
     const existing = await usersRepository.findAuthByEmail(pool, email);
     if (existing) {
@@ -3223,6 +3217,13 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["manager", "sup
   const allowedRoles = ["student", "teacher", "manager", "admin", "parent"];
   if (!allowedRoles.includes(role)) {
     return res.status(400).json({ error: "Invalid role value." });
+  }
+
+  if (req.user!.id === req.params.id) {
+    return res.status(403).json({ error: "Cannot change your own role." });
+  }
+  if (req.user!.role === "admin" && !["student", "teacher", "parent"].includes(role)) {
+    return res.status(403).json({ error: "Admins can only assign student, teacher, or parent roles." });
   }
 
   const userRes = await pool.query("SELECT id, email, role FROM users WHERE id = $1", [req.params.id]);
@@ -3558,8 +3559,19 @@ app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["teach
 
 app.post("/api/tuition/pay", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
   const ownerStudentId = req.user!.role === "student" ? req.user!.id : undefined;
-  const result = await financeRepository.payTuition(pool, req.body.feeId, req.body.paidAmount, ownerStudentId);
-  if (!result) return res.status(404).json({ error: "Tuition fee not found." });
+  const client = await pool.connect();
+  let result;
+  try {
+    await client.query("BEGIN");
+    result = await financeRepository.payTuition(client, req.body.feeId, req.body.paidAmount, ownerStudentId);
+    if (!result) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Tuition fee not found." }); }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
   await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);
   res.json(result);
 }));
@@ -3855,6 +3867,13 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  const studentInSession = (await pool.query(
+    `SELECT 1 FROM course_registrations cr
+     JOIN attendance_sessions ats ON ats.section_id = cr.section_id
+     WHERE ats.id = $1 AND cr.student_id = $2 AND cr.status = 'registered'`,
+    [req.body.sessionId, req.body.studentId]
+  )).rows[0];
+  if (!studentInSession) return res.status(403).json({ error: "Student is not registered in this session's class." });
   const existing = (await pool.query(
     "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
     [req.body.sessionId, req.body.studentId]
@@ -3882,7 +3901,7 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
   if (sectionValidation.error) return res.status(sectionValidation.status!).json({ error: sectionValidation.error });
 
   // Generate unique 6-character random uppercase code
-  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const code = crypto.randomBytes(3).toString("hex").toUpperCase();
   // 5 minutes expiry
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
