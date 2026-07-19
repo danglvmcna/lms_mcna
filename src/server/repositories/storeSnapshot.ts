@@ -6,6 +6,7 @@ import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enro
 // In-memory cache variables to optimize server performance
 let cachedSnapshot: any = null;
 let lastCacheTime = 0;
+let cacheGeneration = 0;
 const CACHE_TTL = 15000; // 15 giây TTL dự phòng an toàn
 
 const normalizeDateOnly = (value: any) => {
@@ -52,6 +53,7 @@ const normalizeDateOnly = (value: any) => {
 export function invalidateStoreCache() {
   cachedSnapshot = null;
   lastCacheTime = 0;
+  cacheGeneration++;
 }
 
 export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = false) {
@@ -59,6 +61,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
   if (!forceBypassCache && cachedSnapshot && (now - lastCacheTime < CACHE_TTL)) {
     return cachedSnapshot;
   }
+  const generationAtStart = cacheGeneration;
   const [
     usersRes,
     coursesRes,
@@ -256,8 +259,10 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     teacherAttendance
   };
 
-  cachedSnapshot = snapshot;
-  lastCacheTime = Date.now();
+  if (generationAtStart === cacheGeneration) {
+    cachedSnapshot = snapshot;
+    lastCacheTime = Date.now();
+  }
   return snapshot;
 }
 

@@ -94,8 +94,8 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
   }, [currentUser.id, search, store.notifications, filter, locallyMarkedReadIds]);
 
   const totalUnreadCount = useMemo(() => {
-    return (store.notifications || []).filter(note => note.userId === currentUser.id && !note.isRead).length;
-  }, [currentUser.id, store.notifications]);
+    return (store.notifications || []).filter(note => note.userId === currentUser.id && !note.isRead && !locallyMarkedReadIds.has(note.id)).length;
+  }, [currentUser.id, store.notifications, locallyMarkedReadIds]);
 
   const markRead = async (note: Notification) => {
     if (note.isRead || locallyMarkedReadIds.has(note.id)) return;

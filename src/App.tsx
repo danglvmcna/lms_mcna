@@ -31,7 +31,15 @@ const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
 const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
+      refetchOnWindowFocus: true
+    }
+  }
+});
 
 function AppShell() {
   console.log("APP: AppShell function executing...");
@@ -98,9 +106,25 @@ function AppShell() {
         setStoreData({ ...serverStore });
       })
       .catch(() => {
+        // The session cookie may be invalid/expired but still present in the browser.
+        // Actively clear it (no-auth endpoint) so a leftover cookie can't later trigger
+        // a false "already logged in with another account" error on next login.
+        fetch("/api/auth/force-logout", { method: "POST", credentials: "include" }).catch(() => undefined);
         setCurrentUser(null);
+        setCsrfToken(null);
         sessionStorage.removeItem("e16_lms_active_session");
       });
+  }, []);
+
+  // Trap the browser Back button so it can't navigate away from this single-page app
+  // (there is no client-side router with real history entries to step through instead).
+  useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -392,9 +416,11 @@ function AppShell() {
               isSidebarCollapsed ? "flex-col gap-3" : ""
             }`}>
               <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 bg-indigo-500 border border-white/20 rounded-xl flex items-center justify-center shrink-0 shadow-md">
-                  <GraduationCap className="h-4.5 w-4.5 text-white" />
-                </div>
+                <img
+                  src="/mcna-logo.png"
+                  alt="MCNA Technology School"
+                  className="w-9 h-9 object-contain bg-white rounded-xl p-1 shrink-0 shadow-md"
+                />
                 {!isSidebarCollapsed && (
                   <div>
                     <h1 className="text-sm font-display font-black tracking-widest text-white uppercase leading-none">MCNA LMS</h1>
@@ -663,10 +689,12 @@ function AppShell() {
               <div className="absolute top-[-20%] left-[-20%] w-72 h-72 bg-[#2563eb]/35 rounded-full filter blur-[100px]" />
 
               <div className="flex items-center space-x-2.5 relative z-10 pt-2">
-                <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
-                  <GraduationCap className="h-4 w-4 text-white" />
-                </div>
-                <span className="font-display font-black text-white tracking-widest uppercase text-xs">MCNA LMS INC.</span>
+                <img
+                  src="/mcna-logo.png"
+                  alt="MCNA Technology School"
+                  className="h-9 w-9 object-contain bg-white rounded-lg p-1"
+                />
+                <span className="font-display font-black text-white tracking-widest uppercase text-xs">MCNA LMS</span>
               </div>
 
               <div className="relative z-10 py-12 space-y-4">

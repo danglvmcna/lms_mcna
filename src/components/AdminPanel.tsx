@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
 
 // Import modular sub-components
@@ -69,7 +70,7 @@ function generateClientTemporaryPassword() {
 }
 
 export default function AdminPanel({ currentUser, onLogout, onRefreshData, activeSystem = "SIS", updateStore }: AdminPanelProps) {
-  const { store, isLoading, isError } = useApiStore();
+  const { store, isLoading, isError, refetch } = useApiStore();
 
   // Navigation tab states
   // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
@@ -148,6 +149,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [newStudentProgramId, setNewStudentProgramId] = useState("");
   const [newStudentDepartmentId, setNewStudentDepartmentId] = useState("");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useUnsavedChangesWarning(
+    showAddUserModal && Boolean(newUserEmail.trim() || newUserName.trim() || newUserPassword.trim())
+  );
 
   // Course rejection states
   const [rejectingCourseId, setRejectingCourseId] = useState<string | null>(null);
@@ -466,7 +471,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   return (
     <div className="space-y-6">
       {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
+      {isError && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+          <span>Không thể tải dữ liệu từ server.</span>
+          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1 font-semibold text-red-100 hover:bg-red-500/20">Thử lại</button>
+        </div>
+      )}
       {/* Toast alarms logs alert */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2563eb] border border-blue-400 text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl animate-fade-in animate-bounce">

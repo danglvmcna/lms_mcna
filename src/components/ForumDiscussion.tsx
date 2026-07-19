@@ -29,8 +29,10 @@ export default function ForumDiscussion({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter posts for the current course and section
+  // Normalize sectionId before comparing: server maps course-level posts to `undefined`,
+  // but some callers pass `null` for "no section" — undefined !== null in JS.
   const coursePosts = (store.forumPosts || []).filter(
-    (post: any) => post.courseId === courseId && post.sectionId === sectionId
+    (post: any) => post.courseId === courseId && (post.sectionId ?? null) === (sectionId ?? null)
   );
 
   // Search filter

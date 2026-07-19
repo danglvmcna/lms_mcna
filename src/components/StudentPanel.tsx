@@ -58,7 +58,7 @@ interface StudentPanelProps {
 }
 
 export default function StudentPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS" }: StudentPanelProps) {
-  const { store, isLoading, isError } = useApiStore();
+  const { store, isLoading, isError, refetch } = useApiStore();
 
 
   // Safeguard StudentProfile backfill so it never crashes
@@ -940,7 +940,12 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         {activeSubTab === "certificates" && (
           <div className="space-y-6">
       {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
+      {isError && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+          <span>Không thể tải dữ liệu từ server.</span>
+          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1 font-semibold text-red-100 hover:bg-red-500/20">Thử lại</button>
+        </div>
+      )}
             <h4 className="text-base font-display font-semibold text-white">Chứng nhận của tôi ({store.certificates.filter(c => c.studentId === currentUser.id).length})</h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

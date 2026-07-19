@@ -524,9 +524,15 @@ async function requireAuth(req: AuthRequest, res: express.Response, next: expres
     const token = extractBearerToken(req);
     if (!token) return res.status(401).json({ error: "Missing session." });
     const payload = await verifyToken(token);
-    if (!payload) return res.status(401).json({ error: "Invalid or expired session." });
+    if (!payload) {
+      clearAuthCookie(res);
+      return res.status(401).json({ error: "Invalid or expired session." });
+    }
     const user = await usersRepository.findById(pool, payload.sub);
-    if (!user || !user.isActive) return res.status(401).json({ error: "User is not available." });
+    if (!user || !user.isActive) {
+      clearAuthCookie(res);
+      return res.status(401).json({ error: "User is not available." });
+    }
     req.user = user;
     next();
   } catch (error) {
@@ -2833,6 +2839,7 @@ app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin",
 app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), validateBody(schemas.submitAssignment), asyncHandler(async (req, res) => {
   const result = await assignmentsRepository.submit(pool, req.user!.id, req.body.assignmentId, req.body.content, req.body.attachmentUrl);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
+  invalidateStoreCache();
   await audit(req, "submit_assignment", result.row.id, result.row.assignmentId);
   res.status(201).json(result.row);
 }));
@@ -2847,6 +2854,7 @@ app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin",
     await maybePostGradeEntry(pool, submission.student_id, "assignment", req.body.submissionId, req.body.score, Number(submission.max_score) || 100);
   }
   await maybePostFinalCourseGradeForSubmission(pool, req.body.submissionId);
+  invalidateStoreCache();
   await audit(req, "grade_assignment", req.body.submissionId, `Score ${req.body.score}.`);
   res.json(result);
 }));
@@ -3059,6 +3067,7 @@ app.post("/api/admin/users", requireAuth, requireRole(["manager", "super_admin",
     });
   }
 
+  invalidateStoreCache();
   await audit(req, "create_user", created.id, created.email);
   res.status(201).json(created);
 }));
@@ -3120,6 +3129,7 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["manager", "super_ad
   }
 
   if (created.length > 0) {
+    invalidateStoreCache();
     await audit(req, "bulk_create_users", "users", `Created ${created.length} users from CSV import; skipped ${errors.length}.`);
   }
 
@@ -3262,6 +3272,7 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "s
     }
   }
 
+  invalidateStoreCache();
   await audit(req, "toggle_user_status", user.id, `isActive=${user.isActive}`);
   res.json(user);
 }));
@@ -3849,6 +3860,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     note: record.note
   }));
   await attendanceRepository.saveAttendanceSession(pool, session, records);
+  invalidateStoreCache();
   await audit(req, "create_attendance_session", session.id, session.courseId);
   res.status(201).json({ session, records });
 }));
@@ -3886,6 +3898,7 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
     note: req.body.note
   };
   await attendanceRepository.bulkMarkRecords(pool, [record]);
+  invalidateStoreCache();
   await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
   res.json(record);
 }));
