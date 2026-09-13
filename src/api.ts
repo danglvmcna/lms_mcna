@@ -1,4 +1,4 @@
-import { LMSDataStore } from "./types";
+import { LMSDataStore, SessionMaterial } from "./types";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -35,6 +35,23 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function postMultipart<T>(url: string, formData: FormData, fallbackError: string): Promise<T> {
+  const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {})
+    },
+    body: formData
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || fallbackError);
+  }
+  return response.json() as Promise<T>;
+}
+
 export const api = {
   getStore: () => apiFetch<LMSDataStore>("/api/store"),
   getAdminDashboard: () => apiFetch("/api/dashboard/admin"),
@@ -50,21 +67,24 @@ export const api = {
     }
     const formData = new FormData();
     formData.append("file", file);
-    const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
-    const response = await fetch("/api/upload", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {})
-      },
-      body: formData
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || "Tải tệp lên thất bại.");
-    }
-    return response.json() as Promise<{ url: string }>;
+    return postMultipart<{ url: string }>("/api/upload", formData, "Tải tệp lên thất bại.");
   },
+  listSessionMaterials: (sessionId: string) => apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`),
+  uploadSessionMaterial: (sessionId: string, type: "slide" | "document", file: File, title?: string) => {
+    const formData = new FormData();
+    formData.append("type", type);
+    if (title) formData.append("title", title);
+    formData.append("file", file);
+    return postMultipart<SessionMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, formData, "Tải tài liệu lên thất bại.");
+  },
+  addLinkMaterial: (sessionId: string, payload: { type: "youtube" | "link"; url: string; title?: string }) =>
+    apiFetch<SessionMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, { method: "POST", body: JSON.stringify(payload) }),
+  updateSessionMaterial: (materialId: string, payload: { title?: string; url?: string }) =>
+    apiFetch<SessionMaterial>(`/api/materials/${encodeURIComponent(materialId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  reorderSessionMaterials: (sessionId: string, materialIds: string[]) =>
+    apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials/order`, { method: "PUT", body: JSON.stringify({ materialIds }) }),
+  deleteSessionMaterial: (materialId: string) => apiFetch(`/api/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" }),
+  materialDownloadUrl: (materialId: string) => `/api/materials/${encodeURIComponent(materialId)}/download`,
   getCourses: () => apiFetch("/api/courses"),
   createCourse: (payload: unknown) => apiFetch("/api/courses", { method: "POST", body: JSON.stringify(payload) }),
   updateCourse: (courseId: string, payload: unknown) => apiFetch(`/api/courses/${courseId}`, { method: "PUT", body: JSON.stringify(payload) }),

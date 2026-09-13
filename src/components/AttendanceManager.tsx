@@ -16,6 +16,7 @@ import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord, Academ
 import { AppStore } from "../store";
 import { api } from "../api";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../utils";
+import SessionMaterialsEditor from "./SessionMaterialsEditor";
 import { normalizeWarningType, warningTypesMatch } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
@@ -940,6 +941,10 @@ export default function AttendanceManager({
                     </div>
                   );
                 })()}
+
+                {activeSessionId && (currentUser.role === "teacher" || currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                  <SessionMaterialsEditor sessionId={activeSessionId} triggerToast={triggerToast} onChanged={onRefreshData} />
+                )}
 
                 {/* Student search input */}
                 <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-sm">

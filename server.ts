@@ -81,7 +81,26 @@ const uploadFileFilter = (_req: express.Request, file: Express.Multer.File, cb: 
 const upload = multer({ storage, fileFilter: uploadFileFilter, limits: { fileSize: MAX_UPLOAD_FILE_BYTES } }); // 10GB limit
 
 // Session materials are kept in memory only long enough to be pushed to private storage.
-const materialUpload = multer({ storage: multer.memoryStorage(), fileFilter: uploadFileFilter, limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+// Browsers without Office installed often send docx/pptx as application/octet-stream, so match on
+// the extension and store a canonical content type instead of trusting the client MIME.
+const MATERIAL_MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+};
+const materialUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
+    if (MATERIAL_MIME_BY_EXT[ext]) return cb(null, true);
+    const err = new Error("Tài liệu buổi học chỉ nhận tệp .ppt, .pptx, .pdf, .doc, .docx.");
+    (err as any).status = 400;
+    cb(err);
+  },
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES }
+});
 const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
   slide: new Set([".ppt", ".pptx", ".pdf"]),
   document: new Set([".doc", ".docx", ".pdf"])
@@ -3975,14 +3994,14 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
       });
     }
     const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;
-    await materialStorage.put(storagePath, req.file.buffer, req.file.mimetype);
+    await materialStorage.put(storagePath, req.file.buffer, MATERIAL_MIME_BY_EXT[ext]);
     try {
       material = await sessionMaterialsRepository.create(pool, {
         ...base,
         title: req.body.title || path.basename(fileName, path.extname(fileName)),
         storagePath,
         fileName,
-        mimeType: req.file.mimetype,
+        mimeType: MATERIAL_MIME_BY_EXT[ext],
         sizeBytes: req.file.size
       });
     } catch (error) {

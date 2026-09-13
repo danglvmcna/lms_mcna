@@ -2,6 +2,7 @@ import React from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin } from "lucide-react";
 import { AppStore } from "../../store";
 import ForumDiscussion from "../ForumDiscussion";
+import SessionMaterialsList from "../SessionMaterialsList";
 
 interface ComponentProps {
   [key: string]: any;
@@ -132,6 +133,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
       
       return {
         number: sessionNum,
+        sessionId: attendanceSession?.id,
+        materials: attendanceSession
+          ? (store.sessionMaterials || []).filter((material: any) => material.sessionId === attendanceSession.id)
+          : [],
         title: `Buổi học ${sessionNum}`,
         date: attendanceSession?.date,
         topic: attendanceSession?.topic,
@@ -173,6 +178,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           {session.content}
         </p>
       )}
+      {session.materials?.length > 0 && <SessionMaterialsList materials={session.materials} />}
     </div>
   ) : null;
   const renderVideoStage = (videoUrl: string, title: string) => (
@@ -494,7 +500,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           <div className="p-3.5 space-y-4 bg-slate-900/40 border-t border-white/5">
                             
                             {/* Topic and summary only; video is shown in the main presentation area. */}
-                            {(session.topic || session.content || session.videoUrl) && (
+                            {(session.topic || session.content || session.videoUrl || session.materials.length > 0) && (
                               <div className="space-y-3 bg-black/25 p-3 rounded-xl border border-white/5 text-[11px] font-sans text-left">
                                 {session.topic && (
                                   <div>
@@ -510,7 +516,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                                     </p>
                                   </div>
                                 )}
-                                {session.videoUrl && (
+                                {(session.videoUrl || session.materials.length > 0) && (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -522,7 +528,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                                     className="w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/15 border border-cyan-500/20 text-cyan-200 transition cursor-pointer"
                                   >
                                     <span className="inline-flex items-center gap-1.5 font-mono font-bold text-[9px] uppercase tracking-widest">
-                                      <Play className="h-3.5 w-3.5" /> Trình chiếu video
+                                      <Play className="h-3.5 w-3.5" /> {session.videoUrl ? "Trình chiếu video" : `Xem tài liệu (${session.materials.length})`}
                                     </span>
                                     <ChevronRight className="h-3.5 w-3.5" />
                                   </button>
@@ -837,11 +843,11 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   <>
                     {activePresentationSession.videoUrl ? (
                       renderVideoStage(activePresentationSession.videoUrl, activePresentationSession.topic || activePresentationSession.title)
-                    ) : (
+                    ) : activePresentationSession.materials.length === 0 ? (
                       <div className="text-center py-16 bg-black/10 border border-dashed border-white/10 rounded-2xl text-xs text-white/45">
                         Buổi học này chưa có video hoặc bài học chi tiết để trình chiếu.
                       </div>
-                    )}
+                    ) : null}
 
                     <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full filter blur-3xl pointer-events-none" />

@@ -1,0 +1,227 @@
+import React, { useEffect, useState } from "react";
+import { ArrowDown, ArrowUp, Check, ExternalLink, Pencil, Play, Presentation, FileText, Trash2, X } from "lucide-react";
+import { api } from "../api";
+import { SessionMaterial } from "../types";
+import { extractYoutubeVideoId } from "../utils";
+import { formatFileSize, MATERIAL_TYPE_LABEL, MaterialIcon, materialHref } from "./SessionMaterialsList";
+
+const MATERIAL_MAX_BYTES = 50 * 1024 * 1024; // mirrors the server upload limit
+
+interface SessionMaterialsEditorProps {
+  sessionId: string;
+  triggerToast: (message: string) => void;
+  onChanged?: () => void;
+}
+
+/** Teacher/admin editor for one session's slides, documents and YouTube videos. */
+export default function SessionMaterialsEditor({ sessionId, triggerToast, onChanged }: SessionMaterialsEditorProps) {
+  const [materials, setMaterials] = useState<SessionMaterial[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeTitle, setYoutubeTitle] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setEditingId(null);
+    api.listSessionMaterials(sessionId)
+      .then(items => {
+        if (!cancelled) setMaterials(items);
+      })
+      .catch((err: any) => {
+        if (!cancelled) triggerToast(err.message || "Không tải được tài liệu buổi học.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const run = async (action: () => Promise<void>, successMessage?: string) => {
+    setBusy(true);
+    try {
+      await action();
+      if (successMessage) triggerToast(successMessage);
+      onChanged?.();
+    } catch (err: any) {
+      triggerToast(err.message || "Thao tác với tài liệu thất bại.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpload = (type: "slide" | "document") => async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > MATERIAL_MAX_BYTES) {
+      triggerToast("Tệp tài liệu phải nhỏ hơn 50 MB.");
+      return;
+    }
+    await run(async () => {
+      const created = await api.uploadSessionMaterial(sessionId, type, file);
+      setMaterials(prev => [...prev, created]);
+    }, type === "slide" ? "Đã tải slide lên buổi học." : "Đã tải tài liệu lên buổi học.");
+  };
+
+  const handleAddYoutube = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!extractYoutubeVideoId(youtubeUrl)) {
+      triggerToast("Link YouTube không hợp lệ.");
+      return;
+    }
+    await run(async () => {
+      const created = await api.addLinkMaterial(sessionId, { type: "youtube", url: youtubeUrl.trim(), title: youtubeTitle.trim() || undefined });
+      setMaterials(prev => [...prev, created]);
+      setYoutubeUrl("");
+      setYoutubeTitle("");
+    }, "Đã thêm video YouTube vào buổi học.");
+  };
+
+  const handleMove = (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= materials.length) return;
+    const next = [...materials];
+    [next[index], next[target]] = [next[target], next[index]];
+    void run(async () => {
+      setMaterials(await api.reorderSessionMaterials(sessionId, next.map(material => material.id)));
+    });
+  };
+
+  const handleRename = async (material: SessionMaterial) => {
+    const title = editingTitle.trim();
+    if (!title) return;
+    await run(async () => {
+      const updated = await api.updateSessionMaterial(material.id, { title });
+      setMaterials(prev => prev.map(item => (item.id === material.id ? updated : item)));
+      setEditingId(null);
+    }, "Đã đổi tên tài liệu.");
+  };
+
+  const handleDelete = async (material: SessionMaterial) => {
+    if (!window.confirm(`Xóa "${material.title}" khỏi buổi học?`)) return;
+    await run(async () => {
+      await api.deleteSessionMaterial(material.id);
+      setMaterials(prev => prev.filter(item => item.id !== material.id));
+    }, "Đã xóa tài liệu.");
+  };
+
+  const uploadButtonClass = "flex-1 min-w-[140px] px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer text-white";
+
+  return (
+    <div className="p-4 bg-slate-900/60 border border-white/10 rounded-2xl space-y-3 font-sans text-xs shadow-md">
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
+        <h5 className="font-bold uppercase tracking-wider text-[11px] text-white/70">Slide, tài liệu & video YouTube</h5>
+        {busy && <span className="h-4 w-4 rounded-full border-2 border-cyan-300 border-t-transparent animate-spin" aria-label="Đang xử lý" />}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <label className={`${uploadButtonClass} bg-indigo-600 hover:bg-indigo-500 ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <Presentation className="h-4 w-4" /> Tải slide
+          <input type="file" accept=".ppt,.pptx,.pdf" className="hidden" onChange={handleUpload("slide")} disabled={busy} />
+        </label>
+        <label className={`${uploadButtonClass} bg-sky-600 hover:bg-sky-500 ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <FileText className="h-4 w-4" /> Tải file Word/PDF
+          <input type="file" accept=".doc,.docx,.pdf" className="hidden" onChange={handleUpload("document")} disabled={busy} />
+        </label>
+      </div>
+
+      <form onSubmit={handleAddYoutube} className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="url"
+          value={youtubeUrl}
+          onChange={e => setYoutubeUrl(e.target.value)}
+          placeholder="Link YouTube (youtube.com/watch?v=..., youtu.be/...)"
+          className="flex-1 min-w-0 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/30"
+        />
+        <input
+          type="text"
+          value={youtubeTitle}
+          onChange={e => setYoutubeTitle(e.target.value)}
+          placeholder="Tiêu đề (không bắt buộc)"
+          className="sm:w-48 min-w-0 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/30"
+        />
+        <button
+          type="submit"
+          disabled={busy || !youtubeUrl.trim()}
+          className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <Play className="h-4 w-4" /> Thêm video
+        </button>
+      </form>
+
+      {loading ? (
+        <div className="py-6 text-center text-white/40">Đang tải tài liệu...</div>
+      ) : materials.length === 0 ? (
+        <div className="py-6 text-center text-white/40 bg-black/20 rounded-xl border border-white/5 border-dashed">
+          Buổi học chưa có tài liệu nào.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {materials.map((material, index) => (
+            <li key={material.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-black/20 border border-white/5">
+              <MaterialIcon type={material.type} className="h-4.5 w-4.5 text-cyan-300 shrink-0" />
+              <div className="min-w-0 flex-1">
+                {editingId === material.id ? (
+                  <input
+                    autoFocus
+                    value={editingTitle}
+                    onChange={e => setEditingTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") void handleRename(material);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="w-full px-2 py-1 bg-slate-950 text-white border border-indigo-400 rounded-lg focus:outline-none"
+                  />
+                ) : (
+                  <span className="block font-bold text-white truncate">{material.title}</span>
+                )}
+                <span className="block text-[10px] font-mono text-white/40 truncate">
+                  {[MATERIAL_TYPE_LABEL[material.type], material.fileName, formatFileSize(material.sizeBytes)].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {editingId === material.id ? (
+                  <>
+                    <IconButton title="Lưu tên" onClick={() => void handleRename(material)} disabled={busy}><Check className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton title="Hủy" onClick={() => setEditingId(null)}><X className="h-3.5 w-3.5" /></IconButton>
+                  </>
+                ) : (
+                  <>
+                    <a href={materialHref(material)} target="_blank" rel="noreferrer" title="Mở / tải về" className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <IconButton title="Lên" onClick={() => handleMove(index, -1)} disabled={busy || index === 0}><ArrowUp className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton title="Xuống" onClick={() => handleMove(index, 1)} disabled={busy || index === materials.length - 1}><ArrowDown className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton title="Đổi tên" onClick={() => { setEditingId(material.id); setEditingTitle(material.title); }} disabled={busy}><Pencil className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton title="Xóa" onClick={() => void handleDelete(material)} disabled={busy} danger><Trash2 className="h-3.5 w-3.5" /></IconButton>
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function IconButton({ title, onClick, disabled, danger, children }: { title: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${danger ? "text-red-400 hover:bg-red-500/15" : "text-white/60 hover:text-white hover:bg-white/10"}`}
+    >
+      {children}
+    </button>
+  );
+}
