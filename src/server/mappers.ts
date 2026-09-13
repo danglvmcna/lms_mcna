@@ -1,4 +1,4 @@
-import { AcademicWarning, Assignment, Course, CourseSection, Enrollment, LessonProgress, Question, Quiz, QuizAttempt, Submission, TuitionFee, User, UserRole } from "../types";
+import { AcademicWarning, Assignment, Course, CourseSection, Enrollment, LessonProgress, Question, Quiz, QuizAttempt, SessionMaterial, Submission, TuitionFee, User, UserRole } from "../types";
 
 export type DbUserRow = {
   id: string;
@@ -14,6 +14,9 @@ export type DbUserRow = {
   school_email?: string | null;
   email_provisioned?: boolean;
   email_provisioned_at?: string | null;
+  must_change_password?: boolean | null;
+  signup_source?: User["signupSource"] | null;
+  crm_contact_id?: string | null;
 };
 
 export function normalizeRole(role: string): UserRole {
@@ -45,7 +48,10 @@ export function toPublicUser(row: DbUserRow): User {
     createdAt: row.created_at,
     schoolEmail: row.school_email || undefined,
     emailProvisioned: Boolean(row.email_provisioned),
-    emailProvisionedAt: row.email_provisioned_at || undefined
+    emailProvisionedAt: row.email_provisioned_at || undefined,
+    mustChangePassword: Boolean(row.must_change_password),
+    signupSource: row.signup_source || "admin",
+    crmContactId: row.crm_contact_id || undefined
   };
 }
 
@@ -75,7 +81,28 @@ export function enrollmentFromRow(row: any): Enrollment {
     studentId: row.student_id,
     status: row.status,
     enrolledAt: row.enrolled_at,
-    completedAt: row.completed_at || undefined
+    completedAt: row.completed_at || undefined,
+    requestedSectionId: row.requested_section_id || undefined,
+    crmDealId: row.crm_deal_id || undefined
+  };
+}
+
+// storage_path is intentionally not exposed; files are served through the authorized download route.
+export function sessionMaterialFromRow(row: any): SessionMaterial {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    sectionId: row.section_id || undefined,
+    courseId: row.course_id,
+    type: row.type,
+    title: row.title,
+    url: row.url || undefined,
+    fileName: row.file_name || undefined,
+    mimeType: row.mime_type || undefined,
+    sizeBytes: row.size_bytes === null || row.size_bytes === undefined ? undefined : Number(row.size_bytes),
+    sortOrder: Number(row.sort_order || 0),
+    createdBy: row.created_by || undefined,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
 

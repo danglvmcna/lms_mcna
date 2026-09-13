@@ -20,6 +20,9 @@ export interface User {
   schoolEmail?: string;
   emailProvisioned?: boolean;
   emailProvisionedAt?: string;
+  mustChangePassword?: boolean;
+  signupSource?: "admin" | "self" | "crm";
+  crmContactId?: string;
 }
 
 export interface Course {
@@ -56,6 +59,8 @@ export interface Enrollment {
   status: "pending" | "active" | "completed" | "cancelled" | "pending_payment";
   enrolledAt: string;
   completedAt?: string;
+  requestedSectionId?: string; // class the student picked when registering; pre-fills placement
+  crmDealId?: string;
 }
 
 export interface LessonProgress {
@@ -273,6 +278,22 @@ export interface AttendanceSession {
   expiresAt?: string;
 }
 
+export interface SessionMaterial {
+  id: string;
+  sessionId: string;
+  sectionId?: string;
+  courseId: string;
+  type: "slide" | "document" | "youtube" | "link";
+  title: string;
+  url?: string; // YouTube or external link; uploaded files are fetched via /api/materials/:id/download
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  sortOrder: number;
+  createdBy?: string;
+  createdAt: string;
+}
+
 export interface AttendanceRecord {
   id: string;
   sessionId: string;
@@ -482,6 +503,7 @@ export interface LMSDataStore {
   programCourses: ProgramCourse[];
   studentProfiles: StudentProfile[];
   attendanceSessions: AttendanceSession[];
+  sessionMaterials?: SessionMaterial[];
   attendanceRecords: AttendanceRecord[];
   tuitionFees: TuitionFee[];
   academicWarnings: AcademicWarning[];

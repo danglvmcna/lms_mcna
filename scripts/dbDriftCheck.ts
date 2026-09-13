@@ -8,10 +8,13 @@ if (!process.env.DATABASE_URL) {
 }
 
 const expected: Record<string, string[]> = {
-  users: ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "linked_student_id", "created_at"],
+  users: ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "linked_student_id", "created_at", "must_change_password", "signup_source", "crm_contact_id"],
   courses: ["id", "title", "description", "teacher_id", "status", "category", "thumbnail", "price", "level", "tags_json", "rejection_reason", "created_at"],
   lessons: ["id", "course_id", "title", "content", "video_url", "lesson_order", "duration"],
-  enrollments: ["id", "course_id", "student_id", "status", "enrolled_at", "completed_at"],
+  enrollments: ["id", "course_id", "student_id", "status", "enrolled_at", "completed_at", "requested_section_id", "crm_deal_id"],
+  session_materials: ["id", "session_id", "section_id", "course_id", "type", "title", "url", "storage_path", "file_name", "mime_type", "size_bytes", "sort_order", "created_by", "created_at"],
+  crm_outbox: ["id", "event_type", "payload", "status", "attempts", "next_attempt_at", "last_error", "created_at", "sent_at"],
+  crm_inbound_events: ["event_id", "type", "payload_sha256", "status", "response", "error", "received_at", "processed_at"],
   lesson_progress: ["id", "enrollment_id", "lesson_id", "completed", "completed_at"],
   quizzes: ["id", "course_id", "lesson_id", "title", "passing_score", "time_limit", "max_attempts"],
   questions: ["id", "quiz_id", "text", "type", "options_json", "correct_answer"],
@@ -40,7 +43,10 @@ const requiredIndexes = [
   "idx_audit_logs_user_id",
   "idx_advisor_notes_student_id",
   "ux_enrollments_student_course",
-  "ux_lesson_progress_enrollment_lesson"
+  "ux_lesson_progress_enrollment_lesson",
+  "idx_session_materials_session_id",
+  "ux_users_crm_contact_id",
+  "idx_crm_outbox_pending"
 ];
 
 const requiredForeignKeys = [
@@ -60,7 +66,9 @@ const requiredForeignKeys = [
   "tuition_fees_student_id_fkey",
   "academic_warnings_student_id_fkey",
   "audit_logs_user_id_fkey",
-  "advisor_notes_student_id_fkey"
+  "advisor_notes_student_id_fkey",
+  "session_materials_session_id_fkey",
+  "enrollments_requested_section_id_fkey"
 ];
 
 const pool = new pg.Pool({
