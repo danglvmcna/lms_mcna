@@ -1,7 +1,7 @@
 import { getInitialStore } from "../../store";
 import { Course, Enrollment, LessonProgress, User } from "../../types";
 import { Queryable } from "../db";
-import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, submissionFromRow, toPublicUser, tuitionFeeFromRow, academicWarningFromRow } from "../mappers";
+import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, sessionMaterialFromRow, submissionFromRow, toPublicUser, tuitionFeeFromRow, academicWarningFromRow } from "../mappers";
 
 // In-memory cache variables to optimize server performance
 let cachedSnapshot: any = null;
@@ -99,7 +99,8 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     certificatesRes,
     forumRepliesRes,
     forumPostsRes,
-    teacherAttendanceRes
+    teacherAttendanceRes,
+    sessionMaterialsRes
   ] = await Promise.all([
     db.query<DbUserRow>("SELECT * FROM users"),
     db.query("SELECT * FROM courses"),
@@ -137,7 +138,8 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM certificates"),
     db.query("SELECT * FROM forum_replies"),
     db.query("SELECT * FROM forum_posts"),
-    db.query("SELECT * FROM teacher_attendance")
+    db.query("SELECT * FROM teacher_attendance"),
+    db.query("SELECT * FROM session_materials ORDER BY session_id, sort_order, created_at")
   ]);
 
   const users = usersRes.rows.map(toPublicUser);
@@ -177,6 +179,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     expiresAt: row.expires_at || undefined
   }));
   const attendanceRecords = attendanceRecordsRes.rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined }));
+  const sessionMaterials = sessionMaterialsRes.rows.map(sessionMaterialFromRow);
   const notifications = notificationsRes.rows.map(row => ({
     id: row.id,
     userId: row.user_id,
@@ -256,7 +259,8 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     graduationApplications,
     certificates,
     forumPosts,
-    teacherAttendance
+    teacherAttendance,
+    sessionMaterials
   };
 
   if (generationAtStart === cacheGeneration) {
@@ -309,7 +313,8 @@ export function limitStoreForRole(store: any, user: User) {
     leaveRequests: [],
     graduationApplications: [],
     systemEvents: [],
-    teacherAttendance: []
+    teacherAttendance: [],
+    sessionMaterials: []
   });
 
   if (user.role === "manager" || user.role === "super_admin" || user.role === "admin") {
@@ -360,6 +365,7 @@ export function limitStoreForRole(store: any, user: User) {
       submissions: store.submissions.filter((submission: any) => visibleStudentIds.has(submission.studentId) && visibleAssignmentIds.has(submission.assignmentId)),
       studentProfiles: visibleProfiles,
       attendanceSessions: (store.attendanceSessions || []).filter((session: any) => visibleSessionIds.has(session.id)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material: any) => visibleSessionIds.has(material.sessionId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record: any) => visibleSessionIds.has(record.sessionId) && visibleStudentIds.has(record.studentId)),
       notifications: (store.notifications || []).filter((item: any) => item.userId === user.id),
       academicWarnings: (store.academicWarnings || []).filter((item: any) => visibleStudentIds.has(item.studentId)),
@@ -419,6 +425,7 @@ export function limitStoreForRole(store: any, user: User) {
       assignments: store.assignments.filter((item: any) => activeCourseIds.has(item.courseId)),
       studentProfiles: store.studentProfiles.filter((item: any) => item.userId === user.id),
       attendanceSessions: (store.attendanceSessions || []).filter((session: any) => visibleSessionIds.has(session.id)).map(sanitizeAttendanceSession),
+      sessionMaterials: (store.sessionMaterials || []).filter((material: any) => visibleSessionIds.has(material.sessionId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record: any) => record.studentId === user.id),
       notifications: store.notifications.filter((item: any) => item.userId === user.id),
       transactions: (store.transactions || []).filter((item: any) => item.studentId === user.id),

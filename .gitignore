@@ -11,3 +11,4 @@ coverage/
 .cursor/
 scratch/
 public/uploads/
+storage/

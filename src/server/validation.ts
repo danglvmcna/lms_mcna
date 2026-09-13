@@ -322,5 +322,18 @@ export const schemas = {
     date: z.string().trim().min(1).optional(),
     videoUrl: z.string().trim().optional().nullable(),
     content: z.string().trim().optional().nullable()
+  }),
+  // Multipart for slide/document (fields arrive as strings), JSON for youtube/link.
+  createSessionMaterial: z.object({
+    type: z.enum(["slide", "document", "youtube", "link"]),
+    title: z.string().trim().max(200).optional().transform(value => value || undefined),
+    url: z.string().trim().max(2000).optional()
+  }),
+  updateSessionMaterial: z.object({
+    title: z.string().trim().min(1).max(200).optional(),
+    url: z.string().trim().min(1).max(2000).optional()
+  }),
+  reorderSessionMaterials: z.object({
+    materialIds: z.array(z.string().trim().min(1)).min(1).max(200)
   })
 };

@@ -80,6 +80,13 @@ const uploadFileFilter = (_req: express.Request, file: Express.Multer.File, cb: 
 };
 const upload = multer({ storage, fileFilter: uploadFileFilter, limits: { fileSize: MAX_UPLOAD_FILE_BYTES } }); // 10GB limit
 
+// Session materials are kept in memory only long enough to be pushed to private storage.
+const materialUpload = multer({ storage: multer.memoryStorage(), fileFilter: uploadFileFilter, limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
+  slide: new Set([".ppt", ".pptx", ".pdf"]),
+  document: new Set([".doc", ".docx", ".pdf"])
+};
+
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -115,6 +122,9 @@ import { notifyStudent, notifyRole } from "./src/server/notify";
 import { attendanceRepository } from "./src/server/repositories/attendance";
 import { forumRepository } from "./src/server/repositories/forum";
 import { sectionsRepository } from "./src/server/repositories/sections";
+import { sessionMaterialsRepository } from "./src/server/repositories/sessionMaterials";
+import { materialStorage } from "./src/server/services/storage";
+import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
 import { toGradePoint, toLetterGrade } from "./src/server/gpaCalculator";
@@ -3384,6 +3394,13 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
     openingDate: req.body.openingDate || existing.opening_date || course.openingDate
   };
   if (!payload.teacherId) return res.status(400).json({ error: "teacherId is required." });
+  // Shrinking a class deletes its trailing generated sessions (and their materials by cascade).
+  const sessionsWithMaterials = await generatedSessionsWithMaterialsBeyond(pool, req.params.id, Number(payload.numberOfSessions));
+  if (sessionsWithMaterials.length > 0) {
+    return res.status(409).json({
+      error: `Không thể giảm số buổi vì ${sessionsWithMaterials.join(", ")} đang có tài liệu. Hãy xóa hoặc chuyển tài liệu trước.`
+    });
+  }
   const scheduleConflicts = await validateCourseSectionScheduleConflicts(pool, payload);
   if (scheduleConflicts.length > 0) {
     return res.status(409).json({ error: scheduleConflicts[0], conflicts: scheduleConflicts });
@@ -3400,6 +3417,8 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   if (req.user!.role === "teacher" && existing.teacher_id !== req.user!.id) {
     return res.status(403).json({ error: "Permission denied." });
   }
+  // Rows cascade with the section; the uploaded files must be removed from storage separately.
+  const materialStoragePaths = await sessionMaterialsRepository.listStoragePathsForSection(pool, req.params.id);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -3413,6 +3432,9 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   } finally {
     client.release();
   }
+  await materialStorage.remove(materialStoragePaths).catch(err => {
+    console.error("[session-materials] failed to remove files of deleted section:", err);
+  });
   invalidateStoreCache();
   await audit(req, "delete_course_section", req.params.id, existing.section_code);
   res.status(204).send();
@@ -3836,6 +3858,199 @@ async function validateAttendanceSectionAccess(courseId: string, sectionId: stri
   if (user.role === "teacher" && section.teacher_id !== user.id) return { status: 403, error: "Permission denied for this class section." };
   return { section };
 }
+
+type SessionOwnership = {
+  id: string;
+  course_id: string;
+  section_id: string | null;
+  course_teacher_id: string;
+  section_teacher_id: string | null;
+};
+
+async function findSessionWithOwners(sessionId: string): Promise<SessionOwnership | null> {
+  return (await pool.query(
+    `SELECT s.id, s.course_id, s.section_id, c.teacher_id AS course_teacher_id, cs.teacher_id AS section_teacher_id
+     FROM attendance_sessions s
+     JOIN courses c ON c.id = s.course_id
+     LEFT JOIN course_sections cs ON cs.id = s.section_id
+     WHERE s.id = $1`,
+    [sessionId]
+  )).rows[0] || null;
+}
+
+function canManageSessionMaterials(user: User, session: SessionOwnership) {
+  if (user.role === "admin" || user.role === "super_admin") return true;
+  return user.role === "teacher" && (session.section_teacher_id === user.id || session.course_teacher_id === user.id);
+}
+
+// Mirrors limitStoreForRole: a student sees a session only with an active/completed enrollment
+// in the course and, for class sessions, a registered seat in that class.
+async function canViewSessionMaterials(user: User, session: SessionOwnership) {
+  if (user.role === "manager" || canManageSessionMaterials(user, session)) return true;
+  if (user.role !== "student") return false;
+  const enrolled = await pool.query(
+    "SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
+    [user.id, session.course_id]
+  );
+  if (!enrolled.rowCount) return false;
+  if (!session.section_id) return true;
+  const registered = await pool.query(
+    "SELECT 1 FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
+    [user.id, session.section_id]
+  );
+  return Boolean(registered.rowCount);
+}
+
+function resolveMaterialUrl(type: "youtube" | "link", value: unknown): string | null {
+  if (type === "youtube") {
+    const videoId = extractYoutubeVideoId(String(value || ""));
+    return videoId ? youtubeWatchUrl(videoId) : null;
+  }
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+const materialUrlError = (type: "youtube" | "link") =>
+  type === "youtube" ? "Link YouTube không hợp lệ." : "Liên kết phải bắt đầu bằng http:// hoặc https://.";
+
+async function generatedSessionsWithMaterialsBeyond(db: Queryable, sectionId: string, targetCount: number) {
+  const rows = (await db.query(
+    `SELECT DISTINCT s.topic
+     FROM session_materials m
+     JOIN attendance_sessions s ON s.id = m.session_id
+     WHERE s.section_id = $1`,
+    [sectionId]
+  )).rows;
+  return rows
+    .map(row => generatedSessionOrder(row.topic))
+    .filter((order): order is number => order !== null && order > targetCount)
+    .sort((a, b) => a - b)
+    .map(order => `Buổi ${order}`);
+}
+
+app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (req, res) => {
+  const session = await findSessionWithOwners(req.params.sessionId);
+  if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
+  if (!await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
+  res.json(await sessionMaterialsRepository.listBySession(pool, session.id));
+}));
+
+app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin", "super_admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+  const session = await findSessionWithOwners(req.params.sessionId);
+  if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
+  if (!canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+
+  const type = req.body.type as "slide" | "document" | "youtube" | "link";
+  const base = {
+    id: sessionMaterialsRepository.newId(),
+    sessionId: session.id,
+    sectionId: session.section_id,
+    courseId: session.course_id,
+    type,
+    createdBy: req.user!.id
+  };
+
+  let material;
+  if (type === "youtube" || type === "link") {
+    if (req.file) return res.status(400).json({ error: "Tài liệu dạng liên kết không kèm tệp." });
+    const url = resolveMaterialUrl(type, req.body.url);
+    if (!url) return res.status(400).json({ error: materialUrlError(type) });
+    material = await sessionMaterialsRepository.create(pool, {
+      ...base,
+      title: req.body.title || (type === "youtube" ? "Video bài giảng" : url),
+      url
+    });
+  } else {
+    if (!req.file) return res.status(400).json({ error: "Vui lòng chọn tệp tài liệu." });
+    // multer decodes multipart filenames as latin1; restore UTF-8 so Vietnamese names survive.
+    const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+    const ext = path.extname(fileName).toLowerCase();
+    if (!MATERIAL_FILE_EXTENSIONS[type].has(ext)) {
+      return res.status(400).json({
+        error: type === "slide" ? "Slide phải là tệp .ppt, .pptx hoặc .pdf." : "Tài liệu phải là tệp .doc, .docx hoặc .pdf."
+      });
+    }
+    const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;
+    await materialStorage.put(storagePath, req.file.buffer, req.file.mimetype);
+    try {
+      material = await sessionMaterialsRepository.create(pool, {
+        ...base,
+        title: req.body.title || path.basename(fileName, path.extname(fileName)),
+        storagePath,
+        fileName,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size
+      });
+    } catch (error) {
+      await materialStorage.remove([storagePath]).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  invalidateStoreCache();
+  await audit(req, "create_session_material", material.id, `${type}: ${material.title}`);
+  res.status(201).json(material);
+}));
+
+app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+  const session = await findSessionWithOwners(req.params.sessionId);
+  if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
+  if (!canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+  const materials = await sessionMaterialsRepository.reorder(pool, session.id, req.body.materialIds);
+  invalidateStoreCache();
+  res.json(materials);
+}));
+
+app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+  const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
+  if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
+  const session = await findSessionWithOwners(row.session_id);
+  if (!session || !canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+
+  let url: string | undefined;
+  if (req.body.url !== undefined) {
+    if (row.type !== "youtube" && row.type !== "link") return res.status(400).json({ error: "Chỉ tài liệu dạng liên kết mới đổi được URL." });
+    url = resolveMaterialUrl(row.type, req.body.url) || undefined;
+    if (!url) return res.status(400).json({ error: materialUrlError(row.type) });
+  }
+  const material = await sessionMaterialsRepository.update(pool, row.id, { title: req.body.title, url });
+  invalidateStoreCache();
+  await audit(req, "update_session_material", row.id, material?.title || row.title);
+  res.json(material);
+}));
+
+app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
+  if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
+  const session = await findSessionWithOwners(row.session_id);
+  if (!session || !canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+
+  await sessionMaterialsRepository.remove(pool, row.id);
+  if (row.storage_path) {
+    await materialStorage.remove([row.storage_path]).catch(err => {
+      console.error("[session-materials] failed to remove file:", row.storage_path, err);
+    });
+  }
+  invalidateStoreCache();
+  await audit(req, "delete_session_material", row.id, row.title);
+  res.status(204).send();
+}));
+
+app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res) => {
+  const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
+  if (!row || !row.storage_path) return res.status(404).json({ error: "Không tìm thấy tệp tài liệu." });
+  const session = await findSessionWithOwners(row.session_id);
+  if (!session || !await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
+
+  const download = await materialStorage.getDownload(row.storage_path, row.file_name || path.basename(row.storage_path));
+  if (download.kind === "redirect") return res.redirect(302, download.url);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.download(download.absolutePath, row.file_name || path.basename(row.storage_path));
+}));
 
 app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
