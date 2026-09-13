@@ -32,6 +32,7 @@ const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
 import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
+import { ForcedPasswordChange, ForgotPasswordForm, SignUpForm } from "./components/public/AccountForms";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,7 +67,7 @@ function AppShell() {
   const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
 
   // Visitors land on the public course catalog; "login" shows the sign-in card.
-  const [authView, setAuthView] = useState<"catalog" | "login">(() => (resetToken ? "login" : "catalog"));
+  const [authView, setAuthView] = useState<"catalog" | "login" | "register" | "forgot">(() => (resetToken ? "login" : "catalog"));
   const [initialCourseId] = useState(() => new URLSearchParams(window.location.search).get("course") || undefined);
   const [pendingIntent, setPendingIntent] = useState<EnrollIntent | null>(() => readEnrollIntent());
   const [appNotice, setAppNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -109,6 +110,8 @@ function AppShell() {
         const csrfCookie = document.cookie.split("; ").find(item => item.startsWith("e16_lms_csrf="));
         if (csrfCookie) setCsrfToken(decodeURIComponent(csrfCookie.split("=")[1] || ""));
         sessionStorage.setItem("e16_lms_active_session", "true");
+        // Data APIs stay locked until a temporary password is replaced (ForcedPasswordChange loads the store after).
+        if (data.user?.mustChangePassword) return;
         const serverStore = await api.getStore();
         AppStore.hydrate(serverStore);
         setStoreData({ ...serverStore });
@@ -253,7 +256,7 @@ function AppShell() {
       setCurrentUser(data.user);
       setCsrfToken(data.csrfToken || null);
       sessionStorage.setItem("e16_lms_active_session", "true");
-      await refreshStoreDataFromServer();
+      if (!data.user.mustChangePassword) await refreshStoreDataFromServer();
       AppStore.log(data.user.id, "authentication_login", "security", `Successfully authenticated into profile desk role: ${data.user.role}`);
       setLoginEmail("");
       setLoginPassword("");
@@ -450,7 +453,21 @@ function AppShell() {
       )}
 
       {/* MAIN LAYOUT CANVAS */}
-      {currentUser ? (
+      {currentUser?.mustChangePassword ? (
+        <ForcedPasswordChange
+          user={currentUser}
+          onLogout={handleLogout}
+          onChanged={async () => {
+            const response = await fetch("/api/auth/me", { credentials: "include" });
+            const data = await response.json();
+            if (!response.ok || !data.user) throw new Error("Phiên đăng nhập đã hết hạn.");
+            const serverStore = await api.getStore();
+            AppStore.hydrate(serverStore);
+            setStoreData({ ...serverStore });
+            setCurrentUser(data.user);
+          }}
+        />
+      ) : currentUser ? (
         <div className="min-h-screen flex flex-col md:flex-row relative">
 
           {/* DESKTOP SIDEBAR NAV BAR */}
@@ -732,7 +749,7 @@ function AppShell() {
               saveEnrollIntent(intent);
               setPendingIntent(intent);
             }
-            setAuthView("login");
+            setAuthView("register");
           }}
         />
       ) : (
@@ -780,19 +797,29 @@ function AppShell() {
               )}
               <div className="space-y-1">
                 <h3 className="text-lg font-display font-bold text-white tracking-tight">
-                  {resetToken ? "Đặt lại mật khẩu" : "Đăng nhập tài khoản của bạn"}
+                  {resetToken
+                    ? "Đặt lại mật khẩu"
+                    : authView === "register"
+                      ? "Tạo tài khoản học viên"
+                      : authView === "forgot"
+                        ? "Quên mật khẩu"
+                        : "Đăng nhập tài khoản của bạn"}
                 </h3>
                 <p className="text-xs text-white/55">
                   {resetToken
                     ? "Thiết lập mật khẩu mới bằng liên kết một lần được gửi qua email."
-                    : "Xác thực để truy cập phân hệ học vụ hoặc lớp học tương ứng."}
+                    : authView === "register"
+                      ? "Đăng ký bằng email cá nhân – mật khẩu tạm thời sẽ được gửi qua email."
+                      : authView === "forgot"
+                        ? "Nhập email đăng nhập để nhận liên kết đặt lại mật khẩu."
+                        : "Xác thực để truy cập phân hệ học vụ hoặc lớp học tương ứng."}
                 </p>
               </div>
 
               {!resetToken && pendingIntent && (
                 <div className="bg-indigo-500/10 border border-indigo-400/20 text-indigo-200 p-3 rounded-xl text-xs flex items-start justify-between gap-3">
                   <span>
-                    Đăng nhập để hoàn tất đăng ký {pendingIntent.sectionCode ? `lớp ${pendingIntent.sectionCode} – ` : ""}{pendingIntent.courseTitle || "khóa học đã chọn"}.
+                    Đăng nhập hoặc tạo tài khoản để hoàn tất đăng ký {pendingIntent.sectionCode ? `lớp ${pendingIntent.sectionCode} – ` : ""}{pendingIntent.courseTitle || "khóa học đã chọn"}.
                   </span>
                   <button
                     type="button"
@@ -807,7 +834,7 @@ function AppShell() {
                 </div>
               )}
 
-              {!resetToken && authError && (
+              {!resetToken && authView === "login" && authError && (
                 <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs space-y-2">
                   <div className="flex items-center gap-2">
                     <Lock className="h-4 w-4 stroke-[2.5] shrink-0" />
@@ -889,6 +916,17 @@ function AppShell() {
                     Quay lại đăng nhập
                   </button>
                 </form>
+              ) : authView === "register" ? (
+                <SignUpForm
+                  intent={pendingIntent}
+                  onGoToLogin={email => {
+                    if (email) setLoginEmail(email);
+                    setAuthError(null);
+                    setAuthView("login");
+                  }}
+                />
+              ) : authView === "forgot" ? (
+                <ForgotPasswordForm onGoToLogin={() => setAuthView("login")} />
               ) : (
                 <>
                   {/* Login submit form */}
@@ -925,6 +963,29 @@ function AppShell() {
                     >
                       Xác nhận Đăng nhập
                     </button>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthError(null);
+                          setAuthView("forgot");
+                        }}
+                        className="text-white/60 hover:text-white font-semibold cursor-pointer"
+                      >
+                        Quên mật khẩu?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthError(null);
+                          setAuthView("register");
+                        }}
+                        className="text-indigo-300 hover:text-indigo-200 font-bold cursor-pointer"
+                      >
+                        Chưa có tài khoản? Tạo tài khoản
+                      </button>
+                    </div>
                   </form>
 
                   {/* Seed Switchboard buttons section */}
@@ -1172,8 +1233,8 @@ function AppShell() {
               setChangePasswordError(null);
               setChangePasswordSuccess(null);
 
-              if (newPassword.length < 6) {
-                setChangePasswordError("Mật khẩu mới phải tối thiểu 6 ký tự.");
+              if (newPassword.length < 8) {
+                setChangePasswordError("Mật khẩu mới phải tối thiểu 8 ký tự.");
                 return;
               }
               if (newPassword !== confirmPassword) {
@@ -1225,7 +1286,7 @@ function AppShell() {
                 <input
                   type="password"
                   required
-                  placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                  placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"

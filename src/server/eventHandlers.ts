@@ -170,6 +170,8 @@ export function registerEventHandlers() {
 
   eventBus.on("user.created", async (user: any, pool) => {
     if (user.role !== "student") return;
+    // Self-registered and CRM-created learners sign in with their personal email; no school mailbox.
+    if (user.signupSource && user.signupSource !== "admin") return;
     try {
       await provisioningService.provisionStudentEmail(pool, user.id);
     } catch (err: any) {

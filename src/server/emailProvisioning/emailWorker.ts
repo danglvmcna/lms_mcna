@@ -380,7 +380,7 @@ export async function sendPasswordResetLinkEmail(
     "Đặt lại mật khẩu tài khoản",
     `
       <p class="greeting">Chào bạn ${safeName},</p>
-      <p>Yêu cầu đặt lại mật khẩu cho tài khoản LMS của bạn đã được tạo bởi Quản lý giáo vụ. Vui lòng dùng liên kết một lần dưới đây để thiết lập mật khẩu mới:</p>
+      <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản LMS của bạn. Vui lòng dùng liên kết một lần dưới đây để thiết lập mật khẩu mới. Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
       <div class="message-box" style="font-size: 16px; text-align: center;">
         <a href="${safeResetUrl}" style="display: inline-block; color: #ffffff; background: #4f46e5; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 700;">Đặt lại mật khẩu</a>
       </div>
@@ -420,4 +420,99 @@ export async function sendPasswordResetLinkEmail(
     );
     throw err;
   }
+}
+
+async function deliverEmail(params: { to: string; name: string; subject: string; html: string; text: string }) {
+  if (hasSmtpOauth2Config()) {
+    await getTransporter().sendMail({ from: SMTP_FROM, to: params.to, subject: params.subject, html: params.html, text: params.text });
+    console.log(`[EmailWorker] "${params.subject}" dispatched to: ${params.to}`);
+  } else {
+    logEmailMock(params.to, params.name, params.subject, params.html);
+  }
+}
+
+/**
+ * Send the temporary password of a self-registered (or CRM-created) learner account to their personal email.
+ * Retries briefly only, because the sign-up request waits for the result.
+ */
+export async function sendTemporaryPasswordEmail(
+  pool: Pool,
+  userId: string,
+  params: { to: string; name: string; temporaryPassword: string; loginUrl: string }
+): Promise<void> {
+  const subject = `[LMS MCNA] Thông tin đăng nhập tài khoản học viên`;
+  const safeName = escapeHtml(params.name);
+  const safeEmail = escapeHtml(params.to);
+  const safePassword = escapeHtml(params.temporaryPassword);
+  const safeLoginUrl = escapeHtml(params.loginUrl);
+  const html = wrapHtmlBody(
+    "Thông tin đăng nhập",
+    `
+      <p class="greeting">Chào bạn ${safeName},</p>
+      <p>Tài khoản học viên LMS của bạn đã được tạo bằng địa chỉ email này. Thông tin đăng nhập:</p>
+      <div class="message-box">
+        <strong>Email đăng nhập:</strong> ${safeEmail}<br/>
+        <strong>Mật khẩu tạm thời:</strong> <span style="font-family: monospace; font-size: 16px;">${safePassword}</span>
+      </div>
+      <p style="color: #ef4444; font-weight: 600;">Vì lý do bảo mật, hệ thống sẽ yêu cầu bạn đổi mật khẩu ngay trong lần đăng nhập đầu tiên.</p>
+      <div class="button-container">
+        <a href="${safeLoginUrl}" class="button" target="_blank">Đăng nhập LMS</a>
+      </div>
+      <p>Nếu bạn không yêu cầu tạo tài khoản, hãy bỏ qua email này.</p>
+    `
+  );
+
+  try {
+    await retryWithBackoff(
+      () => deliverEmail({
+        to: params.to,
+        name: params.name,
+        subject,
+        html,
+        text: `Chào bạn ${params.name},\n\nTài khoản học viên LMS của bạn đã được tạo.\nEmail đăng nhập: ${params.to}\nMật khẩu tạm thời: ${params.temporaryPassword}\n\nBạn sẽ được yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên: ${params.loginUrl}`
+      }),
+      2,
+      [3000]
+    );
+    await auditRepository.log(pool, userId, "temporary_password_email_sent", "email", `Gửi mật khẩu tạm thời tới ${params.to}`);
+  } catch (err: any) {
+    console.error(`[EmailWorker] Failed to send temporary password email to: ${params.to}`, err);
+    throw err;
+  }
+}
+
+/** Tell an existing account holder that someone tried to sign up again with their email. */
+export async function sendAccountExistsEmail(
+  pool: Pool,
+  userId: string,
+  params: { to: string; name: string; loginUrl: string }
+): Promise<void> {
+  const subject = `[LMS MCNA] Bạn đã có tài khoản LMS`;
+  const safeName = escapeHtml(params.name);
+  const safeLoginUrl = escapeHtml(params.loginUrl);
+  const html = wrapHtmlBody(
+    "Bạn đã có tài khoản",
+    `
+      <p class="greeting">Chào bạn ${safeName},</p>
+      <p>Có một yêu cầu tạo tài khoản LMS mới bằng địa chỉ email này, nhưng email đã được dùng cho một tài khoản hiện có.</p>
+      <p>Hãy đăng nhập bằng mật khẩu hiện tại. Nếu quên mật khẩu, chọn <strong>Quên mật khẩu</strong> ở trang đăng nhập để nhận liên kết đặt lại.</p>
+      <div class="button-container">
+        <a href="${safeLoginUrl}" class="button" target="_blank">Đến trang đăng nhập</a>
+      </div>
+      <p>Nếu không phải bạn thực hiện, bạn có thể bỏ qua email này.</p>
+    `
+  );
+
+  await retryWithBackoff(
+    () => deliverEmail({
+      to: params.to,
+      name: params.name,
+      subject,
+      html,
+      text: `Chào bạn ${params.name},\n\nEmail này đã có tài khoản LMS. Hãy đăng nhập hoặc dùng "Quên mật khẩu" tại ${params.loginUrl}`
+    }),
+    2,
+    [3000]
+  );
+  await auditRepository.log(pool, userId, "account_exists_email_sent", "email", `Báo tài khoản đã tồn tại tới ${params.to}`);
 }

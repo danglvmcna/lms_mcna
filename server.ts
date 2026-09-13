@@ -143,7 +143,7 @@ import { forumRepository } from "./src/server/repositories/forum";
 import { sectionsRepository } from "./src/server/repositories/sections";
 import { sessionMaterialsRepository } from "./src/server/repositories/sessionMaterials";
 import { materialStorage } from "./src/server/services/storage";
-import { requestEnrollment } from "./src/server/services/enrollmentService";
+import { requestEnrollment, ServiceError } from "./src/server/services/enrollmentService";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
@@ -151,7 +151,7 @@ import { toGradePoint, toLetterGrade } from "./src/server/gpaCalculator";
 import { startScheduler } from "./src/server/scheduler";
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
-import { sendPasswordResetLinkEmail } from "./src/server/emailProvisioning/emailWorker";
+import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail } from "./src/server/emailProvisioning/emailWorker";
 
 dotenv.config();
 
@@ -362,6 +362,57 @@ function generateTemporaryPassword() {
   return `Lms-${crypto.randomBytes(8).toString("base64url")}-1`;
 }
 
+/**
+ * Learner account created from a personal email (self sign-up or CRM): random temporary password,
+ * emailed to the learner, who must replace it at first login. If the email cannot be delivered the
+ * account is removed again, so the person can simply retry.
+ */
+async function createStudentWithTemporaryPassword(
+  input: { name: string; email: string; phone?: string; crmContactId?: string },
+  source: "self" | "crm",
+  loginUrl: string
+): Promise<{ user: User; temporaryPassword: string } | ServiceError> {
+  const temporaryPassword = generateTemporaryPassword();
+  const client = await pool.connect();
+  let user: User;
+  try {
+    await client.query("BEGIN");
+    const created = await createUserAccount(client, { email: input.email, name: input.name, role: "student", phone: input.phone }, temporaryPassword);
+    await client.query(
+      "UPDATE users SET must_change_password = true, signup_source = $1, crm_contact_id = $2 WHERE id = $3",
+      [source, input.crmContactId || null, created.id]
+    );
+    await client.query("COMMIT");
+    user = { ...created, mustChangePassword: true, signupSource: source, crmContactId: input.crmContactId };
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    if (error?.code === "23505") return { error: "Email hoặc mã liên hệ CRM đã được sử dụng.", status: 409 };
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  try {
+    await sendTemporaryPasswordEmail(pool, user.id, { to: user.email, name: user.name, temporaryPassword, loginUrl });
+  } catch {
+    const cleanup = await pool.connect();
+    try {
+      await cleanup.query("BEGIN");
+      await cleanup.query("DELETE FROM audit_logs WHERE user_id = $1", [user.id]);
+      await cleanup.query("DELETE FROM student_profiles WHERE user_id = $1", [user.id]);
+      await cleanup.query("DELETE FROM users WHERE id = $1", [user.id]);
+      await cleanup.query("COMMIT");
+    } catch (cleanupError) {
+      await cleanup.query("ROLLBACK");
+      console.error("[account] failed to remove account after email failure:", user.id, cleanupError);
+    } finally {
+      cleanup.release();
+    }
+    return { error: "Không gửi được email mật khẩu. Vui lòng kiểm tra địa chỉ email và thử lại sau.", status: 503 };
+  }
+  return { user, temporaryPassword };
+}
+
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
@@ -370,9 +421,38 @@ function generatePasswordResetToken() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
+function lmsBaseUrl(req: express.Request) {
+  return (process.env.LMS_LOGIN_URL || `${req.protocol}://${req.get("host") || "localhost:3000"}`).replace(/\/$/, "");
+}
+
 function passwordResetUrl(req: express.Request, token: string) {
-  const baseUrl = (process.env.LMS_LOGIN_URL || `${req.protocol}://${req.get("host") || "localhost:3000"}`).replace(/\/$/, "");
-  return `${baseUrl}/?resetToken=${encodeURIComponent(token)}`;
+  return `${lmsBaseUrl(req)}/?resetToken=${encodeURIComponent(token)}`;
+}
+
+/** Issues a one-time reset token and invalidates the user's earlier unused tokens. */
+async function issuePasswordResetToken(userId: string, createdBy: string | null) {
+  const resetToken = generatePasswordResetToken();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND used_at IS NULL",
+      [userId]
+    );
+    await client.query(
+      `INSERT INTO password_reset_tokens (id, user_id, token_hash, created_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [generateId("pwd_reset"), userId, sha256Hex(resetToken), createdBy, expiresAt]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { resetToken, expiresAt };
 }
 
 function parseWebhookTimestamp(value: unknown): Date | null {
@@ -489,6 +569,8 @@ function createIpRateLimiter(name: string, max: number, windowSec: number, messa
 }
 
 const rateLimitPublicCatalog = createIpRateLimiter("public-catalog", 120, 60, "Quá nhiều yêu cầu, vui lòng thử lại sau ít phút.");
+const rateLimitRegister = createIpRateLimiter("register", 5, 60 * 60, "Bạn đã gửi quá nhiều yêu cầu tạo tài khoản. Vui lòng thử lại sau.");
+const rateLimitForgotPassword = createIpRateLimiter("forgot-password", 5, 15 * 60, "Quá nhiều yêu cầu quên mật khẩu. Vui lòng thử lại sau.");
 
 async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -563,6 +645,8 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
   if (csrfSafeMethods.has(req.method)) return next();
   if (req.path === "/auth/login" || req.path === "/api/auth/login") return next();
   if (req.path === "/auth/reset-password/complete" || req.path === "/api/auth/reset-password/complete") return next();
+  if (req.path === "/auth/register" || req.path === "/api/auth/register") return next();
+  if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
   if (req.path === "/payments/webhook" || req.path === "/webhooks/payment" || req.path === "/api/payments/webhook" || req.path === "/api/webhooks/payment") return next();
   const cookieToken = extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
@@ -572,6 +656,9 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
   }
   next();
 }
+
+// An account still on its emailed temporary password may only do this much until it sets its own.
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set(["/api/auth/me", "/api/auth/logout", "/api/users/change-password"]);
 
 async function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
   try {
@@ -588,6 +675,9 @@ async function requireAuth(req: AuthRequest, res: express.Response, next: expres
       return res.status(401).json({ error: "User is not available." });
     }
     req.user = user;
+    if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.has(req.originalUrl.split("?")[0])) {
+      return res.status(403).json({ error: "Bạn cần đổi mật khẩu tạm thời trước khi tiếp tục.", code: "PASSWORD_CHANGE_REQUIRED" });
+    }
     next();
   } catch (error) {
     next(error);
@@ -1973,7 +2063,7 @@ app.post("/api/auth/reset-password/complete", rateLimitResetPassword, validateBo
 
     userId = resetToken.user_id;
     await client.query(
-      "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
+      "UPDATE users SET password_hash = $1, password_salt = $2, must_change_password = false WHERE id = $3",
       [credential.hash, credential.salt, userId]
     );
     await client.query(
@@ -1990,6 +2080,48 @@ app.post("/api/auth/reset-password/complete", rateLimitResetPassword, validateBo
 
   await auditRepository.log(pool, userId, "password_reset_token_used", "security", "User completed one-time password reset.");
   res.json({ ok: true, message: "Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập bằng mật khẩu mới." });
+}));
+
+const ACCOUNT_REQUEST_MESSAGE = "Nếu email hợp lệ, thông tin đăng nhập đã được gửi tới hộp thư của bạn. Vui lòng kiểm tra cả thư mục Spam.";
+// Outside production the temporary password is returned too, so E2E tests and local QA can log in without a mailbox.
+const exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging";
+
+app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
+  const existing = await usersRepository.findAuthByEmail(pool, req.body.email) as DbUserRow | null;
+  if (existing) {
+    // Same answer as a fresh sign-up so the form cannot be used to discover registered emails.
+    void sendAccountExistsEmail(pool, existing.id, { to: existing.email, name: existing.name, loginUrl: lmsBaseUrl(req) })
+      .catch(err => console.error("[register] failed to send account-exists email:", err));
+    return res.status(202).json({ ok: true, message: ACCOUNT_REQUEST_MESSAGE });
+  }
+
+  const result = await createStudentWithTemporaryPassword(
+    { name: req.body.name, email: req.body.email, phone: req.body.phone },
+    "self",
+    lmsBaseUrl(req)
+  );
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+
+  invalidateStoreCache();
+  await auditRepository.log(pool, result.user.id, "self_register", "security", `Self sign-up with personal email ${result.user.email}.`);
+  res.status(202).json({
+    ok: true,
+    message: ACCOUNT_REQUEST_MESSAGE,
+    ...(exposeDevSecrets() ? { devTemporaryPassword: result.temporaryPassword } : {})
+  });
+}));
+
+app.post("/api/auth/forgot-password", rateLimitForgotPassword, validateBody(schemas.forgotPassword), asyncHandler(async (req, res) => {
+  const row = await usersRepository.findAuthByEmail(pool, req.body.email) as DbUserRow | null;
+  if (row && row.is_active) {
+    // Runs in the background so neither the response body nor its timing reveals whether the email exists.
+    void (async () => {
+      const { resetToken, expiresAt } = await issuePasswordResetToken(row.id, null);
+      await sendPasswordResetLinkEmail(pool, row.id, { to: row.email, name: row.name, resetUrl: passwordResetUrl(req, resetToken), expiresAt });
+      await auditRepository.log(pool, row.id, "forgot_password_link_sent", "security", "User requested a password reset link.");
+    })().catch(err => console.error("[forgot-password] failed:", err));
+  }
+  res.json({ ok: true, message: "Nếu email có trong hệ thống, liên kết đặt lại mật khẩu đã được gửi tới hộp thư của bạn." });
 }));
 
 app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
@@ -2015,6 +2147,8 @@ app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => {
 app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: "Vui lòng nhập đầy đủ mật khẩu cũ và mới." });
+  if (String(newPassword).length < 8) return res.status(400).json({ error: "Mật khẩu mới phải có tối thiểu 8 ký tự." });
+  if (newPassword === currentPassword) return res.status(400).json({ error: "Mật khẩu mới phải khác mật khẩu hiện tại." });
 
   const row = await usersRepository.findAuthByEmail(pool, req.user!.email) as DbUserRow | null;
   if (!row || !verifyPassword(currentPassword, row.password_hash, row.password_salt || undefined)) {
@@ -2023,7 +2157,7 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
 
   const credential = hashPassword(newPassword);
   await pool.query(
-    "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
+    "UPDATE users SET password_hash = $1, password_salt = $2, must_change_password = false WHERE id = $3",
     [credential.hash, credential.salt, req.user!.id]
   );
 
@@ -3190,29 +3324,8 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["manager", "super_ad
 app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manager", "super_admin", "admin"]), rateLimitResetPassword, asyncHandler(async (req, res) => {
   const user = await usersRepository.findById(pool, req.params.id);
   if (!user) return res.status(404).json({ error: "User not found." });
-  const resetToken = generatePasswordResetToken();
-  const resetTokenHash = sha256Hex(resetToken);
-  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
+  const { resetToken, expiresAt } = await issuePasswordResetToken(user.id, req.user!.id);
   const resetUrl = passwordResetUrl(req, resetToken);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND used_at IS NULL",
-      [user.id]
-    );
-    await client.query(
-      `INSERT INTO password_reset_tokens (id, user_id, token_hash, created_by, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [generateId("pwd_reset"), user.id, resetTokenHash, req.user!.id, expiresAt]
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
 
   let emailSent = false;
   try {

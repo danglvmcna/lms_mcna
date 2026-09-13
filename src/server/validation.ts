@@ -335,5 +335,13 @@ export const schemas = {
   }),
   reorderSessionMaterials: z.object({
     materialIds: z.array(z.string().trim().min(1)).min(1).max(200)
+  }),
+  selfRegister: z.object({
+    name: z.string().trim().min(2).max(120),
+    email: z.email().trim().toLowerCase(),
+    phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/)
+  }),
+  forgotPassword: z.object({
+    email: z.email().trim().toLowerCase()
   })
 };
