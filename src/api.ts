@@ -1,4 +1,4 @@
-import { LMSDataStore, SessionMaterial } from "./types";
+import { LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial } from "./types";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -86,6 +86,8 @@ export const api = {
   deleteSessionMaterial: (materialId: string) => apiFetch(`/api/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" }),
   materialDownloadUrl: (materialId: string) => `/api/materials/${encodeURIComponent(materialId)}/download`,
   getCourses: () => apiFetch("/api/courses"),
+  getPublicCourses: () => apiFetch<PublicCourseSummary[]>("/api/public/courses"),
+  getPublicCourse: (courseId: string) => apiFetch<PublicCourseDetail>(`/api/public/courses/${encodeURIComponent(courseId)}`),
   createCourse: (payload: unknown) => apiFetch("/api/courses", { method: "POST", body: JSON.stringify(payload) }),
   updateCourse: (courseId: string, payload: unknown) => apiFetch(`/api/courses/${courseId}`, { method: "PUT", body: JSON.stringify(payload) }),
   submitCourse: (courseId: string) => apiFetch(`/api/courses/${courseId}/submit`, { method: "POST" }),

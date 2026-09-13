@@ -117,7 +117,7 @@ import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
-import { DbUserRow, toPublicUser, tuitionFeeFromRow, parseSchedule, courseSectionFromRow } from "./src/server/mappers";
+import { DbUserRow, toPublicUser, tuitionFeeFromRow, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow } from "./src/server/mappers";
 import { validateBody, schemas } from "./src/server/validation";
 import { seedAuthUsers, seedCoreLearningData } from "./src/server/seedCore";
 import { usersRepository } from "./src/server/repositories/users";
@@ -143,6 +143,7 @@ import { forumRepository } from "./src/server/repositories/forum";
 import { sectionsRepository } from "./src/server/repositories/sections";
 import { sessionMaterialsRepository } from "./src/server/repositories/sessionMaterials";
 import { materialStorage } from "./src/server/services/storage";
+import { requestEnrollment } from "./src/server/services/enrollmentService";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
@@ -464,6 +465,30 @@ function extractCookie(req: express.Request, name: string): string | null {
   const match = (req.header("Cookie") || "").match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+function createIpRateLimiter(name: string, max: number, windowSec: number, message: string) {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      if (process.env.DISABLE_RATE_LIMIT === "true") return next();
+      const key = `ratelimit:${name}:${req.ip || req.socket.remoteAddress || "unknown"}`;
+      const current = await safeRedis(async () => {
+        const count = await redis.incr(key);
+        if (count === 1) await redis.expire(key, windowSec);
+        return count;
+      }, 1);
+      if (current > max) {
+        const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+        res.setHeader("Retry-After", String(ttl));
+        return res.status(429).json({ error: message });
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+const rateLimitPublicCatalog = createIpRateLimiter("public-catalog", 120, 60, "Quá nhiều yêu cầu, vui lòng thử lại sau ít phút.");
 
 async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -2054,6 +2079,40 @@ app.get("/api/dashboard/academic", requireAuth, requireRole(["admin", "super_adm
 app.get("/api/dashboard/advisor", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getDashboard(pool, req.user!.id))));
 app.get("/api/dashboard/parent", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getDashboard(pool, req.linkedStudentId!))));
 
+const PUBLIC_COURSE_SELECT = `
+  SELECT c.*, u.name AS teacher_name,
+         (SELECT COUNT(*) FROM course_sections cs WHERE cs.course_id = c.id AND cs.status = 'open')::int AS open_section_count
+  FROM courses c
+  LEFT JOIN users u ON u.id = c.teacher_id`;
+
+app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req, res) => {
+  const rows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
+  res.setHeader("Cache-Control", "public, max-age=30");
+  res.json(rows.map(publicCourseFromRow));
+}));
+
+app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (req, res) => {
+  const courseRow = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [req.params.id])).rows[0];
+  if (!courseRow) return res.status(404).json({ error: "Không tìm thấy khóa học." });
+  const sectionRows = (await pool.query(
+    `SELECT cs.*, u.name AS teacher_name,
+            (SELECT COUNT(*) FROM course_registrations cr WHERE cr.section_id = cs.id AND cr.status = 'registered')::int AS registered_count
+     FROM course_sections cs
+     LEFT JOIN users u ON u.id = cs.teacher_id
+     WHERE cs.course_id = $1 AND cs.status = 'open'
+     ORDER BY cs.opening_date NULLS LAST, cs.section_code`,
+    [courseRow.id]
+  )).rows;
+  const sessionRows = sectionRows.length
+    ? (await pool.query("SELECT * FROM attendance_sessions WHERE section_id = ANY($1)", [sectionRows.map(row => row.id)])).rows
+    : [];
+  res.setHeader("Cache-Control", "public, max-age=30");
+  res.json({
+    course: publicCourseFromRow(courseRow),
+    sections: sectionRows.map(row => publicCourseSectionFromRow(row, sessionRows.filter(session => session.section_id === row.id)))
+  });
+}));
+
 app.get("/api/courses", requireAuth, asyncHandler(async (_req, res) => res.json(await coursesRepository.list(pool))));
 app.post("/api/courses", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const body = req.body;
@@ -2287,60 +2346,17 @@ app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin", "su
 
 app.get("/api/enrollments", requireAuth, asyncHandler(async (req, res) => res.json(await enrollmentsRepository.listForUser(pool, req.user!))));
 app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), validateBody(schemas.registerEnrollment), asyncHandler(async (req, res) => {
-  const course = await coursesRepository.findById(pool, req.body.courseId);
-  if (!course || course.status !== "published") return res.status(404).json({ error: "Published course not found." });
-  if (await enrollmentsRepository.existsForCourse(pool, req.user!.id, course.id)) return res.status(409).json({ error: "Enrollment already exists." });
-
-  const isPaid = Number(course.price || 0) > 0;
-  const sectionId = isPaid ? undefined : req.body.sectionId;
-  if (sectionId) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [sectionId])).rows[0];
-    if (!section) return res.status(404).json({ error: "Selected class section not found." });
-    if (section.course_id !== course.id) return res.status(400).json({ error: "Selected section does not belong to this course." });
-
-    // Check capacity
-    const countRes = await pool.query(
-      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-      [sectionId]
-    );
-    const count = Number(countRes.rows[0].count);
-    if (count >= section.max_students) {
-      return res.status(400).json({ error: "Lớp học phần này đã đạt sĩ số tối đa. Vui lòng chọn lớp khác." });
-    }
-
-    // Check timetable conflict
-    if (await sectionsRepository.conflictCheck(pool, req.user!.id, sectionId)) {
-      return res.status(400).json({ error: "Lớp học phần này bị trùng lịch học với các lớp khác bạn đã đăng ký." });
-    }
-  }
-
-  const enrollment = await enrollmentsRepository.register(pool, req.user!.id, course.id, isPaid);
-  if (isPaid) {
-    const txId = generateId("tx");
-    await pool.query(
-      `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at)
-       VALUES ($1, $2, $3, $4, 'pending', 'Chuyển khoản Ngân hàng (QR)', $5)`,
-      [txId, req.user!.id, course.id, Number(course.price), new Date().toISOString()]
-    );
-  }
-
-  if (sectionId) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [sectionId])).rows[0];
-    const creditsRow = (await pool.query(
-      "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
-      [course.id]
-    )).rows[0];
-
-    await pool.query(
-      `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-       VALUES ($1, $2, $3, $4, 'waitlisted', $5, $6, false)`,
-      [generateId("reg"), req.user!.id, sectionId, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
-    );
-  }
+  const result = await requestEnrollment({
+    studentId: req.user!.id,
+    courseId: req.body.courseId,
+    sectionId: req.body.sectionId,
+    origin: "lms"
+  });
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
 
   invalidateStoreCache();
-  await audit(req, "enroll_course", course.id, course.title);
-  res.status(201).json(enrollment);
+  await audit(req, "enroll_course", result.course.id, result.course.title);
+  res.status(201).json(result.enrollment);
 }));
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
   const enrollment = await enrollmentsRepository.activateEnrollment(pool, req.params.id);

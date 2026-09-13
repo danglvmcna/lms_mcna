@@ -367,6 +367,39 @@ export interface CourseSection {
   numberOfSessions?: number;
 }
 
+// Public (unauthenticated) catalog shapes: only what a visitor may see before signing up.
+export interface PublicCourseSummary {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  thumbnail?: string;
+  price: number;
+  level?: Course["level"];
+  tags: string[];
+  openingDate?: string;
+  numberOfLessons?: number;
+  teacherName?: string;
+  openSectionCount: number;
+}
+
+export interface PublicCourseSection {
+  id: string;
+  sectionCode: string;
+  teacherName?: string;
+  maxStudents: number;
+  seatsLeft: number;
+  schedule: CourseSection["schedule"];
+  openingDate?: string;
+  numberOfSessions?: number;
+  sessions: Array<{ id: string; topic: string; date?: string }>;
+}
+
+export interface PublicCourseDetail {
+  course: PublicCourseSummary;
+  sections: PublicCourseSection[];
+}
+
 export interface RegistrationPeriod {
   id: string;
   semesterId: string;

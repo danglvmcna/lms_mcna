@@ -30,6 +30,8 @@ const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
 const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
 const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
+import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
+import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +64,12 @@ function AppShell() {
   const [resetConfirmPassword, setResetConfirmPassword] = useState("");
   const [resetPasswordMessage, setResetPasswordMessage] = useState<string | null>(null);
   const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+
+  // Visitors land on the public course catalog; "login" shows the sign-in card.
+  const [authView, setAuthView] = useState<"catalog" | "login">(() => (resetToken ? "login" : "catalog"));
+  const [initialCourseId] = useState(() => new URLSearchParams(window.location.search).get("course") || undefined);
+  const [pendingIntent, setPendingIntent] = useState<EnrollIntent | null>(() => readEnrollIntent());
+  const [appNotice, setAppNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Mobile sidebar navigation visibility
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -134,6 +142,29 @@ function AppShell() {
       sessionStorage.removeItem("e16_lms_role");
     }
   }, [currentUser]);
+
+  // Submit the class a visitor picked in the public catalog once they are signed in as a student.
+  useEffect(() => {
+    if (!currentUser || currentUser.mustChangePassword) return;
+    const intent = readEnrollIntent();
+    if (!intent) return;
+    clearEnrollIntent();
+    setPendingIntent(null);
+    if (currentUser.role !== "student") return;
+    api.registerEnrollment(intent.courseId, intent.sectionId)
+      .then(async () => {
+        const target = [intent.sectionCode ? `lớp ${intent.sectionCode}` : "", intent.courseTitle || ""].filter(Boolean).join(" – ") || "khóa học";
+        setAppNotice({ type: "success", message: `Đã gửi yêu cầu đăng ký ${target}. Phòng đào tạo sẽ xác nhận và mở quyền học cho bạn.` });
+        await refreshStoreDataFromServer();
+      })
+      .catch((err: any) => setAppNotice({ type: "error", message: err.message || "Không thể đăng ký lớp đã chọn." }));
+  }, [currentUser?.id, currentUser?.mustChangePassword]);
+
+  useEffect(() => {
+    if (!appNotice) return;
+    const timer = setTimeout(() => setAppNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [appNotice]);
 
   const [activeSystem, setActiveSystem] = useState<"SIS" | "LMS">("SIS");
 
@@ -243,6 +274,7 @@ function AppShell() {
     }).catch(() => undefined);
     setCurrentUser(null);
     setCsrfToken(null);
+    setAuthView("catalog");
     sessionStorage.removeItem("e16_lms_active_session");
   };
 
@@ -402,6 +434,20 @@ function AppShell() {
       {/* Dynamic Ambient Blur Spheres */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-purple-600/5 rounded-full blur-[140px] pointer-events-none" />
+
+      {appNotice && (
+        <div
+          role="status"
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-lg px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold flex items-start justify-between gap-3 border ${
+            appNotice.type === "success" ? "bg-emerald-950 border-emerald-500/30 text-emerald-200" : "bg-red-950 border-red-500/30 text-red-200"
+          }`}
+        >
+          <span>{appNotice.message}</span>
+          <button type="button" onClick={() => setAppNotice(null)} className="shrink-0 cursor-pointer" aria-label="Đóng thông báo">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* MAIN LAYOUT CANVAS */}
       {currentUser ? (
@@ -677,6 +723,18 @@ function AppShell() {
           </main>
 
         </div>
+      ) : authView === "catalog" && !resetToken ? (
+        <PublicCourseCatalog
+          initialCourseId={initialCourseId}
+          onLogin={() => setAuthView("login")}
+          onRegister={intent => {
+            if (intent) {
+              saveEnrollIntent(intent);
+              setPendingIntent(intent);
+            }
+            setAuthView("login");
+          }}
+        />
       ) : (
         /* AUTH SECTION VIEW (SPLIT SCREEN LOGIN / WELCOME CARD) */
         <div className="min-h-screen flex items-center justify-center p-4 relative z-20 animate-in fade-in zoom-in-95 duration-200">
@@ -711,6 +769,15 @@ function AppShell() {
 
             {/* RIGHT FORM COLUMN */}
             <div className="lg:col-span-7 p-8 md:p-10 flex flex-col justify-center space-y-6">
+              {!resetToken && (
+                <button
+                  type="button"
+                  onClick={() => setAuthView("catalog")}
+                  className="self-start inline-flex items-center gap-1 text-xs font-bold text-white/60 hover:text-white cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Xem danh sách khóa học
+                </button>
+              )}
               <div className="space-y-1">
                 <h3 className="text-lg font-display font-bold text-white tracking-tight">
                   {resetToken ? "Đặt lại mật khẩu" : "Đăng nhập tài khoản của bạn"}
@@ -721,6 +788,24 @@ function AppShell() {
                     : "Xác thực để truy cập phân hệ học vụ hoặc lớp học tương ứng."}
                 </p>
               </div>
+
+              {!resetToken && pendingIntent && (
+                <div className="bg-indigo-500/10 border border-indigo-400/20 text-indigo-200 p-3 rounded-xl text-xs flex items-start justify-between gap-3">
+                  <span>
+                    Đăng nhập để hoàn tất đăng ký {pendingIntent.sectionCode ? `lớp ${pendingIntent.sectionCode} – ` : ""}{pendingIntent.courseTitle || "khóa học đã chọn"}.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearEnrollIntent();
+                      setPendingIntent(null);
+                    }}
+                    className="shrink-0 font-bold cursor-pointer"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+              )}
 
               {!resetToken && authError && (
                 <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs space-y-2">

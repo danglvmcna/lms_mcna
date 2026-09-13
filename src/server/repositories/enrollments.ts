@@ -12,17 +12,25 @@ export const enrollmentsRepository = {
     return result.rows.map(enrollmentFromRow);
   },
 
-  async register(db: Queryable, studentId: string, courseId: string, isPaidCourse: boolean) {
+  async register(
+    db: Queryable,
+    studentId: string,
+    courseId: string,
+    isPaidCourse: boolean,
+    extra: { requestedSectionId?: string; crmDealId?: string } = {}
+  ) {
     const enrollment: Enrollment = {
       id: generateId("enroll"),
       courseId,
       studentId,
       status: isPaidCourse ? "pending_payment" : "pending",
-      enrolledAt: new Date().toISOString()
+      enrolledAt: new Date().toISOString(),
+      requestedSectionId: extra.requestedSectionId,
+      crmDealId: extra.crmDealId
     };
     await db.query(
-      "INSERT INTO enrollments (id,course_id,student_id,status,enrolled_at,completed_at) VALUES ($1,$2,$3,$4,$5,$6)",
-      [enrollment.id, enrollment.courseId, enrollment.studentId, enrollment.status, enrollment.enrolledAt, null]
+      "INSERT INTO enrollments (id,course_id,student_id,status,enrolled_at,completed_at,requested_section_id,crm_deal_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [enrollment.id, enrollment.courseId, enrollment.studentId, enrollment.status, enrollment.enrolledAt, null, extra.requestedSectionId || null, extra.crmDealId || null]
     );
     return enrollment;
   },

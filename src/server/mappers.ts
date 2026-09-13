@@ -1,4 +1,4 @@
-import { AcademicWarning, Assignment, Course, CourseSection, Enrollment, LessonProgress, Question, Quiz, QuizAttempt, SessionMaterial, Submission, TuitionFee, User, UserRole } from "../types";
+import { AcademicWarning, Assignment, Course, CourseSection, Enrollment, LessonProgress, PublicCourseSection, PublicCourseSummary, Question, Quiz, QuizAttempt, SessionMaterial, Submission, TuitionFee, User, UserRole } from "../types";
 
 export type DbUserRow = {
   id: string;
@@ -71,6 +71,44 @@ export function courseFromRow(row: any): Course {
     createdAt: row.created_at,
     openingDate: row.opening_date || undefined,
     numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === undefined ? undefined : Number(row.number_of_lessons)
+  };
+}
+
+/** Expects courses.* plus teacher_name and open_section_count. */
+export function publicCourseFromRow(row: any): PublicCourseSummary {
+  const course = courseFromRow(row);
+  return {
+    id: course.id,
+    title: course.title,
+    description: course.description,
+    category: course.category,
+    thumbnail: course.thumbnail,
+    price: course.price || 0,
+    level: course.level,
+    tags: course.tags || [],
+    openingDate: course.openingDate,
+    numberOfLessons: course.numberOfLessons,
+    teacherName: row.teacher_name || undefined,
+    openSectionCount: Number(row.open_section_count || 0)
+  };
+}
+
+/** Expects course_sections.* plus teacher_name and registered_count, with that class's attendance_sessions rows. */
+export function publicCourseSectionFromRow(row: any, sessionRows: any[]): PublicCourseSection {
+  const section = courseSectionFromRow(row);
+  const toDateText = (value: any) => (value instanceof Date ? value.toISOString() : value ? String(value) : undefined);
+  return {
+    id: section.id,
+    sectionCode: section.sectionCode,
+    teacherName: row.teacher_name || undefined,
+    maxStudents: section.maxStudents,
+    seatsLeft: Math.max(0, section.maxStudents - Number(row.registered_count || 0)),
+    schedule: section.schedule,
+    openingDate: section.openingDate,
+    numberOfSessions: section.numberOfSessions,
+    sessions: sessionRows
+      .map(session => ({ id: session.id, topic: session.topic, date: toDateText(session.date || session.session_date) }))
+      .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
   };
 }
 

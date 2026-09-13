@@ -270,11 +270,13 @@ export default function ClassPlacement({ store, currentUser, onRefreshData }: Cl
       courseTitle: item.courseTitle,
       isPaymentPending: item.isPaymentPending
     });
-    // Set default section as first available
+    // Default to the class the student picked when registering, otherwise the first open class
     const availableSections = (store.courseSections || []).filter(
       s => s.courseId === item.courseId && s.semesterId === activeSemesterId && s.status === "open"
     );
-    setSelectedSectionId(availableSections[0]?.id || "");
+    const requestedSectionId = (store.enrollments || []).find(enrollment => enrollment.id === item.enrollmentId)?.requestedSectionId;
+    const requestedSection = availableSections.find(section => section.id === requestedSectionId);
+    setSelectedSectionId(requestedSection?.id || availableSections[0]?.id || "");
     setShowModal(true);
   };
 
