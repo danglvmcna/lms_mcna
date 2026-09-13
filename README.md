@@ -47,6 +47,33 @@ Hệ thống tích hợp quy trình tự động cấp phát tài khoản email 
 
 ---
 
+## 🎓 Danh Mục Khóa Học, Lớp – Buổi Học, Tự Đăng Ký & Kết Nối CRM
+
+### Danh mục công khai và đăng ký học
+* Khách chưa đăng nhập thấy danh mục khóa học `published` ở trang đầu (`GET /api/public/courses`, `GET /api/public/courses/:id`): lớp đang mở, số chỗ còn trống, lịch hàng tuần và danh sách buổi.
+* Bấm **Đăng ký lớp này** → tạo tài khoản hoặc đăng nhập → hệ thống tự gửi yêu cầu ghi danh vào đúng lớp đã chọn.
+* Khóa có phí: ghi danh `pending_payment`, lớp đã chọn được lưu (`requested_section_id`) và được chọn sẵn ở màn xếp lớp. Khóa miễn phí: ghi danh `pending`, học viên vào danh sách chờ của lớp.
+
+### Khóa học → Lớp → Buổi → Tài liệu
+* Mỗi lớp (`course_sections`) tự sinh các buổi "Buổi N" (`attendance_sessions`) theo số buổi và lịch học.
+* Giảng viên/Admin mở một buổi trong màn **Điểm danh** để thêm tài liệu (`session_materials`): slide (`.ppt/.pptx/.pdf`), file Word/PDF (`.doc/.docx/.pdf`), video YouTube hoặc liên kết ngoài.
+* File nằm trong bucket **private** của Supabase Storage; học viên chỉ tải được qua `GET /api/materials/:id/download` khi đã được xếp vào lớp (chuyển hướng tới link ký hạn 60 giây). Chưa cấu hình Supabase thì file lưu ở `MATERIALS_DIR` (không public).
+* Hệ thống chặn giảm số buổi của lớp nếu các buổi sắp bị xóa đang có tài liệu.
+
+### Tự đăng ký tài khoản bằng email cá nhân
+* `POST /api/auth/register` (họ tên, email cá nhân, số điện thoại) tạo tài khoản học viên và gửi **mật khẩu tạm** tới email.
+* Khi còn mật khẩu tạm, mọi API (trừ `me`, `logout`, `change-password`) trả `PASSWORD_CHANGE_REQUIRED`; giao diện hiện màn đổi mật khẩu bắt buộc.
+* Email đã có tài khoản nhận phản hồi giống hệt (không lộ tài khoản) và một email nhắc "bạn đã có tài khoản". `POST /api/auth/forgot-password` gửi liên kết đặt lại mật khẩu một lần.
+* Tài khoản tự đăng ký hoặc tạo từ CRM không được cấp email Google Workspace.
+* Ngoài môi trường production, phản hồi đăng ký trả thêm `devTemporaryPassword` để kiểm thử.
+
+### Kết nối CRM MCNA
+* **LMS → CRM:** sự kiện `contact.registered`, `enrollment.requested`, `enrollment.status_changed` được ghi vào `crm_outbox` cùng transaction nghiệp vụ, gửi mỗi 30 giây tới `CRM_WEBHOOK_URL` kèm chữ ký HMAC, tự thử lại tối đa 10 lần.
+* **CRM → LMS:** `/api/integrations/crm/courses`, `/students`, `/enrollments`, `/payments/confirm`, xác thực bằng API key + chữ ký HMAC, chống xử lý trùng theo `X-CRM-Event-Id`.
+* Hợp đồng chi tiết cho đội CRM: [docs/crm-integration.md](docs/crm-integration.md).
+
+---
+
 ## 🛠️ Hướng Dẫn Kỹ Thuật Chi Tiết (Technical Guidelines)
 
 Lập trình viên và quản trị viên hệ thống cần tuân thủ nghiêm ngặt các chỉ dẫn kỹ thuật dưới đây để cài đặt, vận hành và phát triển dự án.
@@ -133,6 +160,12 @@ Hệ thống hỗ trợ kiểm thử tự động toàn bộ luồng hoạt đ�
   ```
 *Kịch bản E2E sẽ mô phỏng tuần tự các hành động: Khởi tạo sinh viên mới -> Đăng ký môn -> Giảng viên điểm danh và chấm điểm -> Sinh viên gửi/ghi nhận thanh toán học phí -> hệ thống cập nhật trạng thái thanh toán -> Cố vấn học tập giải quyết các cảnh báo phát sinh.*
 
+* **Luồng danh mục → tự đăng ký → CRM → tài liệu buổi học.** Server phải chạy với `NODE_ENV` khác production và có `CRM_API_KEY`/`CRM_INBOUND_SECRET`; script dùng cùng giá trị và `DATABASE_URL` trỏ cùng DB:
+  ```bash
+  E2E_BASE_URL=http://localhost:3000 CRM_API_KEY=... CRM_INBOUND_SECRET=... npm run test:signup-crm
+  ```
+* **CRM giả để thử webhook:** `CRM_WEBHOOK_SECRET=dev-secret npm run mock:crm`, rồi khởi động LMS với `CRM_WEBHOOK_URL=http://localhost:4100/webhooks/lms` và cùng `CRM_WEBHOOK_SECRET`.
+
 ---
 
 ### 5. Biên Dịch & Vận Hành Production (Production Deploy)
@@ -171,6 +204,15 @@ npm start
 * `SMTP_PORT` (Mặc định: `465` hoặc `587`)
 * `SMTP_USER` (Hòm thư gửi tự động, ví dụ: `noreply@mcna.edu.vn`)
 * `SMTP_FROM` (Tên hiển thị người gửi, ví dụ: `"LMS E16-MCNA" <noreply@mcna.edu.vn>`)
+
+**Cấu hình Tài liệu buổi học (Supabase Storage):**
+* `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (khóa service role, chỉ dùng phía server)
+* `SUPABASE_STORAGE_BUCKET` (tên bucket **private**, mặc định `lms-materials`)
+
+**Cấu hình Kết nối CRM MCNA:**
+* `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET` (LMS gửi sự kiện sang CRM)
+* `CRM_API_KEY`, `CRM_INBOUND_SECRET` (CRM gọi vào LMS)
+* `CRM_SIGNATURE_TOLERANCE_SECONDS` (độ lệch thời gian cho phép của chữ ký, mặc định `300`)
 
 #### Quy trình triển khai sạch và cấu trúc lệnh đầy đủ trên server:
 ```bash

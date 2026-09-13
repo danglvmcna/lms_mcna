@@ -34,6 +34,22 @@ Sau khi đăng nhập, hệ thống tự hiển thị menu theo đúng vai trò 
 2. Nhập email và mật khẩu.
 3. Chọn đăng nhập. Hệ thống đưa người dùng vào phân hệ và menu phù hợp với vai trò.
 
+### Tạo tài khoản học viên (tự đăng ký)
+
+1. Ở trang đầu (danh mục khóa học), chọn **Tạo tài khoản**, hoặc bấm **Đăng ký lớp này** ở một lớp.
+2. Nhập họ tên, **email cá nhân** và số điện thoại, rồi chọn **Tạo tài khoản**.
+3. Mở hộp thư (kiểm tra cả thư mục Spam) để lấy **mật khẩu tạm thời**.
+4. Đăng nhập bằng email và mật khẩu tạm. Hệ thống yêu cầu đặt mật khẩu mới (tối thiểu 8 ký tự) trước khi dùng các chức năng khác.
+5. Nếu đã chọn một lớp trước khi tạo tài khoản, sau khi đổi mật khẩu hệ thống tự gửi yêu cầu đăng ký lớp đó.
+
+Lưu ý: nếu email đã có tài khoản, màn hình vẫn báo đã gửi thông tin, và hệ thống gửi email nhắc bạn đăng nhập hoặc dùng **Quên mật khẩu**.
+
+### Quên mật khẩu
+
+1. Ở màn đăng nhập, chọn **Quên mật khẩu?**.
+2. Nhập email đăng nhập và gửi yêu cầu.
+3. Mở liên kết trong email (chỉ dùng được một lần, có thời hạn) để đặt mật khẩu mới.
+
 ### Đổi mật khẩu
 
 1. Mở menu tài khoản ở góc giao diện.
@@ -272,6 +288,21 @@ Lưu ý:
 - Giảng viên tập trung hoàn thiện nội dung giảng dạy của từng buổi.
 - Video có thể được tải lên nếu giao diện hiển thị chức năng upload; nếu dùng video ngoài, dán URL hợp lệ.
 
+#### Tài liệu buổi học: slide, file Word/PDF, video YouTube
+
+Đường dẫn: **Điểm danh -> chọn lớp -> chọn buổi học -> khung "Slide, tài liệu & video YouTube"**
+
+1. Chọn **Tải slide** để tải tệp `.ppt`, `.pptx` hoặc `.pdf`.
+2. Chọn **Tải file Word/PDF** để tải tệp `.doc`, `.docx` hoặc `.pdf`.
+3. Dán link YouTube (`youtube.com/watch?v=...`, `youtu.be/...` hoặc Shorts), nhập tiêu đề nếu muốn, rồi chọn **Thêm video**.
+4. Dùng nút mũi tên để sắp xếp, nút bút để đổi tên, nút thùng rác để xóa tài liệu.
+
+Lưu ý:
+
+- Mỗi tệp tối đa 50 MB.
+- Học viên chỉ thấy tài liệu khi đã được xếp vào lớp và ghi danh đang hoạt động.
+- Không giảm được số buổi của lớp nếu các buổi sắp bị bỏ đang có tài liệu; hãy xóa tài liệu ở các buổi đó trước.
+
 ### 5.4. Tạo bài tập theo buổi học
 
 Đường dẫn: **LMS -> Buổi học -> Bài tập** hoặc **Bài tập & Chấm điểm**
@@ -368,24 +399,32 @@ Thông tin này được dùng cho liên hệ học vụ, học phí, cảnh bá
 
 ### 6.2. Đăng ký khóa học/lớp học
 
-Đường dẫn: **LMS -> Khám phá học trình**
+Có hai cách đăng ký.
 
-Quy trình:
+**Từ trang đầu, chưa cần đăng nhập**
+
+1. Mở trang chủ LMS: danh mục khóa học đang mở đăng ký hiện ngay.
+2. Tìm theo tên hoặc lọc theo lĩnh vực, rồi mở chi tiết khóa học.
+3. Xem các lớp đang mở: ngày khai giảng, giảng viên, số chỗ còn trống, lịch hàng tuần và lịch từng buổi.
+4. Chọn **Đăng ký lớp này**, sau đó tạo tài khoản (xem mục 3) hoặc đăng nhập. Yêu cầu đăng ký được gửi tự động ngay sau khi đăng nhập.
+
+**Sau khi đăng nhập**
+
+Đường dẫn: **LMS -> Khám phá học trình**
 
 1. Tìm khóa học bằng tên, danh mục hoặc từ khóa.
 2. Mở chi tiết khóa học.
-3. Chọn đăng ký.
-4. Nếu có danh sách lớp, chọn lớp/phiên học mong muốn.
-5. Xem trạng thái ghi danh.
+3. Chọn lớp mong muốn và bấm đăng ký.
+4. Xem trạng thái ghi danh.
 
 Với khóa học miễn phí:
 
-- Học viên có thể được kích hoạt theo cấu hình của lớp/khoa.
+- Học viên vào danh sách chờ của lớp đã chọn; phòng đào tạo xác nhận để mở quyền học.
 
 Với khóa học có phí:
 
-- Sau khi đăng ký, hệ thống tạo trạng thái **chờ thanh toán**.
-- Học viên chưa được vào lớp cho đến khi thanh toán được xác nhận và admin xác nhận xếp lớp.
+- Sau khi đăng ký, hệ thống tạo trạng thái **chờ thanh toán** và ghi nhớ lớp học viên đã chọn.
+- Học viên chưa được vào lớp cho đến khi thanh toán được xác nhận (bởi phòng đào tạo, hoặc bởi bộ phận tư vấn qua CRM) và được xếp vào lớp.
 
 ### 6.3. Thanh toán học phí
 
@@ -420,6 +459,7 @@ Trong lớp học, học viên có thể:
 - Xem danh sách buổi học theo lịch.
 - Mở nội dung từng buổi.
 - Xem video bài giảng.
+- Xem video YouTube, tải slide và tài liệu Word/PDF của từng buổi (mục **Tài liệu buổi học**).
 - Đọc nội dung/hướng dẫn.
 - Làm quiz gắn với buổi học.
 - Nộp bài tập gắn với buổi học.

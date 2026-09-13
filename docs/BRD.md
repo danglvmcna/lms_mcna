@@ -1,7 +1,7 @@
 # Tài liệu yêu cầu nghiệp vụ E16 LMS/SIS
 
-Phiên bản: 2.0
-Ngày cập nhật: 2026-06-09
+Phiên bản: 2.1
+Ngày cập nhật: 2026-09-14
 Phạm vi: Viết lại theo cấu trúc code hiện tại của repo `D:\LMS`
 
 ---
@@ -17,7 +17,7 @@ E16 LMS/SIS là ứng dụng quản lý đào tạo kết hợp hai không gian 
 
 Quy tắc scope quan trọng:
 
-- Không có tự đăng ký tài khoản công khai. Tài khoản được tạo bởi người có quyền quản trị.
+- Học viên **được tự đăng ký tài khoản** bằng email cá nhân (mật khẩu tạm gửi qua email, bắt buộc đổi ở lần đăng nhập đầu) hoặc được tạo từ CRM MCNA. Tài khoản giảng viên, phụ huynh và quản trị vẫn chỉ do người có quyền quản trị tạo.
 - Hệ thống chỉ còn **giao diện và trạng thái thanh toán**. Đối soát kế toán, sổ sách kế toán và phê duyệt giao dịch bởi kế toán nội bộ đã chuyển cho đơn vị/bên xử lý bên ngoài.
 - Các vai trò nghiệp vụ cũ như `finance`, `sale`, `academic_admin`, `advisor` đã được chuẩn hóa vào 6 vai trò hệ thống hiện tại.
 
@@ -44,6 +44,8 @@ Quy tắc scope quan trọng:
 - `src/components/ParentPanel.tsx`: phân hệ phụ huynh theo dõi con/em được liên kết.
 - `src/components/student/*`: workspace học tập, catalog khóa học, hồ sơ học vụ cá nhân.
 - `src/components/teacher/*`: xây dựng khóa học, quiz, bài tập, sổ điểm và analytics.
+- `src/components/public/*`: danh mục khóa học công khai, form tự đăng ký, quên mật khẩu, màn đổi mật khẩu bắt buộc.
+- `src/components/SessionMaterialsEditor.tsx`, `SessionMaterialsList.tsx`: quản lý (giảng viên/admin) và hiển thị (học viên) tài liệu buổi học.
 
 ### 3.2. Backend
 
@@ -53,6 +55,8 @@ Quy tắc scope quan trọng:
 - `src/server/mappers.ts`: map DB row sang type frontend và normalize role legacy.
 - `src/server/emailProvisioning/*`: cấp phát Google Workspace và gửi email onboarding.
 - `src/server/eventBus.ts`, `eventHandlers.ts`, `scheduler.ts`: xử lý event học vụ/thông báo bất đồng bộ.
+- `src/server/services/enrollmentService.ts`: ghi danh, xác nhận thanh toán và xếp lớp dùng chung cho giao diện và CRM; `src/server/services/storage.ts`: lưu file tài liệu buổi học.
+- `src/server/crm/*`: outbox gửi sự kiện sang CRM và ký/kiểm chữ ký HMAC.
 
 ### 3.3. Dữ liệu và vận hành
 
@@ -103,6 +107,10 @@ Chuẩn hóa role legacy:
 12. Thông báo nội bộ, audit log, upload tài liệu, diễn đàn khóa học.
 13. Học bổng, phúc khảo điểm, bảo lưu và xét tốt nghiệp.
 14. Cấp phát email Google Workspace cho sinh viên khi cấu hình Google/SMTP sẵn sàng.
+15. Danh mục khóa học công khai (chưa đăng nhập): xem khóa, lớp đang mở, số chỗ, lịch học và danh sách buổi; bấm đăng ký lớp.
+16. Tự đăng ký tài khoản học viên bằng email cá nhân, mật khẩu tạm qua email, bắt buộc đổi mật khẩu, tự phục vụ quên mật khẩu.
+17. Tài liệu từng buổi học: slide, file Word/PDF, video YouTube, liên kết ngoài; lưu private, chỉ học viên trong lớp truy cập.
+18. Kết nối hai chiều với CRM MCNA (webhook ký HMAC và API tích hợp) theo `docs/crm-integration.md`.
 
 ### 5.2. Ngoài phạm vi
 
@@ -133,7 +141,7 @@ Tiêu chí nghiệp vụ:
 
 - Không tiết lộ email có tồn tại hay không khi đăng nhập sai.
 - Tài khoản `isActive = false` bị chặn đăng nhập.
-- Các request ghi dữ liệu phải có CSRF token hợp lệ, trừ login/force logout.
+- Các request ghi dữ liệu phải có CSRF token hợp lệ, trừ login, force logout, đăng ký, quên/đặt lại mật khẩu, webhook thanh toán và API tích hợp CRM (các API tích hợp xác thực bằng chữ ký HMAC).
 
 ### 6.2. Vòng đời khóa học
 
@@ -174,6 +182,8 @@ Quy tắc:
 - Hệ thống không yêu cầu kế toán nội bộ duyệt giao dịch.
 - Đơn vị thanh toán bên ngoài chịu trách nhiệm đối soát. Ứng dụng chỉ lưu trạng thái, giao dịch tham chiếu, số tiền và lịch sử thao tác cần thiết cho học vụ.
 - Khi thanh toán hợp lệ, hệ thống phải cho phép chuyển enrollment sang bước học vụ tiếp theo (`pending` hoặc `active` tùy luồng xếp lớp).
+- Học viên chọn lớp ngay khi đăng ký (từ danh mục công khai hoặc sau khi đăng nhập). Lớp đã chọn được lưu ở `enrollments.requested_section_id` kể cả với khóa có phí và được chọn sẵn khi xếp lớp.
+- CRM MCNA có thể ghi danh và xác nhận thanh toán qua API tích hợp; nếu biết lớp, hệ thống xếp lớp và mở quyền học ngay. Xếp lớp thất bại (ví dụ lớp đầy) không làm mất ghi nhận thanh toán.
 
 ### 6.4. Học tập, quiz, bài tập và chứng nhận
 
@@ -247,13 +257,15 @@ Quy tắc scope mới:
 
 ### 7.1. Authentication & Authorization
 
-- **AUTH-001 [Must]**: Hệ thống không có public sign-up.
+- **AUTH-001 [Must]**: Học viên tự đăng ký bằng email cá nhân qua `POST /api/auth/register`; phản hồi giống nhau dù email đã tồn tại hay chưa. Chỉ tài khoản học viên được tự đăng ký.
 - **AUTH-002 [Must]**: Login dùng email/mật khẩu, session cookie HttpOnly và CSRF token.
 - **AUTH-003 [Must]**: Tài khoản inactive không thể đăng nhập.
 - **AUTH-004 [Must]**: Force logout chỉ xóa session hiện tại, không thay đổi dữ liệu người dùng.
 - **AUTH-005 [Must]**: Đổi mật khẩu yêu cầu mật khẩu hiện tại và xác nhận mật khẩu mới.
 - **AUTH-006 [Must]**: Reset mật khẩu dùng token/link một lần, lưu token dạng hash, có thời hạn và ghi nhận `used_at`; hệ thống không gửi mật khẩu tạm thời qua email reset.
 - **AUTH-007 [Must]**: API ghi dữ liệu phải kiểm tra `requireAuth`, `requireRole` và Zod validation khi có schema.
+- **AUTH-008 [Must]**: Tài khoản tạo bằng mật khẩu tạm (tự đăng ký hoặc CRM) có `must_change_password = true`; mọi API trừ `/api/auth/me`, `/api/auth/logout`, `/api/users/change-password` trả `403 PASSWORD_CHANGE_REQUIRED` cho đến khi người dùng đặt mật khẩu mới (tối thiểu 8 ký tự, khác mật khẩu tạm).
+- **AUTH-009 [Must]**: `POST /api/auth/forgot-password` luôn trả cùng một thông báo và gửi liên kết đặt lại một lần ở nền. Đăng ký và quên mật khẩu bị giới hạn tần suất theo IP.
 
 ### 7.2. Role và điều hướng
 
@@ -265,7 +277,7 @@ Quy tắc scope mới:
 ### 7.3. Quản trị người dùng
 
 - **USR-001 [Must]**: `manager` và `super_admin` được tạo user qua API quản trị.
-- **USR-002 [Must]**: Khi tạo student, hệ thống tạo `student_profiles` và kích hoạt luồng cấp email trường nếu cấu hình sẵn.
+- **USR-002 [Must]**: Khi tạo student, hệ thống tạo `student_profiles` và kích hoạt luồng cấp email trường nếu cấu hình sẵn. Tài khoản học viên tự đăng ký hoặc tạo từ CRM dùng email cá nhân và không được cấp email trường.
 - **USR-003 [Must]**: Reset mật khẩu user phải ghi audit log.
 - **USR-004 [Must]**: Khi deactivate student, hệ thống phải thu hồi/xóa trạng thái email trường nếu tích hợp Google Workspace khả dụng.
 - **USR-005 [Should]**: Import CSV users trên UI phải đi qua API server để dữ liệu bền vững trong PostgreSQL, không chỉ cập nhật client snapshot.
@@ -277,6 +289,9 @@ Quy tắc scope mới:
 - **CRS-003 [Must]**: Admin/manager/super_admin duyệt hoặc từ chối course kèm lý do.
 - **CRS-004 [Must]**: Upload tài liệu trả về URL dùng cho course/assignment/quiz attachment.
 - **CRS-005 [Should]**: Upload cần whitelist MIME/extension an toàn trước khi production public.
+- **CRS-006 [Must]**: Mỗi buổi học (`attendance_sessions`) có danh sách tài liệu `session_materials`: slide (.ppt/.pptx/.pdf), tài liệu (.doc/.docx/.pdf), video YouTube, liên kết ngoài. Giảng viên của lớp/khóa và admin được thêm, đổi tên, sắp xếp, xóa.
+- **CRS-007 [Must]**: File tài liệu lưu private (Supabase Storage) và chỉ tải qua route có kiểm quyền với link ký ngắn hạn. Học viên chỉ thấy tài liệu của buổi thuộc lớp mình đã được xếp, khi enrollment `active`/`completed`.
+- **CRS-008 [Must]**: Không cho giảm số buổi của lớp nếu buổi sắp bị xóa đang có tài liệu.
 
 ### 7.5. Enrollment, lớp học phần và thời khóa biểu
 
@@ -286,6 +301,8 @@ Quy tắc scope mới:
 - **ENR-004 [Must]**: Học vụ/admin có thể activate/approve enrollment và gắn section/semester khi cần.
 - **ENR-005 [Must]**: Lớp học phần có course, semester, teacher, section code, sĩ số tối đa, lịch học và trạng thái.
 - **ENR-006 [Must]**: Student chỉ được học/làm bài khi enrollment thuộc trạng thái `active` hoặc `completed`.
+- **ENR-007 [Must]**: Danh mục công khai `GET /api/public/courses` và `GET /api/public/courses/:id` chỉ trả khóa `published`, lớp `open`, số chỗ còn trống và lịch buổi; không trả tài liệu.
+- **ENR-008 [Must]**: Lớp học viên chọn khi đăng ký được lưu (`requested_section_id`) và dùng làm mặc định khi admin xếp lớp hoặc khi CRM xác nhận thanh toán.
 
 ### 7.6. Quiz, assignment và điểm
 
@@ -338,6 +355,16 @@ Quy tắc scope mới:
 - **PROV-004 [Must]**: Mật khẩu khởi tạo onboarding chỉ dùng cho tạo tài khoản ban đầu và không lưu plaintext trong DB; reset mật khẩu dùng link/token một lần.
 - **PROV-005 [Must]**: Admin/super_admin có API reprovision email cho student khi provisioning lỗi.
 
+### 7.12. Tích hợp CRM MCNA
+
+Hợp đồng kỹ thuật chi tiết: `docs/crm-integration.md`.
+
+- **CRM-001 [Must]**: Tạo tài khoản học viên bằng email cá nhân, ghi danh và mọi thay đổi trạng thái ghi danh phát sự kiện sang CRM (`contact.registered`, `enrollment.requested`, `enrollment.status_changed`) qua bảng outbox, ghi trong cùng transaction nghiệp vụ.
+- **CRM-002 [Must]**: Webhook gửi CRM được ký HMAC-SHA256, tự thử lại có giãn cách, tối đa 10 lần; trạng thái giao được lưu trong `crm_outbox`.
+- **CRM-003 [Must]**: CRM gọi LMS qua `/api/integrations/crm/*` với API key, chữ ký HMAC và timestamp trong cửa sổ cho phép; mỗi thao tác ghi có `X-CRM-Event-Id` và chỉ được xử lý một lần.
+- **CRM-004 [Must]**: CRM tra cứu khóa/lớp đang mở, tạo hoặc liên kết tài khoản học viên theo `crmContactId`, ghi danh học viên và xác nhận thanh toán (kèm xếp lớp khi biết lớp).
+- **CRM-005 [Should]**: Sự kiện do chính CRM gây ra mang `origin = "crm"` để CRM tránh vòng lặp đồng bộ.
+
 ---
 
 ## 8. Yêu cầu dữ liệu và bảo mật
@@ -358,6 +385,8 @@ Quy tắc scope mới:
 - Thanh toán/học phí: `tuition_fees`, `transactions`.
 - Học vụ mở rộng: `academic_warnings`, `advisor_notes`, `advisor_assignments`, `scholarships`, `scholarship_applications`, `grade_appeals`, `leave_requests`, `graduation_applications`.
 - Hệ thống: `notifications`, `audit_logs`, `system_events`, `forum_posts`.
+- Tài liệu buổi học: `session_materials` (chỉ metadata; file nằm trong Supabase Storage private).
+- Tích hợp CRM và tự đăng ký: `crm_outbox`, `crm_inbound_events`; `users.crm_contact_id`, `users.signup_source`, `users.must_change_password`; `enrollments.requested_section_id`, `enrollments.crm_deal_id`.
 
 ### 8.3. Quy tắc riêng tư
 
@@ -366,6 +395,7 @@ Quy tắc scope mới:
 - Teacher chỉ xem dữ liệu học viên trong course/section/cố vấn được phân công.
 - Admin/manager/super_admin có quyền rộng hơn nhưng mọi thao tác nhạy cảm phải ghi audit.
 - Đáp án quiz, transaction của người khác, audit log và hồ sơ cá nhân nhạy cảm không được lộ trong snapshot role thấp.
+- Snapshot không chứa đường dẫn lưu trữ file tài liệu; file chỉ tải qua route có kiểm quyền. Danh mục công khai không trả tài liệu, danh sách học viên hay dữ liệu nội bộ của lớp.
 
 ---
 
@@ -379,6 +409,7 @@ Quy tắc scope mới:
 - **NFR-006 [Should]**: Backup/rollback DB phải theo `docs/backup-restore-policy.md` và `docs/rollback-checklist.md`.
 - **NFR-007 [Should]**: Các API ghi dữ liệu phải có validation Zod và audit log khi tác động dữ liệu nhạy cảm.
 - **NFR-008 [Should]**: Không đưa secret, private key Google hoặc DB URL thật vào git.
+- **NFR-009 [Must]**: `CRM_API_KEY`, `CRM_INBOUND_SECRET`, `CRM_WEBHOOK_SECRET` và `SUPABASE_SERVICE_ROLE_KEY` chỉ cấu hình trên server, không đưa xuống client hay vào git.
 
 ---
 
@@ -404,6 +435,8 @@ Các phần sau tồn tại trong code hoặc tài liệu cũ nhưng không còn
 6. Luồng course publish, enrollment, active learning, quiz submit, assignment grading và certificate chạy end-to-end.
 7. Luồng học phí thể hiện đúng trạng thái unpaid/partial/paid, không cần kế toán nội bộ duyệt, và sẵn sàng nhận trạng thái từ bên xử lý thanh toán.
 8. Backup, rollback và smoke test deploy được chuẩn bị trước khi đưa production.
+9. Bucket Supabase Storage cho tài liệu buổi học đã được tạo ở chế độ private và các biến `SUPABASE_*` đã cấu hình.
+10. Đội CRM đã triển khai theo `docs/crm-integration.md`, và `npm run test:signup-crm` pass trên môi trường staging.
 
 ---
 

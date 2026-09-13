@@ -19,3 +19,15 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: lms-materials
+      - key: LMS_LOGIN_URL
+        sync: false
+      - key: CRM_WEBHOOK_URL
+        sync: false
+      - key: CRM_WEBHOOK_SECRET
+        sync: false
+      - key: CRM_API_KEY
+        sync: false
+      - key: CRM_INBOUND_SECRET
+        sync: false
