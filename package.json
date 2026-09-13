@@ -12,6 +12,8 @@
     "db:seed": "tsx scripts/dbSeed.ts",
     "test:e2e": "tsx scripts/e2eAcademicFlow.ts",
     "test:regression": "tsx scripts/e2eRegressionFlow.ts",
+    "test:signup-crm": "tsx scripts/e2eSignupCrmFlow.ts",
+    "mock:crm": "tsx scripts/mockCrmServer.ts",
     "smoke:deploy": "tsx scripts/smokeDeploy.ts",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"

@@ -1,8 +1,10 @@
 import { Enrollment } from "../../types";
-import { pool } from "../db";
+import { enqueueEnrollmentEvent } from "../crm/crmOutbox";
+import { pool, Queryable } from "../db";
 import { generateId } from "../ids";
 import { coursesRepository } from "../repositories/courses";
 import { enrollmentsRepository } from "../repositories/enrollments";
+import { financeRepository } from "../repositories/finance";
 import { sectionsRepository } from "../repositories/sections";
 
 export type ServiceError = { error: string; status: number };
@@ -23,6 +25,8 @@ export type RequestEnrollmentResult = {
   transactionId?: string;
   registrationId?: string;
 };
+
+export type PlacementResult = { enrollment: any; registration: any | null };
 
 export const isServiceError = (value: unknown): value is ServiceError =>
   Boolean(value && typeof value === "object" && "error" in value && "status" in value);
@@ -100,6 +104,7 @@ export async function requestEnrollment(input: RequestEnrollmentInput): Promise<
       );
     }
 
+    await enqueueEnrollmentEvent(client, "enrollment.requested", enrollment.id, input.origin);
     await client.query("COMMIT");
     return {
       enrollment,
@@ -115,4 +120,144 @@ export async function requestEnrollment(input: RequestEnrollmentInput): Promise<
   } finally {
     client.release();
   }
+}
+
+export async function hasConfirmedPaymentForCoursePlacement(db: Queryable, studentId: string, courseId: string): Promise<boolean> {
+  const course = (await db.query("SELECT price FROM courses WHERE id = $1", [courseId])).rows[0];
+  if (!course) return false;
+  if (Number(course.price || 0) <= 0) return true;
+
+  const approvedPayment = (await db.query(
+    `SELECT id
+     FROM transactions
+     WHERE student_id = $1
+       AND course_id = $2
+       AND status = 'approved'
+     LIMIT 1`,
+    [studentId, courseId]
+  )).rows[0];
+  return Boolean(approvedPayment);
+}
+
+/**
+ * Activates an enrollment whose payment is settled and, when a class is given, seats the student in it.
+ * Must run inside the caller's transaction; on a ServiceError the caller rolls back.
+ */
+export async function placeEnrollment(
+  client: Queryable,
+  enrollmentId: string,
+  sectionId: string | undefined,
+  origin: EnrollmentOrigin
+): Promise<PlacementResult | ServiceError> {
+  const enrollmentRow = (await client.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [enrollmentId])).rows[0];
+  if (!enrollmentRow) return { error: "Enrollment not found.", status: 404 };
+  if (!await hasConfirmedPaymentForCoursePlacement(client, enrollmentRow.student_id, enrollmentRow.course_id)) {
+    return { error: "Payment must be confirmed before class placement.", status: 400 };
+  }
+  const enrollment = (await client.query(
+    "UPDATE enrollments SET status = 'active' WHERE id = $1 RETURNING *",
+    [enrollmentId]
+  )).rows[0];
+
+  let registration = null;
+  if (sectionId) {
+    const section = (await client.query("SELECT * FROM course_sections WHERE id = $1 FOR UPDATE", [sectionId])).rows[0];
+    if (!section) return { error: "Course section not found.", status: 404 };
+    if (section.course_id !== enrollment.course_id) return { error: "Selected section does not belong to this course.", status: 400 };
+
+    const count = Number((await client.query(
+      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
+      [sectionId]
+    )).rows[0].count);
+    if (count >= section.max_students) {
+      return { error: "Lớp học phần này đã đạt sĩ số tối đa. Không thể xếp thêm học viên.", status: 400 };
+    }
+
+    const existingRegistration = (await client.query(
+      `SELECT cr.id, cr.status
+       FROM course_registrations cr
+       JOIN course_sections cs ON cs.id = cr.section_id
+       WHERE cr.student_id = $1
+         AND cs.course_id = $2
+         AND cr.semester_id = $3
+         AND cr.status IN ('registered', 'waitlisted')`,
+      [enrollment.student_id, enrollment.course_id, section.semester_id]
+    )).rows[0];
+
+    if (!existingRegistration) {
+      const creditsRow = (await client.query(
+        "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
+        [enrollment.course_id]
+      )).rows[0];
+      registration = (await client.query(
+        `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
+         VALUES ($1, $2, $3, $4, 'registered', $5, $6, false)
+         RETURNING *`,
+        [generateId("reg"), enrollment.student_id, sectionId, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+      )).rows[0];
+    } else {
+      registration = (await client.query(
+        "UPDATE course_registrations SET section_id = $1, status = 'registered' WHERE id = $2 RETURNING *",
+        [sectionId, existingRegistration.id]
+      )).rows[0];
+    }
+  }
+
+  await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollmentId, origin);
+  return { enrollment, registration };
+}
+
+/**
+ * Records a settled payment for a course enrollment. Idempotent: approves the pending transaction, or
+ * creates an approved one when the payment happened outside the LMS, and does nothing if already paid.
+ * Must run inside the caller's transaction.
+ */
+export async function confirmCoursePayment(
+  client: Queryable,
+  enrollmentId: string,
+  input: { amount?: number; reference?: string; paidAt?: string },
+  origin: EnrollmentOrigin
+): Promise<{ transactionId: string | null } | ServiceError> {
+  const enrollment = (await client.query(
+    `SELECT e.*, COALESCE(c.price, 0) AS course_price
+     FROM enrollments e
+     JOIN courses c ON c.id = e.course_id
+     WHERE e.id = $1
+     FOR UPDATE OF e`,
+    [enrollmentId]
+  )).rows[0];
+  if (!enrollment) return { error: "Enrollment not found.", status: 404 };
+  if (enrollment.status === "cancelled") return { error: "Enrollment was cancelled.", status: 409 };
+  if (Number(enrollment.course_price) <= 0) return { transactionId: null };
+
+  const existing = (await client.query(
+    `SELECT id, status
+     FROM transactions
+     WHERE student_id = $1 AND course_id = $2 AND status IN ('approved', 'pending')
+     ORDER BY (status = 'approved') DESC, created_at DESC
+     LIMIT 1`,
+    [enrollment.student_id, enrollment.course_id]
+  )).rows[0];
+  if (existing?.status === "approved") return { transactionId: existing.id };
+
+  const note = `Payment confirmed via ${origin === "crm" ? "CRM MCNA" : "LMS"}${input.reference ? ` (ref: ${input.reference})` : ""}.`;
+  let transactionId: string;
+  if (existing) {
+    const reviewed = await financeRepository.reviewTransaction(client, existing.id, "approved", null, note);
+    if (!reviewed) return { error: "Transaction not found.", status: 404 };
+    if ("error" in reviewed) return { error: reviewed.error, status: reviewed.status };
+    transactionId = existing.id;
+  } else {
+    transactionId = generateId("tx");
+    const paidAt = input.paidAt || new Date().toISOString();
+    await client.query(
+      `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, processed_at, notes)
+       VALUES ($1, $2, $3, $4, 'approved', $5, $6, $6, $7)`,
+      [transactionId, enrollment.student_id, enrollment.course_id, input.amount ?? Number(enrollment.course_price), origin === "crm" ? "CRM MCNA" : "LMS", paidAt, note]
+    );
+    await client.query("UPDATE enrollments SET status = 'pending' WHERE id = $1 AND status = 'pending_payment'", [enrollmentId]);
+  }
+
+  await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollmentId, origin);
+  return { transactionId };
 }

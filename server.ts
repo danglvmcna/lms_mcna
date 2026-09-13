@@ -143,7 +143,17 @@ import { forumRepository } from "./src/server/repositories/forum";
 import { sectionsRepository } from "./src/server/repositories/sections";
 import { sessionMaterialsRepository } from "./src/server/repositories/sessionMaterials";
 import { materialStorage } from "./src/server/services/storage";
-import { requestEnrollment, ServiceError } from "./src/server/services/enrollmentService";
+import {
+  confirmCoursePayment,
+  hasConfirmedPaymentForCoursePlacement,
+  isServiceError,
+  placeEnrollment,
+  PlacementResult,
+  requestEnrollment,
+  ServiceError
+} from "./src/server/services/enrollmentService";
+import { enqueueCrmEvent, enqueueEnrollmentEvent } from "./src/server/crm/crmOutbox";
+import { verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
@@ -410,6 +420,15 @@ async function createStudentWithTemporaryPassword(
     }
     return { error: "Không gửi được email mật khẩu. Vui lòng kiểm tra địa chỉ email và thử lại sau.", status: 503 };
   }
+  await enqueueCrmEvent(pool, "contact.registered", {
+    lmsUserId: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone || null,
+    signupSource: source,
+    crmContactId: input.crmContactId || null,
+    createdAt: user.createdAt
+  }, source === "crm" ? "crm" : "lms");
   return { user, temporaryPassword };
 }
 
@@ -571,6 +590,7 @@ function createIpRateLimiter(name: string, max: number, windowSec: number, messa
 const rateLimitPublicCatalog = createIpRateLimiter("public-catalog", 120, 60, "Quá nhiều yêu cầu, vui lòng thử lại sau ít phút.");
 const rateLimitRegister = createIpRateLimiter("register", 5, 60 * 60, "Bạn đã gửi quá nhiều yêu cầu tạo tài khoản. Vui lòng thử lại sau.");
 const rateLimitForgotPassword = createIpRateLimiter("forgot-password", 5, 15 * 60, "Quá nhiều yêu cầu quên mật khẩu. Vui lòng thử lại sau.");
+const rateLimitCrmIntegration = createIpRateLimiter("crm-integration", 300, 60, "Too many CRM integration requests.");
 
 async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -647,6 +667,8 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
   if (req.path === "/auth/reset-password/complete" || req.path === "/api/auth/reset-password/complete") return next();
   if (req.path === "/auth/register" || req.path === "/api/auth/register") return next();
   if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
+  // CRM server-to-server calls authenticate with an API key and an HMAC signature instead of cookies.
+  if (req.path.startsWith("/integrations/crm/")) return next();
   if (req.path === "/payments/webhook" || req.path === "/webhooks/payment" || req.path === "/api/payments/webhook" || req.path === "/api/webhooks/payment") return next();
   const cookieToken = extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
@@ -825,23 +847,6 @@ async function maybePostFinalCourseGradeForQuiz(db: Queryable, studentId: string
   const quiz = (await db.query("SELECT course_id FROM quizzes WHERE id = $1", [quizId])).rows[0];
   if (!quiz) return null;
   return maybePostFinalCourseGrade(db, studentId, quiz.course_id);
-}
-
-async function hasConfirmedPaymentForCoursePlacement(db: Queryable, studentId: string, courseId: string): Promise<boolean> {
-  const course = (await db.query("SELECT price FROM courses WHERE id = $1", [courseId])).rows[0];
-  if (!course) return false;
-  if (Number(course.price || 0) <= 0) return true;
-
-  const approvedPayment = (await db.query(
-    `SELECT id
-     FROM transactions
-     WHERE student_id = $1
-       AND course_id = $2
-       AND status = 'approved'
-     LIMIT 1`,
-    [studentId, courseId]
-  )).rows[0];
-  return Boolean(approvedPayment);
 }
 
 async function maybePostFinalCourseGradeForSubmission(db: Queryable, submissionId: string) {
@@ -2219,6 +2224,19 @@ const PUBLIC_COURSE_SELECT = `
   FROM courses c
   LEFT JOIN users u ON u.id = c.teacher_id`;
 
+async function listOpenSectionRows(courseIds: string[]) {
+  if (courseIds.length === 0) return [];
+  return (await pool.query(
+    `SELECT cs.*, u.name AS teacher_name,
+            (SELECT COUNT(*) FROM course_registrations cr WHERE cr.section_id = cs.id AND cr.status = 'registered')::int AS registered_count
+     FROM course_sections cs
+     LEFT JOIN users u ON u.id = cs.teacher_id
+     WHERE cs.course_id = ANY($1) AND cs.status = 'open'
+     ORDER BY cs.opening_date NULLS LAST, cs.section_code`,
+    [courseIds]
+  )).rows;
+}
+
 app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req, res) => {
   const rows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
   res.setHeader("Cache-Control", "public, max-age=30");
@@ -2228,15 +2246,7 @@ app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req,
 app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (req, res) => {
   const courseRow = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [req.params.id])).rows[0];
   if (!courseRow) return res.status(404).json({ error: "Không tìm thấy khóa học." });
-  const sectionRows = (await pool.query(
-    `SELECT cs.*, u.name AS teacher_name,
-            (SELECT COUNT(*) FROM course_registrations cr WHERE cr.section_id = cs.id AND cr.status = 'registered')::int AS registered_count
-     FROM course_sections cs
-     LEFT JOIN users u ON u.id = cs.teacher_id
-     WHERE cs.course_id = $1 AND cs.status = 'open'
-     ORDER BY cs.opening_date NULLS LAST, cs.section_code`,
-    [courseRow.id]
-  )).rows;
+  const sectionRows = await listOpenSectionRows([courseRow.id]);
   const sessionRows = sectionRows.length
     ? (await pool.query("SELECT * FROM attendance_sessions WHERE section_id = ANY($1)", [sectionRows.map(row => row.id)])).rows
     : [];
@@ -2244,6 +2254,224 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
   res.json({
     course: publicCourseFromRow(courseRow),
     sections: sectionRows.map(row => publicCourseSectionFromRow(row, sessionRows.filter(session => session.section_id === row.id)))
+  });
+}));
+
+// ---- MCNA CRM integration (server-to-server). Contract: docs/crm-integration.md ----
+
+function requireCrmIntegration(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const apiKey = process.env.CRM_API_KEY;
+  const secret = process.env.CRM_INBOUND_SECRET;
+  if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
+
+  const authorization = req.header("Authorization") || "";
+  const provided = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
+  // Compare digests so the check takes the same time whatever the key length.
+  const keyMatches = crypto.timingSafeEqual(
+    crypto.createHash("sha256").update(provided).digest(),
+    crypto.createHash("sha256").update(apiKey).digest()
+  );
+  if (!provided || !keyMatches) return res.status(401).json({ error: "Invalid CRM API key." });
+
+  const configuredTolerance = Number(process.env.CRM_SIGNATURE_TOLERANCE_SECONDS || 300);
+  const signatureFailure = verifyCrmSignature(
+    secret,
+    req.header("X-CRM-Timestamp"),
+    req.header("X-CRM-Signature"),
+    (req as any).rawBody || "",
+    Number.isFinite(configuredTolerance) && configuredTolerance > 0 ? configuredTolerance : 300
+  );
+  if (signatureFailure) return res.status(signatureFailure.status).json({ error: signatureFailure.error });
+  next();
+}
+
+type CrmResult = { status: number; body: any };
+
+/** Runs a CRM write at most once per X-CRM-Event-Id and replays the stored answer when the CRM retries. */
+async function runIdempotentCrmCall(req: express.Request, res: express.Response, type: string, handler: () => Promise<CrmResult>) {
+  const eventId = req.header("X-CRM-Event-Id");
+  if (!eventId || eventId.length > 200) return res.status(400).json({ error: "X-CRM-Event-Id header is required (max 200 characters)." });
+  const payloadHash = sha256Hex((req as any).rawBody || "");
+
+  const claimed = await pool.query(
+    "INSERT INTO crm_inbound_events (event_id, type, payload_sha256) VALUES ($1, $2, $3) ON CONFLICT (event_id) DO NOTHING RETURNING event_id",
+    [eventId, type, payloadHash]
+  );
+  if (!claimed.rowCount) {
+    const existing = (await pool.query("SELECT * FROM crm_inbound_events WHERE event_id = $1", [eventId])).rows[0];
+    if (existing.type !== type || existing.payload_sha256 !== payloadHash) {
+      return res.status(409).json({ error: "X-CRM-Event-Id was already used for a different request." });
+    }
+    if (existing.status === "processed" && existing.response) {
+      res.setHeader("X-Idempotent-Replay", "true");
+      return res.status(existing.response.status).json(existing.response.body);
+    }
+    // Only a failed attempt may be retried; a concurrent duplicate is still "processing".
+    const retry = await pool.query(
+      "UPDATE crm_inbound_events SET status = 'processing', error = NULL WHERE event_id = $1 AND status = 'failed' RETURNING event_id",
+      [eventId]
+    );
+    if (!retry.rowCount) return res.status(409).json({ error: "This event is still being processed." });
+  }
+
+  let result: CrmResult;
+  try {
+    result = await handler();
+  } catch (error: any) {
+    await pool.query(
+      "UPDATE crm_inbound_events SET status = 'failed', error = $2, processed_at = NOW() WHERE event_id = $1",
+      [eventId, String(error?.message || error).slice(0, 1000)]
+    );
+    throw error;
+  }
+  // 5xx answers are temporary, so the event stays retryable with the same id.
+  const temporaryFailure = result.status >= 500;
+  await pool.query(
+    "UPDATE crm_inbound_events SET status = $2, response = $3, error = $4, processed_at = NOW() WHERE event_id = $1",
+    [eventId, temporaryFailure ? "failed" : "processed", JSON.stringify(result), temporaryFailure ? String(result.body?.error || "") : null]
+  );
+  if (!temporaryFailure) invalidateStoreCache();
+  return res.status(result.status).json(result.body);
+}
+
+async function findCrmStudentId(input: { crmContactId?: string; email?: string }) {
+  if (input.crmContactId) {
+    const row = (await pool.query("SELECT id FROM users WHERE crm_contact_id = $1 AND role = 'student'", [input.crmContactId])).rows[0];
+    if (row) return row.id as string;
+  }
+  if (input.email) {
+    const row = await usersRepository.findAuthByEmail(pool, input.email) as DbUserRow | null;
+    if (row?.role === "student") return row.id;
+  }
+  return null;
+}
+
+app.get("/api/integrations/crm/courses", rateLimitCrmIntegration, requireCrmIntegration, asyncHandler(async (_req, res) => {
+  const courseRows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
+  const sectionRows = await listOpenSectionRows(courseRows.map(row => row.id));
+  res.json({
+    courses: courseRows.map(row => ({
+      ...publicCourseFromRow(row),
+      sections: sectionRows
+        .filter(section => section.course_id === row.id)
+        .map(section => {
+          const { sessions, ...summary } = publicCourseSectionFromRow(section, []);
+          return summary;
+        })
+    }))
+  });
+}));
+
+app.post("/api/integrations/crm/students", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmUpsertStudent), asyncHandler(async (req, res) => {
+  await runIdempotentCrmCall(req, res, "students.upsert", async () => {
+    const { crmContactId, name, email, phone } = req.body;
+    const linked = (await pool.query("SELECT id, email FROM users WHERE crm_contact_id = $1", [crmContactId])).rows[0];
+    if (linked) return { status: 200, body: { lmsUserId: linked.id, email: linked.email, created: false } };
+
+    const existing = await usersRepository.findAuthByEmail(pool, email) as DbUserRow | null;
+    if (existing) {
+      if (existing.role !== "student") return { status: 409, body: { error: "Email belongs to a non-student account." } };
+      if (existing.crm_contact_id) return { status: 409, body: { error: "Email is already linked to another CRM contact." } };
+      await pool.query("UPDATE users SET crm_contact_id = $1 WHERE id = $2", [crmContactId, existing.id]);
+      return { status: 200, body: { lmsUserId: existing.id, email: existing.email, created: false } };
+    }
+
+    const result = await createStudentWithTemporaryPassword({ name, email, phone, crmContactId }, "crm", lmsBaseUrl(req));
+    if (isServiceError(result)) return { status: result.status, body: { error: result.error } };
+    await auditRepository.log(pool, result.user.id, "crm_create_student", "security", `Created from CRM contact ${crmContactId}.`);
+    return { status: 201, body: { lmsUserId: result.user.id, email: result.user.email, created: true } };
+  });
+}));
+
+app.post("/api/integrations/crm/enrollments", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmCreateEnrollment), asyncHandler(async (req, res) => {
+  await runIdempotentCrmCall(req, res, "enrollments.create", async () => {
+    const studentId = await findCrmStudentId(req.body);
+    if (!studentId) return { status: 404, body: { error: "No student account found for this CRM contact or email." } };
+
+    const result = await requestEnrollment({
+      studentId,
+      courseId: req.body.courseId,
+      sectionId: req.body.sectionId,
+      origin: "crm",
+      crmDealId: req.body.crmDealId
+    });
+    if (isServiceError(result)) {
+      if (result.status !== 409) return { status: result.status, body: { error: result.error } };
+      const current = (await pool.query(
+        "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 ORDER BY enrolled_at DESC LIMIT 1",
+        [studentId, req.body.courseId]
+      )).rows[0];
+      return { status: 409, body: { error: result.error, enrollmentId: current?.id || null } };
+    }
+    return {
+      status: 201,
+      body: {
+        enrollmentId: result.enrollment.id,
+        status: result.enrollment.status,
+        transactionId: result.transactionId || null,
+        requestedSectionId: result.enrollment.requestedSectionId || null
+      }
+    };
+  });
+}));
+
+app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmConfirmPayment), asyncHandler(async (req, res) => {
+  await runIdempotentCrmCall(req, res, "payments.confirm", async () => {
+    const enrollmentRow = req.body.enrollmentId
+      ? (await pool.query("SELECT * FROM enrollments WHERE id = $1", [req.body.enrollmentId])).rows[0]
+      : (await pool.query("SELECT * FROM enrollments WHERE crm_deal_id = $1 ORDER BY enrolled_at DESC LIMIT 1", [req.body.crmDealId])).rows[0];
+    if (!enrollmentRow) return { status: 404, body: { error: "Enrollment not found." } };
+
+    let transactionId: string | null = null;
+    let placedSectionId: string | null = null;
+    let placementError: string | null = null;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const payment = await confirmCoursePayment(
+        client,
+        enrollmentRow.id,
+        { amount: req.body.amount, reference: req.body.reference, paidAt: req.body.paidAt },
+        "crm"
+      );
+      if (isServiceError(payment)) {
+        await client.query("ROLLBACK");
+        return { status: payment.status, body: { error: payment.error } };
+      }
+      transactionId = payment.transactionId;
+
+      const sectionId = req.body.sectionId || enrollmentRow.requested_section_id;
+      if (sectionId && !["active", "completed"].includes(enrollmentRow.status)) {
+        // A failed placement (e.g. the class filled up) must not undo the recorded payment.
+        await client.query("SAVEPOINT placement");
+        const placement = await placeEnrollment(client, enrollmentRow.id, sectionId, "crm");
+        if (isServiceError(placement)) {
+          await client.query("ROLLBACK TO SAVEPOINT placement");
+          placementError = placement.error;
+        } else {
+          placedSectionId = sectionId;
+        }
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    if (placedSectionId) {
+      await notificationsRepository.create(pool, {
+        userId: enrollmentRow.student_id,
+        type: "success",
+        message: "Thanh toán của bạn đã được xác nhận và bạn đã được xếp vào lớp học."
+      });
+    }
+    const current = (await pool.query("SELECT status FROM enrollments WHERE id = $1", [enrollmentRow.id])).rows[0];
+    return {
+      status: 200,
+      body: { enrollmentId: enrollmentRow.id, status: current?.status, transactionId, placedSectionId, placementError }
+    };
   });
 }));
 
@@ -2495,102 +2723,42 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
   const enrollment = await enrollmentsRepository.activateEnrollment(pool, req.params.id);
   if (!enrollment) return res.status(404).json({ error: "Enrollment not found." });
+  await enqueueEnrollmentEvent(pool, "enrollment.status_changed", enrollment.id);
   invalidateStoreCache();
   await audit(req, "activate_enrollment", enrollment.id, `Activated enrollment for student ID: ${enrollment.studentId}`);
   res.json(enrollment);
 }));
 app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
+  const sectionId = req.body.sectionId;
   const client = await pool.connect();
-  let committed = false;
+  let placement: PlacementResult;
   try {
     await client.query("BEGIN");
-
-    const enrollmentRow = (await client.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [req.params.id])).rows[0];
-    if (!enrollmentRow) {
+    const result = await placeEnrollment(client, req.params.id, sectionId, "lms");
+    if (isServiceError(result)) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Enrollment not found." });
+      return res.status(result.status).json({ error: result.error });
     }
-    if (!await hasConfirmedPaymentForCoursePlacement(client, enrollmentRow.student_id, enrollmentRow.course_id)) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Payment must be confirmed before class placement." });
-    }
-    const enrollment = (await client.query(
-      "UPDATE enrollments SET status = 'active' WHERE id = $1 RETURNING *",
-      [req.params.id]
-    )).rows[0];
-
-    let registration = null;
-    const sectionId = req.body.sectionId;
-    if (sectionId) {
-      const section = (await client.query("SELECT * FROM course_sections WHERE id = $1 FOR UPDATE", [sectionId])).rows[0];
-      if (!section) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ error: "Course section not found." });
-      }
-      if (section.course_id !== enrollment.course_id) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Selected section does not belong to this course." });
-      }
-
-      // Check capacity
-      const countRes = await client.query(
-        "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-        [sectionId]
-      );
-      const count = Number(countRes.rows[0].count);
-      if (count >= section.max_students) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Lớp học phần này đã đạt sĩ số tối đa. Không thể xếp thêm học viên." });
-      }
-
-      const existingRegistration = (await client.query(
-        `SELECT cr.id, cr.status
-         FROM course_registrations cr
-         JOIN course_sections cs ON cs.id = cr.section_id
-         WHERE cr.student_id = $1
-           AND cs.course_id = $2
-           AND cr.semester_id = $3
-           AND cr.status IN ('registered', 'waitlisted')`,
-        [enrollment.student_id, enrollment.course_id, section.semester_id]
-      )).rows[0];
-
-      if (!existingRegistration) {
-        const creditsRow = (await client.query(
-          "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
-          [enrollment.course_id]
-        )).rows[0];
-        registration = (await client.query(
-          `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-           VALUES ($1, $2, $3, $4, 'registered', $5, $6, false)
-           RETURNING *`,
-          [generateId("reg"), enrollment.student_id, sectionId, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
-        )).rows[0];
-      } else {
-        registration = (await client.query(
-          "UPDATE course_registrations SET section_id = $1, status = 'registered' WHERE id = $2 RETURNING *",
-          [sectionId, existingRegistration.id]
-        )).rows[0];
-      }
-    }
-
+    placement = result;
     await client.query("COMMIT");
-    committed = true;
-    invalidateStoreCache();
-    await notificationsRepository.create(pool, {
-      userId: enrollment.student_id,
-      type: "success",
-      message: sectionId
-        ? "Yêu cầu đăng ký môn học của bạn đã được duyệt và xếp vào lớp học phần."
-        : "Yêu cầu đăng ký môn học của bạn đã được duyệt."
-    });
-    await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
-    res.json({ enrollment, registration });
   } catch (error) {
-    if (!committed) await client.query("ROLLBACK");
+    await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
+
+  const { enrollment, registration } = placement;
+  invalidateStoreCache();
+  await notificationsRepository.create(pool, {
+    userId: enrollment.student_id,
+    type: "success",
+    message: sectionId
+      ? "Yêu cầu đăng ký môn học của bạn đã được duyệt và xếp vào lớp học phần."
+      : "Yêu cầu đăng ký môn học của bạn đã được duyệt."
+  });
+  await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
+  res.json({ enrollment, registration });
 }));
 
 app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
@@ -2755,6 +2923,9 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       return res.status(400).json({ error: "Lỗi kiểm tra dữ liệu xếp lớp hàng loạt.", errors });
     }
 
+    for (const placed of results) {
+      await enqueueEnrollmentEvent(client, "enrollment.status_changed", placed.enrollmentId);
+    }
     await client.query("COMMIT");
     invalidateStoreCache();
     res.json({ success: true, count: results.length });
@@ -3642,6 +3813,7 @@ app.patch("/api/course-registrations/:id/approve", requireAuth, requireRole(["ma
       [req.params.id]
     )).rows[0];
     await client.query("UPDATE enrollments SET status = 'active' WHERE id = $1", [enrollment.id]);
+    await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollment.id);
     await client.query("COMMIT");
     invalidateStoreCache();
     await audit(req, "approve_course_registration", req.params.id, registration.student_id);
@@ -3816,6 +3988,13 @@ const reviewTransactionHandler = asyncHandler(async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(result.status).json({ error: result.error });
     }
+    if (result.course_id) {
+      const affected = (await client.query(
+        "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
+        [result.student_id, result.course_id]
+      )).rows;
+      for (const row of affected) await enqueueEnrollmentEvent(client, "enrollment.status_changed", row.id);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -3975,6 +4154,13 @@ const paymentWebhookHandler = asyncHandler(async (req, res) => {
       );
       await client.query("COMMIT");
       return res.status(result.status || 400).json({ error: result.error });
+    }
+    if (result.course_id) {
+      const affected = (await client.query(
+        "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
+        [result.student_id, result.course_id]
+      )).rows;
+      for (const row of affected) await enqueueEnrollmentEvent(client, "enrollment.status_changed", row.id);
     }
     await client.query(
       "UPDATE payment_webhook_events SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP WHERE event_id = $1",

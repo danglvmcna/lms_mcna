@@ -1,3 +1,4 @@
+import { deliverPendingCrmEvents } from "./crm/crmOutbox";
 import { pool } from "./db";
 import { eventBus } from "./eventBus";
 import { recalculateGPA } from "./gpaCalculator";
@@ -8,6 +9,12 @@ export function startScheduler() {
     await runSchedulerTask("attendance alerts", checkAttendanceAlerts);
     await runSchedulerTask("gpa warnings", checkGPAWarnings);
   }, 60 * 60 * 1000);
+
+  setInterval(() => {
+    void runSchedulerTask("crm outbox", async () => {
+      await deliverPendingCrmEvents();
+    });
+  }, 30 * 1000);
 
   setTimeout(async () => {
     await runSchedulerTask("overdue fees", checkOverdueFees);

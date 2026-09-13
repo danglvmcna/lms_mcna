@@ -343,5 +343,26 @@ export const schemas = {
   }),
   forgotPassword: z.object({
     email: z.email().trim().toLowerCase()
-  })
+  }),
+  crmUpsertStudent: z.object({
+    crmContactId: z.string().trim().min(1).max(200),
+    name: z.string().trim().min(2).max(120),
+    email: z.email().trim().toLowerCase(),
+    phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/).optional()
+  }),
+  crmCreateEnrollment: z.object({
+    crmContactId: z.string().trim().min(1).max(200).optional(),
+    email: z.email().trim().toLowerCase().optional(),
+    courseId: z.string().trim().min(1),
+    sectionId: z.string().trim().min(1).optional(),
+    crmDealId: z.string().trim().min(1).max(200).optional()
+  }).refine(value => Boolean(value.crmContactId || value.email), { message: "crmContactId or email is required." }),
+  crmConfirmPayment: z.object({
+    enrollmentId: z.string().trim().min(1).optional(),
+    crmDealId: z.string().trim().min(1).max(200).optional(),
+    amount: z.coerce.number().nonnegative().optional(),
+    reference: z.string().trim().max(200).optional(),
+    paidAt: z.string().trim().max(40).optional(),
+    sectionId: z.string().trim().min(1).optional()
+  }).refine(value => Boolean(value.enrollmentId || value.crmDealId), { message: "enrollmentId or crmDealId is required." })
 };
