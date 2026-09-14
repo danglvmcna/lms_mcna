@@ -6,22 +6,18 @@ import {
   X, 
   User, 
   AlertCircle, 
-  Award, 
   Activity, 
   DollarSign, 
   Plus, 
-  MessageSquare,
-  Building,
-  GraduationCap,
-  Calendar,
-  Clock,
-  ShieldAlert
+  MessageSquare, 
+  GraduationCap, 
+  Calendar, 
+  Clock, 
+  ShieldAlert 
 } from "lucide-react";
 import { 
   LMSDataStore, 
   User as UserType, 
-  StudentProfile, 
-  Course, 
   Enrollment, 
   AttendanceRecord, 
   AttendanceSession, 
@@ -29,7 +25,7 @@ import {
   AcademicWarning, 
   AdvisorNote 
 } from "../types";
-import { AppStore, calculateStudentGpa } from "../store";
+import { AppStore } from "../store";
 import { generateId } from "../utils";
 import ModalPortal from "./ModalPortal";
 
@@ -43,9 +39,6 @@ interface StudentRegistryProps {
 export default function StudentRegistry({ store, currentUser, onRefreshData, triggerToast }: StudentRegistryProps) {
   // Search & Filter state
   const [search, setSearch] = useState("");
-  const [filterDept, setFilterDept] = useState("all");
-  const [filterProg, setFilterProg] = useState("all");
-  const [filterYear, setFilterYear] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
   // Target Student for View Modal
@@ -93,9 +86,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
     };
   });
 
-  const departments = store.departments || [];
-  const programs = store.programs || [];
-  const academicYears = store.academicYears || [];
+
   const courses = store.courses || [];
   const enrollments = store.enrollments || [];
   const attendanceRecords = store.attendanceRecords || [];
@@ -109,12 +100,9 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
     const matchesSearch = st.name.toLowerCase().includes(search.toLowerCase()) || 
                           st.studentCode.toLowerCase().includes(search.toLowerCase()) ||
                           st.email.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = filterDept === "all" || st.departmentId === filterDept;
-    const matchesProg = filterProg === "all" || st.programId === filterProg;
-    const matchesYear = filterYear === "all" || Number(st.academicYear) === Number(filterYear);
     const matchesStatus = filterStatus === "all" || st.status === filterStatus;
 
-    return matchesSearch && matchesDept && matchesProg && matchesYear && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
@@ -128,19 +116,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
     } else if (studentSortField === "name") {
       valA = a.name || "";
       valB = b.name || "";
-    } else if (studentSortField === "departmentId") {
-      const deptA = departments.find(d => d.id === a.departmentId);
-      const deptB = departments.find(d => d.id === b.departmentId);
-      valA = deptA?.name || "";
-      valB = deptB?.name || "";
-    } else if (studentSortField === "programId") {
-      const progA = programs.find(p => p.id === a.programId);
-      const progB = programs.find(p => p.id === b.programId);
-      valA = progA?.name || "";
-      valB = progB?.name || "";
-    } else if (studentSortField === "academicYear") {
-      valA = Number(a.academicYear) || 0;
-      valB = Number(b.academicYear) || 0;
     } else if (studentSortField === "gpa") {
       valA = a.gpa || 0;
       valB = b.gpa || 0;
@@ -161,18 +136,14 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
   // CSV Export action
   const handleExportCSV = () => {
     let csvContent = "\ufeff"; // BOM for excel Vietnamese readability
-    csvContent += "Mã Sinh Viên,Họ Tên,Email,Khoa,Ngành Học,Năm,GPA,Trạng Thái\n";
+    csvContent += "Mã Học Viên,Họ Tên,Email,Số Điện Thoại,GPA,Trạng Thái\n";
 
     filteredStudents.forEach(st => {
-      const dept = departments.find(d => d.id === st.departmentId);
-      const prog = programs.find(p => p.id === st.programId);
       const row = [
         st.studentCode,
         st.name,
         st.email,
-        dept ? dept.name : "Không xác định",
-        prog ? prog.name : "Không xác định",
-        st.academicYear,
+        st.phone || "",
         st.gpa,
         st.status
       ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(",");
@@ -282,40 +253,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
           <div className="flex flex-wrap items-center gap-2">
             <SlidersHorizontal className="h-3.5 w-3.5 text-white/40" />
             <select
-              value={filterDept}
-              onChange={(e) => setFilterDept(e.target.value)}
-              className="px-2 py-1.5 text-[11px] bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
-            >
-              <option value="all" className="bg-slate-900">Mọi Khoa</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id} className="bg-slate-900">{d.name}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterProg}
-              onChange={(e) => setFilterProg(e.target.value)}
-              className="px-2 py-1.5 text-[11px] bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
-            >
-              <option value="all" className="bg-slate-900">Mọi Ngành học</option>
-              {programs.map(p => (
-                <option key={p.id} value={p.id} className="bg-slate-900">{p.name}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="px-2 py-1.5 text-[11px] bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
-            >
-              <option value="all" className="bg-slate-900">Mọi niên khóa</option>
-              <option value="1" className="bg-slate-900">Năm 1</option>
-              <option value="2" className="bg-slate-900">Năm 2</option>
-              <option value="3" className="bg-slate-900">Năm 3</option>
-              <option value="4" className="bg-slate-900">Năm 4</option>
-            </select>
-
-            <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="px-2 py-1.5 text-[11px] bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
@@ -350,15 +287,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
                 <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("name")}>
                   Học sinh Sinh viên {studentSortField === "name" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("departmentId")}>
-                  Khoa chuyên môn {studentSortField === "departmentId" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
-                </th>
-                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("programId")}>
-                  Chương trình đào tạo {studentSortField === "programId" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
-                </th>
-                <th className="py-3 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("academicYear")}>
-                  Năm học {studentSortField === "academicYear" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
-                </th>
+                <th className="py-3 px-3">Số điện thoại</th>
                 <th className="py-3 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("gpa")}>
                   GPA {studentSortField === "gpa" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
@@ -370,9 +299,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
             </thead>
             <tbody className="divide-y divide-white/5 text-white/95">
               {sortedStudents.map(st => {
-                const dept = departments.find(d => d.id === st.departmentId);
-                const prog = programs.find(p => p.id === st.programId);
-                
                 // Color badges status
                 let statusClass = "bg-white/10 text-white/80 border border-white/10";
                 if (st.status === "active") statusClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
@@ -387,9 +313,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
                       <div className="font-bold text-white text-xs">{st.name}</div>
                       <div className="text-[10px] text-white/40 font-mono">{st.email}</div>
                     </td>
-                    <td className="py-3 px-3 font-medium text-white/80">{dept ? dept.code : "Không xác định"}</td>
-                    <td className="py-3 px-3 text-[11px] text-white/70">{prog ? prog.name : "Không xác định"}</td>
-                    <td className="py-3 px-3 text-center font-bold text-indigo-300">Năm {st.academicYear}</td>
+                    <td className="py-3 px-3 font-medium text-white/80">{st.phone || "—"}</td>
                     <td className="py-3 px-3 text-center font-bold font-mono text-amber-400">{st.gpa}</td>
                     <td className="py-3 px-3">
                       <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${statusClass}`}>
@@ -412,7 +336,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
               })}
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-white/30 text-xs">Không tìm thấy bản ghi sinh viên trùng khớp yêu cầu tra cứu.</td>
+                  <td colSpan={6} className="py-12 text-center text-white/30 text-xs">Không tìm thấy bản ghi sinh viên trùng khớp yêu cầu tra cứu.</td>
                 </tr>
               )}
             </tbody>

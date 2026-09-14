@@ -2,9 +2,7 @@ import { AcademicWarning, User } from "../../types";
 import { Queryable } from "../db";
 import { generateId } from "../ids";
 import { academicWarningFromRow } from "../mappers";
-import { parentRepository } from "./parent";
-
-const ADMIN_WARNING_ROLES = new Set<User["role"]>(["manager", "super_admin", "admin"]);
+const ADMIN_WARNING_ROLES = new Set<User["role"]>(["admin"]);
 
 export const academicsRepository = {
   async listWarnings(db: Queryable, studentId?: string) {
@@ -29,17 +27,6 @@ export const academicsRepository = {
   ): Promise<{ warnings: AcademicWarning[] } | { error: string; status: number }> {
     if (user.role === "student") {
       return { warnings: await this.listWarnings(db, user.id) };
-    }
-
-    if (user.role === "parent") {
-      const linkedStudentId = await parentRepository.getLinkedStudent(db, user.id);
-      if (!linkedStudentId) {
-        return { error: "No linked student found for this parent account.", status: 403 };
-      }
-      if (requestedStudentId && requestedStudentId !== linkedStudentId) {
-        return { error: "Permission denied.", status: 403 };
-      }
-      return { warnings: await this.listWarnings(db, linkedStudentId) };
     }
 
     if (user.role === "teacher") {

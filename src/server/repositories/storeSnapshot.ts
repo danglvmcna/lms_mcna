@@ -72,35 +72,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     questionsRes,
     quizAttemptsRes,
     assignmentsRes,
-    submissionsRes,
-    tuitionFeesRes,
-    academicWarningsRes,
-    auditLogsRes,
-    academicYearsRes,
-    semestersRes,
-    departmentsRes,
-    programsRes,
-    programCoursesRes,
-    studentProfilesRes,
-    attendanceSessionsRes,
-    attendanceRecordsRes,
-    notificationsRes,
-    transactionsRes,
-    advisorNotesRes,
-    courseSectionsRes,
-    registrationPeriodsRes,
-    courseRegistrationsRes,
-    scholarshipsRes,
-    scholarshipApplicationsRes,
-    gradeAppealsRes,
-    advisorAssignmentsRes,
-    leaveRequestsRes,
-    graduationApplicationsRes,
-    certificatesRes,
-    forumRepliesRes,
-    forumPostsRes,
-    teacherAttendanceRes,
-    sessionMaterialsRes
+    submissionsRes
   ] = await Promise.all([
     db.query<DbUserRow>("SELECT * FROM users"),
     db.query("SELECT * FROM courses"),
@@ -111,7 +83,21 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM questions ORDER BY created_at ASC"),
     db.query("SELECT * FROM quiz_attempts"),
     db.query("SELECT * FROM assignments"),
-    db.query("SELECT * FROM submissions"),
+    db.query("SELECT * FROM submissions")
+  ]);
+
+  const [
+    tuitionFeesRes,
+    academicWarningsRes,
+    auditLogsRes,
+    academicYearsRes,
+    semestersRes,
+    departmentsRes,
+    programsRes,
+    programCoursesRes,
+    studentProfilesRes,
+    attendanceSessionsRes
+  ] = await Promise.all([
     db.query("SELECT * FROM tuition_fees"),
     db.query("SELECT * FROM academic_warnings"),
     db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200"),
@@ -121,7 +107,20 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM programs"),
     db.query("SELECT * FROM program_courses"),
     db.query("SELECT * FROM student_profiles"),
-    db.query("SELECT * FROM attendance_sessions"),
+    db.query("SELECT * FROM attendance_sessions")
+  ]);
+
+  const [
+    attendanceRecordsRes,
+    notificationsRes,
+    transactionsRes,
+    advisorNotesRes,
+    courseSectionsRes,
+    registrationPeriodsRes,
+    courseRegistrationsRes,
+    scholarshipsRes,
+    scholarshipApplicationsRes
+  ] = await Promise.all([
     db.query("SELECT * FROM attendance_records"),
     db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200"),
     db.query("SELECT * FROM transactions ORDER BY created_at DESC"),
@@ -130,7 +129,20 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM registration_periods"),
     db.query("SELECT * FROM course_registrations"),
     db.query("SELECT * FROM scholarships"),
-    db.query("SELECT * FROM scholarship_applications"),
+    db.query("SELECT * FROM scholarship_applications")
+  ]);
+
+  const [
+    gradeAppealsRes,
+    advisorAssignmentsRes,
+    leaveRequestsRes,
+    graduationApplicationsRes,
+    certificatesRes,
+    forumRepliesRes,
+    forumPostsRes,
+    teacherAttendanceRes,
+    sessionMaterialsRes
+  ] = await Promise.all([
     db.query("SELECT * FROM grade_appeals"),
     db.query("SELECT * FROM advisor_assignments"),
     db.query("SELECT * FROM leave_requests"),
@@ -317,7 +329,7 @@ export function limitStoreForRole(store: any, user: User) {
     sessionMaterials: []
   });
 
-  if (user.role === "manager" || user.role === "super_admin" || user.role === "admin") {
+  if (user.role === "admin") {
     return {
       ...store,
       users: store.users.map(safeUser)
@@ -441,51 +453,6 @@ export function limitStoreForRole(store: any, user: User) {
       forumPosts: (store.forumPosts || []).filter((post: any) => myCourseIds.has(post.courseId) && (!post.sectionId || myRegisteredSections.has(post.sectionId)))
     };
   }
-
-  if (user.role === "parent") {
-    const childId = user.linkedStudentId || "";
-    const childEnrollments = store.enrollments.filter((item: Enrollment) => item.studentId === childId);
-    const childCourseIds = new Set(childEnrollments.map((item: Enrollment) => item.courseId));
-    const childRegisteredSections = new Set((store.courseRegistrations || [])
-      .filter((cr: any) => cr.studentId === childId)
-      .map((cr: any) => cr.sectionId));
-    const childSessionIds = new Set((store.attendanceSessions || [])
-      .filter((session: any) => childCourseIds.has(session.courseId) && (!session.sectionId || childRegisteredSections.has(session.sectionId)))
-      .map((session: any) => session.id));
-    const visibleTeacherIds = new Set(store.courses
-      .filter((course: Course) => childCourseIds.has(course.id))
-      .map((course: Course) => course.teacherId));
-    return {
-      ...baseScopedStore(),
-      users: store.users.filter((item: User) => item.id === user.id || item.id === childId || visibleTeacherIds.has(item.id)).map(safeUser),
-      courses: store.courses.filter((course: Course) => childCourseIds.has(course.id)),
-      lessons: store.lessons.filter((lesson: any) => childCourseIds.has(lesson.courseId)).map(sanitizeLessonPreview),
-      enrollments: childEnrollments,
-      lessonProgress: store.lessonProgress.filter((item: LessonProgress) => childEnrollments.some((enroll: Enrollment) => enroll.id === item.enrollmentId)),
-      quizzes: store.quizzes.filter((quiz: any) => childCourseIds.has(quiz.courseId)),
-      quizAttempts: store.quizAttempts.filter((item: any) => item.studentId === childId),
-      submissions: store.submissions.filter((item: any) => item.studentId === childId),
-      tuitionFees: store.tuitionFees.filter((item: any) => item.studentId === childId),
-      academicWarnings: store.academicWarnings.filter((item: any) => item.studentId === childId),
-      assignments: store.assignments.filter((item: any) => childCourseIds.has(item.courseId)),
-      studentProfiles: store.studentProfiles.filter((item: any) => item.userId === childId),
-      attendanceSessions: (store.attendanceSessions || []).filter((session: any) => childSessionIds.has(session.id)).map(sanitizeAttendanceSession),
-      attendanceRecords: (store.attendanceRecords || []).filter((record: any) => record.studentId === childId),
-      notifications: store.notifications.filter((item: any) => item.userId === user.id || item.userId === childId),
-      transactions: (store.transactions || []).filter((item: any) => item.studentId === childId),
-      advisorNotes: (store.advisorNotes || []).filter((item: any) => item.studentId === childId && item.shareWithParent === true),
-      courseSections: (store.courseSections || []).filter((section: any) => childCourseIds.has(section.courseId) || childRegisteredSections.has(section.id)),
-      courseRegistrations: (store.courseRegistrations || []).filter((item: any) => item.studentId === childId),
-      scholarshipApplications: (store.scholarshipApplications || []).filter((item: any) => item.studentId === childId),
-      gradeAppeals: (store.gradeAppeals || []).filter((item: any) => item.studentId === childId),
-      leaveRequests: (store.leaveRequests || []).filter((item: any) => item.studentId === childId),
-      graduationApplications: (store.graduationApplications || []).filter((item: any) => item.studentId === childId),
-      teacherAttendance: (store.teacherAttendance || []).filter((item: any) => childCourseIds.has(item.courseId) && (!item.sectionId || childRegisteredSections.has(item.sectionId))),
-      certificates: (store.certificates || []).filter((cert: any) => cert.studentId === childId),
-      forumPosts: (store.forumPosts || []).filter((post: any) => childCourseIds.has(post.courseId))
-    };
-  }
-
 
   return {
     ...baseScopedStore(),

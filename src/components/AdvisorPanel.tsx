@@ -141,7 +141,7 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
 
       // Notify Parent
       if (shareWithParent) {
-        const parentUser = freshStore.users.find(u => u.role === "parent" && u.linkedStudentId === selectedStudentId);
+        const parentUser = freshStore.users.find(u => (u.role as string) === "parent" && u.linkedStudentId === selectedStudentId);
         if (parentUser) {
           freshStore.notifications.unshift({
             id: generateId("note"),

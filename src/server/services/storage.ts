@@ -53,12 +53,12 @@ export const materialStorage = {
     await fs.promises.writeFile(target, body);
   },
 
-  async getDownload(objectPath: string, fileName: string): Promise<MaterialDownload> {
+  async getDownload(objectPath: string, fileName: string, options?: { inline?: boolean }): Promise<MaterialDownload> {
     const supabase = getClient();
     if (supabase) {
       const { data, error } = await supabase.storage
         .from(bucket())
-        .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS, { download: fileName });
+        .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS, options?.inline ? undefined : { download: fileName });
       if (error || !data?.signedUrl) throw new Error(`Supabase signed URL failed: ${error?.message || "missing URL"}`);
       return { kind: "redirect", url: data.signedUrl };
     }

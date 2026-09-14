@@ -553,7 +553,7 @@ export default function AttendanceManager({
       )}
 
       {/* Giám sát tuân thủ điểm danh giảng viên (Học vụ & Admin) */}
-      {(currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "super_admin") && (
+      {currentUser.role === "admin" && (
         <div className="bg-white/4 border border-white/5 p-5 rounded-2xl space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2 border-b border-white/10 gap-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
@@ -884,7 +884,7 @@ export default function AttendanceManager({
                         <h5 className="font-bold text-white uppercase tracking-wider text-[11px] text-white/70">
                           Nội dung & Tài liệu học tập
                         </h5>
-                        {(currentUser.role === "teacher" || currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                        {(currentUser.role === "teacher" || currentUser.role === "admin") && (
                           <button
                             onClick={() => {
                               setEditTopic(activeSession.topic || "");
@@ -942,7 +942,7 @@ export default function AttendanceManager({
                   );
                 })()}
 
-                {activeSessionId && (currentUser.role === "teacher" || currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                {activeSessionId && (currentUser.role === "teacher" || currentUser.role === "admin") && (
                   <SessionMaterialsEditor sessionId={activeSessionId} triggerToast={triggerToast} onChanged={onRefreshData} />
                 )}
 

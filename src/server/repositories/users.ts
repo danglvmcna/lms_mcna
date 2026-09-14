@@ -12,7 +12,7 @@ export const usersRepository = {
 
   async normalizeSystemUsers(db: Queryable) {
     const systemUsers = [
-      ["admin@mcna.local", "Arthur Pendragon", "manager"],
+      ["admin@mcna.local", "Arthur Pendragon", "admin"],
       ["finance@mcna.local", "Nguyễn Văn Thanh Toán", "admin"],
       ["le_tan@mcna.local", "Lê Thị Lễ Tân", "admin"],
       ["academic@mcna.local", "Trần Văn Học Vụ", "admin"],

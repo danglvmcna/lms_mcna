@@ -37,7 +37,7 @@ export const graduationRepository = {
 
   async list(db: Queryable, user: { id: string; role: string }) {
     if (user.role === "student") return (await db.query("SELECT * FROM graduation_applications WHERE student_id = $1 ORDER BY applied_at DESC", [user.id])).rows;
-    if (["admin", "super_admin", "manager"].includes(user.role)) {
+    if (user.role === "admin") {
       return (await db.query("SELECT * FROM graduation_applications ORDER BY applied_at DESC")).rows;
     }
     return [];

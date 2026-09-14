@@ -25,7 +25,7 @@ export const schemas = {
     email: z.email().trim().toLowerCase(),
     password: z.string().min(8),
     name: z.string().trim().min(1),
-    role: z.enum(["manager", "super_admin", "teacher", "student", "admin", "parent"]),
+    role: z.enum(["admin", "teacher", "student"]),
     phone: z.string().trim().optional(),
     linkedStudentId: z.string().trim().optional(),
     programId: z.string().trim().optional(),
@@ -36,7 +36,7 @@ export const schemas = {
     users: z.array(z.object({
       email: z.email().trim().toLowerCase(),
       name: z.string().trim().min(1),
-      role: z.enum(["manager", "teacher", "student", "admin", "parent"]),
+      role: z.enum(["admin", "teacher", "student"]),
       phone: z.string().trim().optional(),
       linkedStudentId: z.string().trim().optional(),
       programId: z.string().trim().optional(),

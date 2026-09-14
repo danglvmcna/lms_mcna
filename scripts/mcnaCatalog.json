@@ -1,0 +1,289 @@
+{
+  "source": "https://mcna.vn",
+  "scrapedAt": "2026-09-14",
+  "note": "Khóa lẻ bản mới nhất trên mcna.vn và lịch khai giảng tháng 09/2026. Web không công bố học phí: defaultPrice là giá tạm để thử, sửa lại trong LMS.",
+  "defaultPrice": 2990000,
+  "defaultMaxStudents": 30,
+  "courses": [
+    {
+      "key": "ai_for_work",
+      "code": "AI_WORK",
+      "title": "AI for Work: Tối ưu hiệu suất & tự động hóa công việc",
+      "englishName": "AI For Work",
+      "category": "Trí tuệ nhân tạo (AI)",
+      "level": "Cơ bản",
+      "description": "Khóa học AI for Work tại MCNA giúp bạn làm chủ Kỹ thuật Prompt Engineering, ứng dụng ChatGPT, Gemini, Copilot và các công cụ AI tạo sinh để tăng 200% hiệu suất văn phòng.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/07/1784088138427_3816359707153636430_g2445526069388021576_0cabe2b9d3ee2bd84a0aa40aa4e9093d.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-ai-for-work-toi-uu-hieu-suat/",
+      "sessions": [
+        { "title": "Prompt & Tạo Slide", "content": "Cách viết prompt hiệu quả, chuẩn xác để AI hiểu đúng ý bạn. Ứng dụng công nghệ AI để thiết kế slide chuyên nghiệp, nhanh chóng." },
+        { "title": "AI cho Office", "content": "AI trong Word: hỗ trợ viết lách, tóm tắt và chỉnh sửa văn bản. AI trong Excel: phân tích dữ liệu nhanh và tối ưu công thức hàm phức tạp. AI trong PowerPoint: tự động tạo slide thuyết trình nhanh và đẹp mắt." },
+        { "title": "Phân tích dữ liệu", "content": "Sử dụng AI phân tích khối lượng lớn dữ liệu cực nhanh. Trực quan hóa số liệu và thiết lập báo cáo thông minh cùng Claude AI." },
+        { "title": "Giao tiếp & Nghiên cứu", "content": "Tối ưu hóa quản lý email cá nhân và sắp xếp lịch làm việc khoa học. Ứng dụng AI nghiên cứu thông tin chuyên sâu và tổng hợp dữ liệu tốc hành." },
+        { "title": "Quy trình & Tự động hóa", "content": "Thiết lập hệ thống tự động hóa các công việc văn phòng lặp đi lặp lại hàng ngày. Xây dựng và tối ưu hóa ứng dụng AI cá nhân hiệu quả cho riêng bạn." }
+      ]
+    },
+    {
+      "key": "ai_agent",
+      "code": "AI_AGENT",
+      "title": "AI Agent Masterclass: Xây dựng trợ lý ảo tự động 24/7",
+      "englishName": "AI Agent Masterclass",
+      "category": "Trí tuệ nhân tạo (AI)",
+      "level": "Trung cấp",
+      "description": "Khóa học AI Agent Masterclass tại MCNA với lộ trình 5 buổi thực chiến. Giúp bạn làm chủ công nghệ no-code & code, xây dựng trợ lý thông minh làm việc tự động 24/7.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/07/47def052-0740-4555-8c3c-03fab39a7773.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-ai-agent-masterclass-tu-dong-hoa/",
+      "sessions": [
+        { "title": "AI Agent Foundation", "content": "Hiểu bản chất AI Agent và xu hướng công nghệ. Tìm hiểu Prompt Engineering, RAG, Memory, Tool Calling, MCP. Thực hành: tạo AI Agent đầu tiên." },
+        { "title": "No-code AI Agent", "content": "Làm chủ các nền tảng n8n, Flowise, Dify, Langflow. Ứng dụng Workflow, Memory, Tool, PDF, RAG. Thực hành: tạo Chatbot CSKH và AI tra cứu tài liệu." },
+        { "title": "Code AI Agent", "content": "Sử dụng Python, OpenAI API, LangChain, LangGraph, CrewAI, AutoGen, MCP Server. Thực hành: làm AI Research, viết báo cáo và phân tích Excel tự động." },
+        { "title": "AI Agent cho Doanh nghiệp", "content": "Tích hợp AI vào Gmail, Drive, Sheets, Notion, Slack, Telegram, Discord, CRM. Thực hành: xây dựng hệ thống AI Sale Automation và Marketing Automation." },
+        { "title": "Triển khai & Kiếm tiền", "content": "Deploy hệ thống với VPS, Cloud, Docker, API, Authentication. Theo dõi hoạt động và tối ưu chi phí. Hướng đi Freelance, săn dự án AI Agent, phát triển AI SaaS, Agency." }
+      ]
+    },
+    {
+      "key": "ai_automation",
+      "code": "AI_AUTO",
+      "title": "AI Automation: Xây dựng hệ thống tự động hóa doanh nghiệp",
+      "englishName": "AI Automation",
+      "category": "Trí tuệ nhân tạo (AI)",
+      "level": "Trung cấp",
+      "description": "Khóa học AI Automation tại MCNA với lộ trình 5 buổi thực chiến giúp bạn kết nối đa nền tảng, xây dựng quy trình tự động hóa chuyên sâu và tối ưu chi phí vận hành.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/07/66ef5f30-3018-4d66-b254-36770e048277.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-ai-automation-chuan-doanh-nghiep/",
+      "sessions": [
+        { "title": "Nền tảng tự động hóa", "content": "Tổng quan về Automation và các nền tảng phổ biến. Làm quen Make.com, n8n, Zapier, API, Webhook, JSON. Thiết kế quy trình tự động hóa hiệu quả." },
+        { "title": "Xây dựng Workflow chuyên sâu", "content": "Xử lý dữ liệu: lọc, phân loại, điều kiện, vòng lặp. Tích hợp AI gồm ChatGPT, OCR, phân tích dữ liệu. Kết nối Email, Sheets, CRM, Slack." },
+        { "title": "Tích hợp API & Dữ liệu nâng cao", "content": "Làm việc với API, Webhook, Authentication. Kết nối Database gồm Google Sheets, Airtable, SQL. Xử lý và đồng bộ dữ liệu tự động." },
+        { "title": "Triển khai & Giám sát hệ thống", "content": "Deploy lên Cloud/VPS, Cron Job, Scheduling. Cài đặt hệ thống Monitoring, Logging, Error Handling. Tối ưu hiệu suất và chi phí hệ thống." },
+        { "title": "Dự án thực tế & Ứng dụng", "content": "Xây dựng hệ thống Automation hoàn chỉnh. Ứng dụng thực tế cho Sales, Marketing, CSKH, HR, Finance. Mở rộng và tối ưu theo nhu cầu doanh nghiệp." }
+      ]
+    },
+    {
+      "key": "ai_leader",
+      "code": "AI_LEAD",
+      "title": "AI cho lãnh đạo: Chiến lược & lộ trình 90 ngày",
+      "englishName": "AI for Leaders",
+      "category": "Trí tuệ nhân tạo (AI)",
+      "level": "Cơ bản",
+      "description": "Khóa học AI cho lãnh đạo thực chiến tại MCNA. Trang bị tư duy chiến lược, chọn đúng bài toán và xây dựng lộ trình 90 ngày bứt phá cho doanh nghiệp.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/08/AI-for-Boss_V2.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-ai-cho-lanh-dao-mcna/",
+      "sessions": [
+        { "title": "Bức tranh AI & Cơ hội theo ngành", "content": "Tổng quan về AI và xu hướng ứng dụng. Nhận diện 10+ use case khả thi. Xác định điểm nghẽn vận hành cần ưu tiên. Đầu ra: danh sách điểm nghẽn và cơ hội AI chuyên biệt." },
+        { "title": "Đánh giá sẵn sàng & Chọn bài toán", "content": "Đánh giá mức độ sẵn sàng của tổ chức. Lựa chọn 2-3 bài toán giá trị cao. Thực hành viết mô tả bài toán chuẩn. Đầu ra: chốt 2-3 bài toán cốt lõi có căn cứ rõ ràng." },
+        { "title": "Xây lộ trình & Quản trị rủi ro", "content": "Xác định phương án: Build, Buy hay Hợp tác. Ước tính ngân sách, nguồn lực, thời gian. Phác thảo lộ trình 90 ngày kèm quản trị rủi ro. Đầu ra: lộ trình 90 ngày khả thi." },
+        { "title": "Dẫn dắt chuyển đổi & Hoàn thiện", "content": "Thiết lập hệ thống KPI. Soạn thảo thông điệp truyền thông nội bộ. Trình bày kế hoạch và nhận phản hồi. Đầu ra: bản trình bày lộ trình sẵn sàng triển khai." }
+      ]
+    },
+    {
+      "key": "ai_research",
+      "code": "AI_RSCH",
+      "title": "AI for Research: Biến đề tài thành sản phẩm thật trong 3 buổi",
+      "englishName": "AI for Research",
+      "category": "Trí tuệ nhân tạo (AI)",
+      "level": "Trung cấp",
+      "description": "Khóa học AI for Research giới hạn 10-15 học viên tại MCNA. Lộ trình 3 buổi thực chiến trên đề tài riêng, cam kết có sản phẩm thật (Skill/Agent).",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/09/9664af82-0bc1-4aed-be59-82456bce062f.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-ai-for-research/",
+      "sessions": [
+        { "title": "Thiết lập khung nghiên cứu & khai thác tài liệu thông minh", "content": "Chuẩn hóa cấu trúc đề tài và xác định bài toán nghiên cứu cốt lõi. Khai thác Perplexity & AI chuyên sâu để tổng hợp tài liệu, tìm kiếm paper uy tín. Trích xuất và lọc dữ liệu thô phục vụ phần Literature Review." },
+        { "title": "Xử lý dữ liệu & phân tích chuyên sâu cùng AI", "content": "Ứng dụng Claude và ChatGPT xây dựng khung phương pháp nghiên cứu. Kỹ thuật prompting nâng cao để xử lý bảng biểu và bóc tách insight. Giải quyết điểm nghẽn logic trực tiếp cùng giảng viên." },
+        { "title": "Tự động hóa & đóng gói sản phẩm nghiên cứu (Skill/Agent)", "content": "Tích hợp quy trình thành hệ thống tự động hóa cá nhân hóa. Tự tay xây dựng và tối ưu Skill/Agent riêng cho đề tài. Review sản phẩm 1:1 và hoàn thiện toàn bộ hệ thống ngay tại lớp." }
+      ]
+    },
+    {
+      "key": "pbi_lv1",
+      "code": "PBI_LV1",
+      "title": "Power BI Level 1: Phân tích & trực quan hóa dữ liệu",
+      "englishName": "Power BI Essentials: Data Analysis & Visualization",
+      "category": "Power BI & Business Intelligence",
+      "level": "Cơ bản",
+      "description": "Khóa học Power BI Level 1 tại MCNA: học Power Query, Data Modeling, DAX, dựng Dashboard chuyên nghiệp chỉ sau 7 buổi.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/07/1d864ccb-b01c-43d9-936c-989b40db7881.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-power-bi-level-1/",
+      "sessions": [
+        { "title": "Tổng quan Power BI", "content": "Làm quen với giao diện và hiểu trọn vẹn quy trình từ nhập dữ liệu đến tạo báo cáo." },
+        { "title": "Kết nối dữ liệu", "content": "Học cách đưa dữ liệu vào Power BI từ các nguồn phổ biến như Excel, CSV…" },
+        { "title": "Power Query cơ bản", "content": "Thực hành chuẩn hóa dữ liệu: lọc, đổi kiểu dữ liệu, xóa cột và xử lý lỗi cơ bản." },
+        { "title": "Thiết kế Data Model", "content": "Học cách tạo quan hệ giữa các bảng và xây dựng mô hình dữ liệu tối ưu nhất." },
+        { "title": "DAX cơ bản", "content": "Thực hành viết các hàm Measure, Calculated Column ứng dụng cho báo cáo doanh nghiệp." },
+        { "title": "Visualization & Tương tác", "content": "Thiết kế biểu đồ, KPI Card và thiết lập tính năng tương tác thông minh cho báo cáo." },
+        { "title": "Dự án cuối khóa", "content": "Xây dựng Dashboard hoàn chỉnh từ đầu, giúp tổng hợp kiến thức và làm sản phẩm Portfolio." }
+      ]
+    },
+    {
+      "key": "pbi_lv2",
+      "code": "PBI_LV2",
+      "title": "Power BI Level 2: Giải pháp Business Intelligence",
+      "englishName": "Power BI in Action: Business Intelligence Solutions",
+      "category": "Power BI & Business Intelligence",
+      "level": "Nâng cao",
+      "description": "Khóa học Power BI nâng cao giúp bạn làm chủ DAX nâng cao, tích hợp AI, thiết lập bảo mật RLS và tối ưu hóa hệ thống Dashboard thực chiến cho doanh nghiệp.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2026/07/8efd7113-738e-48ae-89e2-a79eb2c531c7.png",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-power-bi-nang-cao-2/",
+      "sessions": [
+        { "title": "Tư duy & DAX nâng cao (P1)", "content": "Bắt đầu học các công thức phức tạp, thấu hiểu cơ chế Filter Context và Row Context để xử lý dữ liệu chuẩn xác." },
+        { "title": "Advanced DAX & Calculated Table (P2)", "content": "Ứng dụng các hàm DAX nâng cao để khởi tạo Calculated Table phục vụ các bài toán so sánh, dự báo phân tích." },
+        { "title": "Trực quan hóa dữ liệu chuyên sâu", "content": "Xây dựng biểu đồ động, thiết lập định dạng có điều kiện (Conditional Formatting) và lồng ghép các yếu tố AI trực quan." },
+        { "title": "Tùy chỉnh tương tác báo cáo nâng cao", "content": "Nâng tầm UX/UI báo cáo thông qua việc tối ưu Slicer, ứng dụng linh hoạt Bookmark và Drillthrough." },
+        { "title": "Bảo mật & Phân quyền RLS", "content": "Quản lý và thiết lập bảo mật Row-Level Security (RLS): phân quyền xem số liệu theo vị trí/phòng ban." },
+        { "title": "Triển khai Power BI Service & AI Dashboard", "content": "Làm chủ Power BI Cloud/Service, chia sẻ báo cáo an toàn trong tổ chức, ứng dụng AI & Copilot để tối ưu Dashboard." },
+        { "title": "Dự án cuối khóa & Tối ưu hóa hiệu suất", "content": "Xây dựng giải pháp BI hoàn chỉnh cho case study thực tế lớn, học cách tối ưu hiệu năng và giảm độ trễ của Dashboard." }
+      ]
+    },
+    {
+      "key": "pl300",
+      "code": "PL-300",
+      "title": "PL-300: Microsoft Power BI Data Analyst",
+      "englishName": "PL-300: Microsoft Power BI Data Analyst",
+      "category": "Power BI & Business Intelligence",
+      "level": "Nâng cao",
+      "description": "Khoá học PL-300: Làm chủ Power BI từ kết nối dữ liệu, viết DAX, đến xây dashboard & chia sẻ báo cáo chuyên nghiệp trên Power BI Service.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/07/khoa-hoc-pl-300.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-pl-300-mcna/",
+      "sessions": [
+        { "title": "Giới thiệu Phân tích Dữ liệu & Kết nối Dữ liệu trong Power BI" },
+        { "title": "Làm sạch, Biến đổi & Mô hình hóa Dữ liệu" },
+        { "title": "Làm quen DAX & Filter Context" },
+        { "title": "DAX nâng cao & Ôn tập DAX + Project" },
+        { "title": "Thiết kế Visual & Xây dựng Báo cáo Power BI" },
+        { "title": "Phân tích nâng cao & Chia sẻ nội dung trên Power BI Service" },
+        { "title": "Project Day" }
+      ]
+    },
+    {
+      "key": "excel_lv2",
+      "code": "EXC_LV2",
+      "title": "Excel nâng cao: Làm báo cáo logic, thông minh",
+      "englishName": "Excel for Data-Driven Business Intelligence",
+      "category": "Excel",
+      "level": "Trung cấp",
+      "description": "Khoá học Excel nâng cao: Làm chủ hàm, Pivot, Power Query, thiết kế dashboard. Tích hợp AI hỗ trợ để áp dụng vào công việc.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/excel-nang-cao-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-excel-nang-cao/",
+      "sessions": [
+        { "title": "Làm chủ bảng tính & hàm Excel thông dụng" },
+        { "title": "Tự động hoá làm sạch dữ liệu với Power Query" },
+        { "title": "Trực quan hóa dữ liệu với Pivot Table & Pivot Chart" },
+        { "title": "Dashboard & Báo cáo quản trị" },
+        { "title": "Automation với Formulas + AI hỗ trợ" },
+        { "title": "Kết nối nguồn dữ liệu & quản lý báo cáo liên vùng" },
+        { "title": "Project Day" }
+      ]
+    },
+    {
+      "key": "sql_lv1",
+      "code": "SQL_LV1",
+      "title": "SQL cơ bản: Phân tích dữ liệu cho người mới",
+      "englishName": "SQL Fundamentals: From Beginner to Data Analyst",
+      "category": "SQL & Cơ sở dữ liệu",
+      "level": "Cơ bản",
+      "description": "Khoá học SQL cơ bản giúp bạn nắm vững kiến thức, thực hành truy vấn dữ liệu, phù hợp cho người mới bắt đầu.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/sql-co-ban-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-sql-co-ban/",
+      "sessions": [
+        { "title": "Làm quen SQL Server & ngôn ngữ DDL" },
+        { "title": "Truy vấn dữ liệu với SELECT và thao tác DML" },
+        { "title": "Ghép nối dữ liệu và kết hợp bảng" },
+        { "title": "Hàm xử lý dữ liệu nâng cao" },
+        { "title": "Truy vấn nâng cao với bảng phụ" },
+        { "title": "Project: Sales Analysis & Top Products" },
+        { "title": "Project Day: Truy vấn nâng cao & ứng dụng GenAI" }
+      ]
+    },
+    {
+      "key": "sql_lv2",
+      "code": "SQL_LV2",
+      "title": "SQL nâng cao: Kỹ thuật xử lý dữ liệu chuyên sâu",
+      "englishName": "Advanced SQL for Data Science Mastery",
+      "category": "SQL & Cơ sở dữ liệu",
+      "level": "Nâng cao",
+      "description": "Khoá học SQL nâng cao tại MCNA: Thành thạo Stored Proc, Pivot, Trigger,... Tích hợp AI hỗ trợ viết truy vấn, phù hợp cho Data Analyst & BI.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/sql-nang-cao-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-sql-nang-cao/",
+      "sessions": [
+        { "title": "Stored Procedure & xử lý logic nâng cao" },
+        { "title": "CRUD nâng cao: Xoá, Cập nhật & Thêm dữ liệu" },
+        { "title": "Transactions, Table Variables, Temp Table" },
+        { "title": "Hàm trả bảng, Derived Tables và CTEs" },
+        { "title": "Cursors, Debugging và Dynamic SQL" },
+        { "title": "Pivot & Trigger nâng cao" },
+        { "title": "Project Day" }
+      ]
+    },
+    {
+      "key": "pyt_lv1",
+      "code": "PYT_LV1",
+      "title": "Python cơ bản: Phân tích dữ liệu thực chiến",
+      "englishName": "Python for Data Analytics & Risk Analytics Fundamentals",
+      "category": "Python & Machine Learning",
+      "level": "Cơ bản",
+      "description": "Khoá học Python cơ bản: Làm chủ Pandas, trực quan hóa, xử lý dữ liệu & dự báo. Học qua dự án thực tế, phù hợp người mới vào ngành dữ liệu.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/python-co-ban-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-python-co-ban/",
+      "sessions": [
+        { "title": "Làm quen Python & Xử lý dữ liệu cơ bản" },
+        { "title": "Numpy & Pandas cơ bản" },
+        { "title": "Làm sạch & Chuẩn hóa dữ liệu" },
+        { "title": "Trực quan hóa & phân tích chuỗi thời gian" },
+        { "title": "Giới thiệu Machine Learning với Scikit-learn" },
+        { "title": "Project: Dự báo doanh thu" },
+        { "title": "Project Day: Phân tích dữ liệu & trình bày mô hình dự đoán" }
+      ]
+    },
+    {
+      "key": "pyt_lv2",
+      "code": "PYT_LV2",
+      "title": "Python nâng cao: Machine Learning & Deep Learning thực chiến",
+      "englishName": "Python for Machine Learning & Deep Learning Mastery",
+      "category": "Python & Machine Learning",
+      "level": "Nâng cao",
+      "description": "Khoá học Python nâng cao: Ứng dụng Machine Learning, Clustering, Regression. Học qua project thực tế, dùng AI hỗ trợ viết & tối ưu mô hình.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/python-nang-cao-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-python-nang-cao/",
+      "sessions": [
+        { "title": "Tổng quan & chuẩn bị môi trường ML" },
+        { "title": "Linear Regression: Dự đoán biến số liên tục" },
+        { "title": "Tối ưu hóa mô hình hồi quy & đánh giá tự động" },
+        { "title": "Case Study: Dự đoán giá nhà" },
+        { "title": "Logistic Regression: Phân loại khách hàng" },
+        { "title": "Unsupervised Learning: Phân khúc khách hàng" },
+        { "title": "Project Day" }
+      ]
+    },
+    {
+      "key": "stat_lv2",
+      "code": "STAT_LV2",
+      "title": "Toán & Thống kê cho Data Science",
+      "englishName": "Essential Math & Statistics for Data Science",
+      "category": "Thống kê",
+      "level": "Trung cấp",
+      "description": "Khoá học Thống kê: Nắm vững mô tả, kiểm định, hồi quy, trực quan hoá dữ liệu; dùng AI hỗ trợ phân tích dữ liệu.",
+      "thumbnail": "https://mcna.vn/wp-content/uploads/2025/06/thong-ke-co-ban-scaled.jpg",
+      "sourceUrl": "https://mcna.vn/khoa-hoc/khoa-hoc-thong-ke-co-ban/",
+      "sessions": [
+        { "title": "Toán học nền tảng trong Data Science" },
+        { "title": "Thống kê mô tả & trực quan hóa dữ liệu" },
+        { "title": "Xác suất & Phân phối xác suất" },
+        { "title": "Lấy mẫu & Suy luận thống kê" },
+        { "title": "Kiểm định giả thuyết (Hypothesis Testing)" },
+        { "title": "Tương quan & Hồi quy đơn giản" },
+        { "title": "Project Day" }
+      ]
+    }
+  ],
+  "classes": [
+    { "course": "ai_for_work", "openingDate": "2026-09-06", "days": ["Thứ Năm", "Chủ Nhật"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "ai_agent", "openingDate": "2026-09-08", "days": ["Thứ Ba", "Thứ Bảy"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "ai_automation", "openingDate": "2026-09-12", "days": ["Thứ Tư", "Thứ Bảy"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "ai_for_work", "openingDate": "2026-09-28", "days": ["Thứ Hai", "Thứ Sáu"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "pbi_lv1", "openingDate": "2026-09-04", "days": ["Thứ Ba", "Thứ Sáu"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "pyt_lv2", "openingDate": "2026-09-07", "days": ["Thứ Hai", "Thứ Tư"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "sql_lv1", "openingDate": "2026-09-15", "days": ["Thứ Ba", "Thứ Bảy"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "sql_lv2", "openingDate": "2026-09-20", "days": ["Thứ Tư", "Chủ Nhật"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "pbi_lv2", "openingDate": "2026-09-22", "days": ["Thứ Ba", "Thứ Bảy"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "pbi_lv1", "openingDate": "2026-09-28", "days": ["Thứ Hai", "Thứ Năm"], "startTime": "19:30", "endTime": "21:30" },
+    { "course": "pyt_lv1", "openingDate": "2026-09-29", "days": ["Thứ Hai", "Thứ Năm"], "startTime": "19:30", "endTime": "21:30" }
+  ]
+}

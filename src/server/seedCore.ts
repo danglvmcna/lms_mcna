@@ -363,6 +363,20 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM session_materials")).rows[0].count) === 0) {
+    const firstSession = (await db.query("SELECT id, section_id, course_id FROM attendance_sessions ORDER BY id LIMIT 1")).rows[0];
+    if (firstSession) {
+      await db.query(
+        `INSERT INTO session_materials (id, session_id, section_id, course_id, type, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_at)
+         VALUES 
+         ($1, $2, $3, $4, 'youtube', 'Bài giảng giới thiệu môn học (Video mẫu)', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', NULL, NULL, NULL, NULL, 0, NOW()),
+         ($5, $2, $3, $4, 'link', 'Tài liệu hướng dẫn trực tuyến (Link tài liệu)', 'https://docs.mcna.edu.vn', NULL, NULL, NULL, NULL, 1, NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [generateId("mat"), firstSession.id, firstSession.section_id, firstSession.course_id, generateId("mat")]
+      ).catch(() => undefined);
+    }
+  }
+
   if (Number((await db.query("SELECT COUNT(*) AS count FROM attendance_records")).rows[0].count) === 0) {
     for (const record of store.attendanceRecords || []) {
       await db.query(
@@ -423,48 +437,6 @@ export async function seedAuthUsers(db: Queryable) {
   const teacherCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'")).rows[0].count);
   if (studentCount < 300 || teacherCount < 20) {
     await usersRepository.seed(db, getBackfilledSeedStore().users);
-  }
-
-  // Synchronize parent accounts for all student accounts in the database
-  const credential = hashPassword("parent16");
-  const students = (await db.query("SELECT id, email, name, created_at FROM users WHERE role = 'student'")).rows;
-  
-  if (students.length > 0) {
-    const userValues: any[] = [];
-    const userPlaceholders: string[] = [];
-    const linkValues: any[] = [];
-    const linkPlaceholders: string[] = [];
-
-    students.forEach((student, idx) => {
-      const parentId = student.id === "user_student" ? "user_parent_demo" : `parent_${student.id}`;
-      const parentEmail = "parents" + student.email;
-      const parentName = `Phụ Huynh ${student.name}`;
-      
-      const uOffset = idx * 7;
-      userPlaceholders.push(`($${uOffset + 1}, $${uOffset + 2}, $${uOffset + 3}, $${uOffset + 4}, $${uOffset + 5}, 'parent', true, $${uOffset + 6}, $${uOffset + 7})`);
-      userValues.push(parentId, parentEmail, credential.hash, credential.salt || null, parentName, student.id, student.created_at);
-
-      const lOffset = idx * 4;
-      linkPlaceholders.push(`($${lOffset + 1}, $${lOffset + 2}, $${lOffset + 3}, $${lOffset + 4})`);
-      linkValues.push(`plink_${student.id}`, parentId, student.id, new Date().toISOString());
-    });
-
-    await db.query(
-      `INSERT INTO users (id, email, password_hash, password_salt, name, role, is_active, linked_student_id, created_at)
-       VALUES ${userPlaceholders.join(", ")}
-       ON CONFLICT (email) DO UPDATE SET
-         name = EXCLUDED.name,
-         role = EXCLUDED.role,
-         linked_student_id = EXCLUDED.linked_student_id`,
-      userValues
-    );
-
-    await db.query(
-      `INSERT INTO parent_links (id, parent_id, student_id, created_at)
-       VALUES ${linkPlaceholders.join(", ")}
-       ON CONFLICT (parent_id, student_id) DO NOTHING`,
-      linkValues
-    );
   }
 
   // Backfill school email for all student users in DB during seeding to satisfy new requirements

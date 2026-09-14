@@ -21,13 +21,11 @@ import {
   Info,
   Calendar,
   Clock,
-  Building,
   ShieldAlert,
   Activity,
   LogOut,
   ChevronRight,
   FileText,
-  Award,
   HelpCircle,
   Bell
 } from "lucide-react";
@@ -37,14 +35,12 @@ import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
 
 // Import modular sub-components
-import AcademicManager from "./AcademicManager";
 import StudentRegistry from "./StudentRegistry";
 import AttendanceManager from "./AttendanceManager";
 import TuitionManager from "./TuitionManager";
 import WarningAndReports from "./WarningAndReports";
 import Timetable from "./Timetable";
 import ClassPlacement from "./ClassPlacement";
-import CertificateVerifier from "./CertificateVerifier";
 import UserGuide from "./UserGuide";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
@@ -75,10 +71,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   // Navigation tab states
   // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
   const [activeSubTab, setActiveSubTab] = useState<
-    | "academic_years" 
-    | "semesters" 
-    | "departments" 
-    | "programs" 
     | "students" 
     | "attendance" 
     | "tuition" 
@@ -89,7 +81,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     | "admin_timetable"
     | "teacher_timetable"
     | "class_placement"
-    | "verify_certificates"
     | "notifications"
     | "users"
     | "course_section_mgmt"
@@ -101,34 +92,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
   useEffect(() => {
     if (activeSystem === "LMS") {
-      const allowedLmsTabs = ["audit", "admin_guide", "notifications"];
-      if (currentUser.role === "manager" || currentUser.role === "super_admin" || currentUser.role === "admin") {
-        allowedLmsTabs.push("users");
-      }
-      if (currentUser.role === "manager" || currentUser.role === "super_admin" || currentUser.role === "admin") {
-        allowedLmsTabs.push("approval");
-      }
-      if (currentUser.role === "admin" || currentUser.role === "super_admin") {
-        allowedLmsTabs.push("course_section_mgmt");
-      }
+      const allowedLmsTabs = ["audit", "admin_guide", "notifications", "users", "approval", "course_section_mgmt"];
       if (!allowedLmsTabs.includes(activeSubTab)) {
         setActiveSubTab("admin_guide");
       }
     } else {
       const allowedSisTabs = [
-        "academic_years", "semesters", "departments", "programs", "students",
-        "reports", "class_placement", "verify_certificates", "admin_guide", "notifications"
+        "students", "class_placement", "admin_guide", "notifications",
+        "course_section_mgmt", "attendance", "admin_timetable", "teacher_timetable", "tuition", "users", "warnings", "audit"
       ];
-      if (currentUser.role === "admin" || currentUser.role === "super_admin") {
-        allowedSisTabs.push("course_section_mgmt");
-      }
-      if (currentUser.role === "super_admin") {
-        allowedSisTabs.push("attendance", "admin_timetable", "teacher_timetable", "tuition", "users", "warnings", "audit");
-      } else if (currentUser.role === "manager") {
-        allowedSisTabs.push("users", "audit");
-      } else if (currentUser.role === "admin") {
-        allowedSisTabs.push("attendance", "teacher_timetable", "warnings", "users", "audit");
-      }
       if (!allowedSisTabs.includes(activeSubTab)) {
         setActiveSubTab("admin_guide");
       }
@@ -145,9 +117,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "manager" | "admin" | "parent">("student");
-  const [newStudentProgramId, setNewStudentProgramId] = useState("");
-  const [newStudentDepartmentId, setNewStudentDepartmentId] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin">("student");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useUnsavedChangesWarning(
@@ -162,7 +132,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [userSearch, setUserSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "other">("student");
+  const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "admin">("student");
   const [auditSearch, setAuditSearch] = useState("");
   const [auditFilterAction, setAuditFilterAction] = useState("all");
   const [userPage, setUserPage] = useState(1);
@@ -198,7 +168,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       return;
     }
 
-    const roleToSubmit = currentUser.role === "admin" ? "student" : newUserRole;
+    const roleToSubmit = newUserRole;
 
     const exists = store.users.find(u => u.email.toLowerCase() === newUserEmail.toLowerCase());
     if (exists) {
@@ -211,15 +181,11 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         email: newUserEmail.toLowerCase().trim(),
         password: newUserPassword,
         name: newUserName.trim(),
-        role: roleToSubmit,
-        programId: roleToSubmit === "student" && newStudentProgramId ? newStudentProgramId : undefined,
-        departmentId: roleToSubmit === "student" && newStudentDepartmentId ? newStudentDepartmentId : undefined
+        role: roleToSubmit
       });
       setNewUserEmail("");
       setNewUserName("");
       setNewUserPassword("");
-      setNewStudentProgramId("");
-      setNewStudentDepartmentId("");
       setShowAddUserModal(false);
       onRefreshData();
       triggerToast("Đã lưu trữ và thiết lập tài khoản thành công.");
@@ -267,7 +233,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     const usersToImport: Array<{
       name: string;
       email: string;
-      role: "student" | "teacher" | "manager" | "admin" | "parent";
+      role: "student" | "teacher" | "admin";
     }> = [];
     const seenEmails = new Set<string>();
     let localErrorCount = 0;
@@ -286,11 +252,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       const [name, email, role] = columns;
       const cleanEmail = email.toLowerCase().trim();
       const cleanRole = role.toLowerCase().trim();
-      if (currentUser.role === "admin" && cleanRole !== "student") {
-        localErrorCount++;
-        return;
-      }
-      const roleValidated = ["student", "teacher", "manager", "admin", "parent"].includes(cleanRole);
+      const roleValidated = ["student", "teacher", "admin"].includes(cleanRole);
       const emailUnique = !seenEmails.has(cleanEmail) && !store.users.some(u => u.email.toLowerCase() === cleanEmail);
 
       if (!name.trim() || !cleanEmail.includes("@") || !roleValidated || !emailUnique) {
@@ -302,7 +264,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       usersToImport.push({
         name: name.trim(),
         email: cleanEmail,
-        role: cleanRole as "student" | "teacher" | "manager" | "admin" | "parent"
+        role: cleanRole as "student" | "teacher" | "admin"
       });
     });
 
@@ -350,7 +312,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   };
 
   const handleUpdateUserRole = (userId: string, newRole: User["role"]) => {
-    const allowedRoles: User["role"][] = ["student", "teacher", "manager", "admin", "parent"];
+    const allowedRoles: User["role"][] = ["student", "teacher", "admin"];
     if (!allowedRoles.includes(newRole)) return;
     
     api.setUserRole(userId, newRole)
@@ -422,7 +384,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     const matchesDirectory = filterRole !== "all" ? true : (
       userDirTab === "student" ? u.role === "student" :
       userDirTab === "teacher" ? u.role === "teacher" :
-      !["student", "teacher", "parent"].includes(u.role)
+      u.role === "admin"
     );
 
     return matchesSearch && matchesRole && matchesStatus && matchesDirectory;
@@ -562,47 +524,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Hộp thư thông báo</span>
               </button>
               <button
-                onClick={() => { setActiveSubTab("academic_years"); setRegistryLookupStudentId(null); }}
+                onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
                 className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "academic_years" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                  activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Năm học</span>
+                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
               </button>
-              <button
-                onClick={() => { setActiveSubTab("semesters"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "semesters" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Clock className="h-4 w-4" /> Tháng</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("departments"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "departments" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Building className="h-4 w-4" /> Quản lý Khoa</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("programs"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "programs" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Chương trình đào tạo</span>
-              </button>
-              {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
-                <button
-                  onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
-                </button>
-              )}
             </div>
 
             <div className="space-y-1.5 border-t border-white/5 pt-3">
@@ -617,46 +545,38 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               >
                 <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Sổ Học sinh Sinh viên</span>
               </button>
-              {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
-                <button
-                  onClick={() => { setActiveSubTab("attendance"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "attendance" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Activity className="h-4 w-4" /> Quản trị Điểm danh</span>
-                </button>
-              )}
-              {currentUser.role === "super_admin" && (
-                <button
-                  onClick={() => { setActiveSubTab("tuition"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "tuition" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Thanh toán Học phí</span>
-                </button>
-              )}
-              {currentUser.role === "super_admin" && (
-                <button
-                  onClick={() => { setActiveSubTab("admin_timetable"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "admin_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Quản lý Thời khóa biểu</span>
-                </button>
-              )}
-              {currentUser.role !== "manager" && (
-                <button
-                  onClick={() => { setActiveSubTab("teacher_timetable"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "teacher_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Thời khóa biểu Giảng viên</span>
-                </button>
-              )}
+              <button
+                onClick={() => { setActiveSubTab("attendance"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "attendance" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><Activity className="h-4 w-4" /> Quản trị Điểm danh</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("tuition"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "tuition" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Thanh toán Học phí</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("admin_timetable"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "admin_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Quản lý Thời khóa biểu</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("teacher_timetable"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "teacher_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Thời khóa biểu Giảng viên</span>
+              </button>
               <button
                 onClick={() => { setActiveSubTab("class_placement"); setRegistryLookupStudentId(null); }}
                 className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
@@ -666,33 +586,21 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Xếp lớp Học viên</span>
               </button>
               <button
-                onClick={() => { setActiveSubTab("verify_certificates"); setRegistryLookupStudentId(null); }}
+                onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
                 className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "verify_certificates" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                  activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Award className="h-4 w-4" /> Duyệt & Xác thực Bằng</span>
+                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
               </button>
-              {(currentUser.role === "manager" || currentUser.role === "super_admin" || currentUser.role === "admin") && (
-                <>
-                <button
-                  onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
-                </button>
-                <button
-                  onClick={() => { setActiveSubTab("audit"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "audit" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống (Audit)</span>
-                </button>
-                </>
-              )}
+              <button
+                onClick={() => { setActiveSubTab("audit"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "audit" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống (Audit)</span>
+              </button>
             </div>
             </>
             )}
@@ -710,41 +618,35 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               >
                 <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Hướng dẫn sử dụng</span>
               </button>
-              {(currentUser.role === "manager" || currentUser.role === "super_admin" || currentUser.role === "admin") && (
-                <button
-                  onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
-                </button>
-              )}
-              {(currentUser.role === "manager" || currentUser.role === "super_admin" || currentUser.role === "admin") && (
-                <button
-                  onClick={() => { setActiveSubTab("approval"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "approval" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Duyệt khóa học</span>
-                  {pendingCourses.length > 0 && (
-                    <span className="bg-amber-500 text-indigo-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full">
-                      {pendingCourses.length}
-                    </span>
-                  )}
-                </button>
-              )}
-              {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
-                <button
-                  onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
-                  className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                    activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
-                </button>
-              )}
+              <button
+                onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("approval"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "approval" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Duyệt khóa học</span>
+                {pendingCourses.length > 0 && (
+                  <span className="bg-amber-500 text-indigo-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full">
+                    {pendingCourses.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
+                  activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
+              </button>
               <button
                 onClick={() => { setActiveSubTab("notifications"); setRegistryLookupStudentId(null); }}
                 className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
@@ -764,7 +666,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             </div>
             )}
 
-            {activeSystem === "SIS" && (currentUser.role === "admin" || currentUser.role === "super_admin") && (
+            {activeSystem === "SIS" && (
             <div className="space-y-1.5 border-t border-white/5 pt-3">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
                 REPORTS STATS (Thống kê tổng hợp)
@@ -786,23 +688,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         {/* Right Main viewport area container */}
         <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 min-w-0">
           
-          {/* SCHOLASTIC GROUP (Academic Manager) */}
-          {(activeSubTab === "academic_years" || activeSubTab === "semesters" || activeSubTab === "departments" || activeSubTab === "programs") && (
-            <AcademicManager 
-              store={store} 
-              currentUser={currentUser} 
-              onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
-              updateStore={updateStore}
-              initialTab={
-                activeSubTab === "academic_years" ? "years" :
-                activeSubTab === "semesters" ? "semesters" :
-                activeSubTab === "departments" ? "departments" :
-                activeSubTab === "programs" ? "programs" : undefined
-              }
-            />
-          )}
-
           {/* STUDENTS GROUP (Student registry layout) */}
           {activeSubTab === "students" && (
             <StudentRegistry 
@@ -866,15 +751,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           {/* COURSE & SECTION MANAGEMENT GROUP */}
           {activeSubTab === "course_section_mgmt" && (
             <CourseSectionManager
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-            />
-          )}
-
-          {/* CERTIFICATE VERIFICATION GROUP */}
-          {activeSubTab === "verify_certificates" && (
-            <CertificateVerifier
               store={store}
               currentUser={currentUser}
               onRefreshData={onRefreshData}
@@ -998,23 +874,22 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                     className="p-1.5 bg-black/25 text-white/85 border border-white/10 rounded-xl"
                   >
                     <option value="all" className="bg-slate-900">Mọi vai trò</option>
-                    <option value="student" className="bg-slate-900">Sinh Viên</option>
-                    <option value="teacher" className="bg-slate-900">Giáo Viên</option>
-                    <option value="manager" className="bg-slate-900">Manager</option>
-                    <option value="admin" className="bg-slate-900">Admin học tập</option>
+                    <option value="student" className="bg-slate-900">Học Viên</option>
+                    <option value="teacher" className="bg-slate-900">Giảng Viên</option>
+                    <option value="admin" className="bg-slate-900">Quản Trị Viên</option>
                   </select>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "student", label: "Sinh Viên" },
+                  { id: "student", label: "Học Viên" },
                   { id: "teacher", label: "Giảng Viên" },
-                  { id: "other", label: "Chức Năng Khác" }
+                  { id: "admin", label: "Quản Trị Viên" }
                 ].map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => { setUserDirTab(tab.id as "student" | "teacher" | "other"); setUserPage(1); }}
+                    onClick={() => { setUserDirTab(tab.id as "student" | "teacher" | "admin"); setUserPage(1); }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${userDirTab === tab.id ? "bg-indigo-600 text-white border-indigo-400" : "bg-white/5 text-white/60 border-white/10 hover:text-white"}`}
                   >
                     {tab.label}
@@ -1050,7 +925,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                     <tbody className="divide-y divide-white/5">
                       {paginatedUsers.map(usr => {
                         const profile = store.studentProfiles?.find(p => p.userId === usr.id);
-                        const program = store.programs?.find(p => p.id === profile?.programId);
                         return (
                           <tr key={usr.id} className="hover:bg-white/2 transition">
                             <td className="py-3 px-3 font-semibold text-white">{usr.name}</td>
@@ -1058,7 +932,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                             {userDirTab === "student" && (
                               <td className="py-3 px-3 text-white/70">
                                 <div className="font-mono text-indigo-300">{profile?.studentCode || "Chưa có mã"}</div>
-                                <div className="text-[10px] text-white/40">{program?.name || profile?.programId || "Chưa gán ngành"} · GPA {profile?.gpa ?? 0}</div>
+                                <div className="text-[10px] text-white/40">{profile?.phone ? `SĐT: ${profile.phone}` : "Chưa có SĐT"} · GPA {profile?.gpa ?? 0}</div>
                               </td>
                             )}
                             <td className="py-3 px-3">
@@ -1068,11 +942,9 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                                 disabled={usr.id === currentUser.id}
                                 className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-200 disabled:opacity-50"
                               >
-                                <option value="student" className="bg-slate-900">Sinh viên</option>
+                                <option value="student" className="bg-slate-900">Học viên</option>
                                 <option value="teacher" className="bg-slate-900">Giảng viên</option>
-                                <option value="manager" className="bg-slate-900">Manager</option>
-                                <option value="admin" className="bg-slate-900">Admin học vụ</option>
-                                <option value="parent" className="bg-slate-900">Phụ huynh</option>
+                                <option value="admin" className="bg-slate-900">Quản trị viên</option>
                               </select>
                             </td>
                             <td className="py-3 px-3">
@@ -1282,49 +1154,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               <div className="space-y-1">
                 <label className="text-white/60">Phân hệ Quyền</label>
                 <select
-                  value={currentUser.role === "admin" ? "student" : newUserRole}
+                  value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value as any)}
-                  disabled={currentUser.role === "admin"}
-                  className={`w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none ${currentUser.role === "admin" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none"
                 >
-                  <option value="student" className="bg-slate-900">Sinh Viên (Student)</option>
+                  <option value="student" className="bg-slate-900">Học Viên (Student)</option>
                   <option value="teacher" className="bg-slate-900">Giảng Viên (Teacher)</option>
-                  <option value="manager" className="bg-slate-900">Manager (Manager)</option>
-                  <option value="admin" className="bg-slate-900">Admin học vụ (admin)</option>
-                  <option value="parent" className="bg-slate-900">Phụ huynh (Parent)</option>
+                  <option value="admin" className="bg-slate-900">Quản Trị Viên (Admin)</option>
                 </select>
               </div>
-
-              {(currentUser.role === "admin" || newUserRole === "student") && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-white/60">Khoa / Viện (Tùy chọn)</label>
-                    <select
-                      value={newStudentDepartmentId}
-                      onChange={(e) => setNewStudentDepartmentId(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none text-sm"
-                    >
-                      <option value="" className="bg-slate-900">-- Mặc định --</option>
-                      {store.departments?.map((d: any) => (
-                        <option key={d.id} value={d.id} className="bg-slate-900">{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-white/60">Chuyên ngành (Tùy chọn)</label>
-                    <select
-                      value={newStudentProgramId}
-                      onChange={(e) => setNewStudentProgramId(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none text-sm"
-                    >
-                      <option value="" className="bg-slate-900">-- Mặc định --</option>
-                      {store.programs?.map((p: any) => (
-                        <option key={p.id} value={p.id} className="bg-slate-900">{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
 
               <div className="flex justify-end gap-2 text-xs pt-2">
                 <button

@@ -72,7 +72,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData, acti
   // Parents are linked to exactly one student via linkedStudentId
   const childId = currentUser.role === "student" ? currentUser.id : currentUser.linkedStudentId;
 
-  if (currentUser.role === "parent" && !childId) {
+  if ((currentUser.role as string) === "parent" && !childId) {
     return (
       <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-100">
         Tài khoản phụ huynh chưa được liên kết với học viên. Vui lòng liên hệ quản trị viên để được hỗ trợ.

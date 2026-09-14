@@ -30,11 +30,14 @@ const ADVISOR_CREDENTIAL = credential("advisor16", "seed_advisor");
 function normalizeLegacyRoles(store: LMSDataStore): void {
   store.users = store.users.map(user => {
     const legacyRole = user.role as string;
-    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin") {
+    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin" || legacyRole === "manager" || legacyRole === "super_admin") {
       return { ...user, role: "admin" };
     }
     if (legacyRole === "advisor") {
       return { ...user, role: "teacher" };
+    }
+    if (legacyRole === "parent") {
+      return { ...user, role: "student" };
     }
     return user;
   });
@@ -72,7 +75,7 @@ export function getInitialStore(): LMSDataStore {
         passwordHash: ADMIN_CREDENTIAL.hash,
         passwordSalt: ADMIN_CREDENTIAL.salt,
         name: "Arthur Pendragon",
-        role: "manager",
+        role: "admin",
         isActive: true,
         createdAt: new Date("2026-01-01T08:00:00Z").toISOString()
       },

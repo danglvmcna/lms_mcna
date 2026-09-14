@@ -343,16 +343,16 @@ export function backfillMegaDemoData(store: LMSDataStore) {
     return `${s} ${m} ${g}`;
   };
 
-  // 1. Double check Super Admin presence
-  const hasSuperAdmin = store.users.some(u => u.role === "super_admin");
-  if (!hasSuperAdmin) {
+  // 1. Double check Admin presence
+  const hasAdmin = store.users.some(u => u.role === "admin");
+  if (!hasAdmin) {
     store.users.push({
       id: "user_super_admin",
       email: "superadmin@e16.local",
       passwordHash: credential("superadmin16", "seed_super_admin").hash,
       passwordSalt: credential("superadmin16", "seed_super_admin").salt,
-      name: "Trần Anh Khoa (Super Admin)",
-      role: "super_admin",
+      name: "Trần Anh Khoa (Quản Trị Viên)",
+      role: "admin",
       isActive: true,
       createdAt: new Date("2026-01-01T00:00:00Z").toISOString()
     });
@@ -739,33 +739,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
     });
   });
 
-  // Generate/synchronize parent accounts for all student accounts
-  const parentCredential = credential("parent16", "seed_parent_global");
-  const studentUsers = store.users.filter(u => u.role === "student");
-  studentUsers.forEach(student => {
-    const parentId = student.id === "user_student" ? "user_parent_demo" : `parent_${student.id}`;
-    const parentEmail = "parents" + student.email;
-    
-    // Check if parent account exists, if so, update email
-    const existingParent = store.users.find(u => u.id === parentId || (u.role === "parent" && u.linkedStudentId === student.id));
-    if (existingParent) {
-      existingParent.email = parentEmail;
-      existingParent.name = `Phụ Huynh ${student.name}`;
-      existingParent.linkedStudentId = student.id;
-    } else {
-      store.users.push({
-        id: parentId,
-        email: parentEmail,
-        passwordHash: parentCredential.hash,
-        passwordSalt: parentCredential.salt,
-        name: `Phụ Huynh ${student.name}`,
-        role: "parent",
-        isActive: true,
-        linkedStudentId: student.id,
-        createdAt: student.createdAt
-      });
-    }
-  });
 
   // -------------------------------------------------------------
   // SEED DATA FOR KỲ 2026.1 (Fall 2026 / Academic Year 2026-2027)

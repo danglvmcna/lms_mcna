@@ -3,6 +3,7 @@ import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings
 import ModalPortal from "../ModalPortal";
 import { AppStore } from "../../store";
 import AttendanceManager from "../AttendanceManager";
+import SessionMaterialsEditor from "../SessionMaterialsEditor";
 import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
@@ -827,6 +828,31 @@ export default function CourseBuilder(props: ComponentProps) {
                               })()}
                             </div>
                           </div>
+
+                          {/* Card: Session Materials (Slide, Docx, PDF, YouTube, Link) */}
+                          {(() => {
+                            const sessionIndex = Math.max(Number(selectedClassLesson.order || 1) - 1, 0);
+                            const matchingSession = selectedClassAttendanceSessionsByOrder[sessionIndex] || null;
+                            const currentSessionId = matchingSession ? matchingSession.id : "";
+                            if (!currentSessionId) return null;
+
+                            return (
+                              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                  <div>
+                                    <span className="text-xs font-semibold text-white block">Tài liệu buổi học</span>
+                                    <span className="text-[10px] text-white/40">Quản lý slide bài giảng, tệp Word/PDF và liên kết YouTube cho buổi học này</span>
+                                  </div>
+                                  <FileText className="h-4 w-4 text-indigo-300" />
+                                </div>
+                                <SessionMaterialsEditor
+                                  sessionId={currentSessionId}
+                                  triggerToast={triggerToast || props.triggerToast || (() => {})}
+                                  onChanged={onRefreshData}
+                                />
+                              </div>
+                            );
+                          })()}
 
                           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">

@@ -31,7 +31,7 @@ export const scholarshipsRepository = {
         [user.id]
       )).rows;
     }
-    if (!["admin", "manager", "super_admin", "finance"].includes(user.role)) return [];
+    if (user.role !== "admin") return [];
     return (await db.query("SELECT * FROM scholarship_applications ORDER BY applied_at DESC")).rows;
   },
 

@@ -28,7 +28,6 @@ import { AppStore } from "./store";
 const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
 const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
 const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
-const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
 import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
@@ -91,11 +90,9 @@ function AppShell() {
   const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
 
   const roleLabel = (role: User["role"]) => {
-    if (role === "admin") return "Admin quản lý lớp";
-    if (role === "manager" || role === "super_admin") return "Ban Quản Trị";
+    if (role === "admin") return "Quản Trị Viên";
     if (role === "teacher") return "Giảng Viên";
     if (role === "student") return "Học Viên";
-    if (role === "parent") return "Trang Phụ Huynh";
     return role;
   };
 
@@ -323,12 +320,6 @@ function AppShell() {
     } catch {
       setResetPasswordError("Dịch vụ đặt lại mật khẩu chưa sẵn sàng.");
     }
-  };
-
-  const handleInstantDemoLogin = (email: string, pass: string) => {
-    setLoginEmail(email);
-    setLoginPassword(pass);
-    setAuthError(null);
   };
 
   // Standalone Single-File download builder
@@ -662,7 +653,7 @@ function AppShell() {
               </div>
 
               {/* Header right: System Switcher */}
-              {["manager", "super_admin", "admin", "student", "parent"].includes(currentUser.role) ? (
+              {["admin", "student"].includes(currentUser.role) ? (
                 <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 relative z-10 backdrop-blur-xl transition duration-200 shadow-md">
                   <button
                     onClick={() => setActiveSystem("SIS")}
@@ -674,18 +665,16 @@ function AppShell() {
                   >
                     <span>Hành chính SIS</span>
                   </button>
-                  {currentUser.role !== "manager" && (
-                    <button
-                      onClick={() => setActiveSystem("LMS")}
-                      className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold font-sans tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeSystem === "LMS"
-                          ? "bg-indigo-600 text-white shadow-lg border border-indigo-400/30"
-                          : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent"
-                      }`}
-                    >
-                      <span>LMS Học tập</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setActiveSystem("LMS")}
+                    className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold font-sans tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeSystem === "LMS"
+                        ? "bg-indigo-600 text-white shadow-lg border border-indigo-400/30"
+                        : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent"
+                    }`}
+                  >
+                    <span>LMS Học tập</span>
+                  </button>
                 </div>
               ) : (
                 <div />
@@ -700,7 +689,7 @@ function AppShell() {
                   <span className="text-xs text-indigo-300 font-mono tracking-widest uppercase">Đang tải phân hệ học vụ...</span>
                 </div>
               }>
-                {(currentUser.role === "admin" || currentUser.role === "super_admin" || currentUser.role === "manager") && (
+                {currentUser.role === "admin" && (
                   <AdminPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
@@ -720,15 +709,6 @@ function AppShell() {
                 )}
                 {currentUser.role === "student" && (
                   <StudentPanel
-                    currentUser={currentUser}
-                    onLogout={handleLogout}
-                    onRefreshData={refreshStoreDataFromServer}
-                    activeSystem={activeSystem}
-                  />
-                )}
-
-                {currentUser.role === "parent" && (
-                  <ParentPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onRefreshData={refreshStoreDataFromServer}
@@ -988,141 +968,6 @@ function AppShell() {
                     </div>
                   </form>
 
-                  {/* Seed Switchboard buttons section */}
-                  <div className="border-t border-white/10 pt-5 space-y-4">
-                    <span className="text-[10px] font-mono font-bold tracking-wider text-white/40 block uppercase">
-                      Bảng chuyển đổi nhanh Tài khoản Demo:
-                    </span>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleInstantDemoLogin("admin@e16.local", "admine16")}
-                    className="p-2 bg-red-500/10 hover:bg-[#dc2626]/20 border border-red-500/20 text-red-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-sans font-extrabold text-[10px] leading-tight group-hover:text-red-300">Admin QTV</span>
-                      <span className="font-mono text-[8px] font-normal text-white/30 truncate block">admin@e16.local</span>
-                    </div>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 ml-1 transform group-hover:translate-x-0.5 transition text-red-400" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleInstantDemoLogin("teacher@e16.local", "teachere16")}
-                    className="p-2 bg-amber-500/10 hover:bg-[#d97706]/20 border border-amber-500/20 text-amber-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-sans font-extrabold text-[10px] leading-tight group-hover:text-amber-300">Giảng Viên</span>
-                      <span className="font-mono text-[8px] font-normal text-white/30 truncate block">teacher@e16.local</span>
-                    </div>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 ml-1 transform group-hover:translate-x-0.5 transition text-amber-400" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleInstantDemoLogin("student@e16.local", "studente16")}
-                    className="p-2 bg-blue-500/10 hover:bg-blue-600/20 border border-blue-400/20 text-blue-300 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-sans font-extrabold text-[10px] leading-tight group-hover:text-blue-200">Học Viên</span>
-                      <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student@e16.local</span>
-                    </div>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 ml-1 transform group-hover:translate-x-0.5 transition text-blue-300" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleInstantDemoLogin("academic@e16.local", "academice16")}
-                    className="p-2 bg-sky-500/10 hover:bg-sky-600/20 border border-sky-400/20 text-sky-300 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-sans font-extrabold text-[10px] leading-tight group-hover:text-sky-200">Admin Quản Lý Lớp</span>
-                      <span className="font-mono text-[8px] font-normal text-white/30 truncate block">academic@e16.local</span>
-                    </div>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 ml-1 transform group-hover:translate-x-0.5 transition text-sky-300" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleInstantDemoLogin("parentsstudent@mcna.local", "parent16")}
-                    className="p-2 bg-rose-500/10 hover:bg-rose-600/20 border border-rose-400/20 text-rose-300 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="block font-sans font-extrabold text-[10px] leading-tight group-hover:text-rose-200">Phụ Huynh</span>
-                      <span className="font-mono text-[8px] font-normal text-white/30 truncate block">parentsstudent@mcna.local</span>
-                    </div>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 ml-1 transform group-hover:translate-x-0.5 transition text-rose-300" />
-                  </button>
-                </div>
-
-                <div className="border-t border-white/5 pt-3 space-y-2">
-                  <span className="text-[10px] font-mono font-bold tracking-wider text-white/40 block uppercase">
-                    Kiểm thử trạng thái Học viên:
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => handleInstantDemoLogin("student_active@e16.local", "studente16")}
-                      className="p-2 bg-emerald-500/5 hover:bg-emerald-600/10 border border-emerald-500/10 text-emerald-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-sans font-extrabold text-[9px] leading-tight group-hover:text-emerald-300">1. Đang học (Active)</span>
-                        <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student_active</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleInstantDemoLogin("student_on_leave@e16.local", "studente16")}
-                      className="p-2 bg-amber-500/5 hover:bg-amber-600/10 border border-amber-500/10 text-amber-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-sans font-extrabold text-[9px] leading-tight group-hover:text-amber-300">2. Bảo lưu (On-Leave)</span>
-                        <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student_on_leave</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-amber-400 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleInstantDemoLogin("student_suspended@e16.local", "studente16")}
-                      className="p-2 bg-red-500/5 hover:bg-red-600/10 border border-red-500/10 text-red-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-sans font-extrabold text-[9px] leading-tight group-hover:text-red-300">3. Đình chỉ (Suspended)</span>
-                        <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student_suspended</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-red-400 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleInstantDemoLogin("student_graduated@e16.local", "studente16")}
-                      className="p-2 bg-blue-500/5 hover:bg-blue-600/10 border border-blue-500/10 text-blue-400 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-sans font-extrabold text-[9px] leading-tight group-hover:text-blue-200">4. Tốt nghiệp (Graduated)</span>
-                        <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student_graduated</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-blue-400 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleInstantDemoLogin("student_withdrawn@e16.local", "studente16")}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold rounded-xl flex items-center justify-between text-left cursor-pointer group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <span className="block font-sans font-extrabold text-[9px] leading-tight group-hover:text-slate-900">5. Thôi học (Withdrawn)</span>
-                        <span className="font-mono text-[8px] font-normal text-white/30 truncate block">student_withdrawn</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-slate-700 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-                  </div>
-                </div>
-                  </div>
                 </>
               )}
 
