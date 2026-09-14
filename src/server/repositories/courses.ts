@@ -20,7 +20,7 @@ export const coursesRepository = {
   async create(db: Queryable, input: Omit<Course, "id" | "createdAt">) {
     const course: Course = { ...input, id: generateId("course"), createdAt: new Date().toISOString() };
     await db.query(
-      "INSERT INTO courses (id,title,description,teacher_id,status,category,thumbnail,price,level,tags_json,rejection_reason,created_at,opening_date,number_of_lessons) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+      "INSERT INTO courses (id,title,description,teacher_id,status,category,thumbnail,price,level,tags_json,rejection_reason,created_at,opening_date,number_of_lessons,original_price) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)",
       [
         course.id,
         course.title,
@@ -35,13 +35,14 @@ export const coursesRepository = {
         course.rejectionReason || null,
         course.createdAt,
         course.openingDate || null,
-        course.numberOfLessons || null
+        course.numberOfLessons || null,
+        course.originalPrice ?? null
       ]
     );
     return course;
   },
 
-  async updateDetails(db: Queryable, id: string, input: Pick<Course, "title" | "description" | "category"> & Partial<Pick<Course, "thumbnail" | "price" | "level" | "tags" | "openingDate" | "numberOfLessons">>) {
+  async updateDetails(db: Queryable, id: string, input: Pick<Course, "title" | "description" | "category"> & Partial<Pick<Course, "thumbnail" | "price" | "originalPrice" | "level" | "tags" | "openingDate" | "numberOfLessons">>) {
     const row = (await db.query(
       `UPDATE courses
        SET title = $1,
@@ -52,8 +53,9 @@ export const coursesRepository = {
            level = $6,
            tags_json = $7,
            opening_date = $8,
-           number_of_lessons = $9
-       WHERE id = $10
+           number_of_lessons = $9,
+           original_price = $10
+       WHERE id = $11
        RETURNING *`,
       [
         input.title,
@@ -65,6 +67,7 @@ export const coursesRepository = {
         JSON.stringify(input.tags || []),
         input.openingDate || null,
         input.numberOfLessons || null,
+        input.originalPrice ?? null,
         id
       ]
     )).rows[0];

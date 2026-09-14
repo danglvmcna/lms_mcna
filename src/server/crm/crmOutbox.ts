@@ -16,7 +16,12 @@ const DELIVERY_TIMEOUT_MS = 10_000;
 export async function enqueueCrmEvent(db: Queryable, type: CrmEventType, data: Record<string, unknown>, origin: CrmOrigin = "lms") {
   const id = generateId("crmevt");
   const payload = { id, type, origin, occurredAt: new Date().toISOString(), data };
-  await db.query("INSERT INTO crm_outbox (id, event_type, payload) VALUES ($1, $2, $3)", [id, type, JSON.stringify(payload)]);
+  // clock_timestamp(), not the column default: events queued in one transaction (payment confirmed, then placed)
+  // would otherwise share the transaction start time and could reach the CRM out of order.
+  await db.query(
+    "INSERT INTO crm_outbox (id, event_type, payload, created_at) VALUES ($1, $2, $3, clock_timestamp())",
+    [id, type, JSON.stringify(payload)]
+  );
   return id;
 }
 
@@ -100,19 +105,23 @@ export async function deliverPendingCrmEvents(): Promise<{ sent: number; failed:
   let failed = 0;
   try {
     // Lease the batch first so no HTTP call runs inside an open transaction and parallel workers skip it.
+    // Sorted in SQL: JS dates drop the microseconds that separate events queued in the same transaction.
     const rows = (await pool.query(
-      `UPDATE crm_outbox
-       SET next_attempt_at = NOW() + INTERVAL '5 minutes'
-       WHERE id IN (
-         SELECT id FROM crm_outbox
-         WHERE status = 'pending' AND next_attempt_at <= NOW()
-         ORDER BY created_at
-         LIMIT $1
-         FOR UPDATE SKIP LOCKED
+      `WITH leased AS (
+         UPDATE crm_outbox
+         SET next_attempt_at = NOW() + INTERVAL '5 minutes'
+         WHERE id IN (
+           SELECT id FROM crm_outbox
+           WHERE status = 'pending' AND next_attempt_at <= NOW()
+           ORDER BY created_at
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING *
        )
-       RETURNING *`,
+       SELECT * FROM leased ORDER BY created_at, id`,
       [BATCH_SIZE]
-    )).rows.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    )).rows;
 
     for (const row of rows) {
       const body = JSON.stringify(row.payload);

@@ -2171,6 +2171,7 @@ app.post("/api/courses", requireAuth, requireRole(["admin", "super_admin"]), val
     category: body.category,
     thumbnail: body.thumbnail,
     price: body.price,
+    originalPrice: body.originalPrice ?? undefined,
     level: body.level,
     tags: body.tags,
     openingDate: body.openingDate,
@@ -2197,6 +2198,7 @@ app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin", "super
       category: existing.category,
       thumbnail: existing.thumbnail,
       price: existing.price,
+      originalPrice: existing.originalPrice,
       level: existing.level,
       tags: existing.tags,
       openingDate: existing.openingDate,
@@ -2214,6 +2216,7 @@ app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin", "super
     category: body.category,
     thumbnail: body.thumbnail,
     price: body.price,
+    originalPrice: body.originalPrice ?? undefined,
     level: body.level,
     tags: body.tags,
     openingDate: body.openingDate,
@@ -2403,64 +2406,54 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   await audit(req, "enroll_course", result.course.id, result.course.title);
   res.status(201).json(result.enrollment);
 }));
+// One-click activation from the admin orders screen: record the payment, then place the learner.
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
   const enrollmentId = req.params.id;
+  const chosenSectionId = typeof req.body?.sectionId === "string" && req.body.sectionId.trim() ? req.body.sectionId.trim() : undefined;
   const client = await pool.connect();
+  let placement: PlacementResult;
+  let studentId: string;
+  let targetSectionId: string | undefined;
   try {
     await client.query("BEGIN");
-    const enrollmentRow = (await client.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [enrollmentId])).rows[0];
+    const enrollmentRow = (await client.query("SELECT student_id, requested_section_id FROM enrollments WHERE id = $1", [enrollmentId])).rows[0];
     if (!enrollmentRow) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Không tìm thấy thông tin ghi danh (Enrollment)." });
+      return res.status(404).json({ error: "Không tìm thấy đơn đăng ký." });
     }
+    studentId = enrollmentRow.student_id;
+    // Only the class the admin picked or the one the learner asked for; never guess a class.
+    targetSectionId = chosenSectionId || enrollmentRow.requested_section_id || undefined;
 
-    // 1. Approve pending payment transaction if exists
-    const pendingTx = (await client.query(
-      "SELECT id FROM transactions WHERE student_id = $1 AND course_id = $2 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
-      [enrollmentRow.student_id, enrollmentRow.course_id]
-    )).rows[0];
-
-    if (pendingTx) {
-      await financeRepository.reviewTransaction(client, pendingTx.id, "approved", req.user!.id, "Xác nhận thanh toán 1-chạm bởi Admin.");
-    }
-
-    // 2. Determine target section
-    let targetSectionId = req.body.sectionId || enrollmentRow.requested_section_id;
-    if (!targetSectionId) {
-      const openSection = (await client.query(
-        "SELECT id FROM course_sections WHERE course_id = $1 AND status = 'open' ORDER BY opening_date ASC NULLS LAST LIMIT 1",
-        [enrollmentRow.course_id]
-      )).rows[0];
-      targetSectionId = openSection?.id;
-    }
-
-    // 3. Place student into class
-    const placement = await placeEnrollment(client, enrollmentId, targetSectionId, "lms");
-    if (isServiceError(placement)) {
+    const payment = await confirmCoursePayment(client, enrollmentId, { reference: `admin ${req.user!.id}` }, "lms");
+    if (isServiceError(payment)) {
       await client.query("ROLLBACK");
-      return res.status(placement.status).json({ error: placement.error });
+      return res.status(payment.status).json({ error: payment.error });
     }
-
-    await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollmentId);
+    const result = await placeEnrollment(client, enrollmentId, targetSectionId, "lms");
+    if (isServiceError(result)) {
+      await client.query("ROLLBACK");
+      return res.status(result.status).json({ error: result.error });
+    }
+    placement = result;
     await client.query("COMMIT");
-    invalidateStoreCache();
-
-    await notificationsRepository.create(pool, {
-      userId: enrollmentRow.student_id,
-      type: "success",
-      message: targetSectionId
-        ? "Đơn đăng ký khóa học của bạn đã được kích hoạt và xếp vào lớp thành công! Chúc bạn học tập hiệu quả."
-        : "Đơn đăng ký khóa học của bạn đã được kích hoạt thành công!"
-    });
-
-    await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
-    res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
-  } catch (error: any) {
+  } catch (error) {
     await client.query("ROLLBACK");
-    res.status(500).json({ error: error.message || "Không thể kích hoạt đơn hàng." });
+    throw error;
   } finally {
     client.release();
   }
+
+  invalidateStoreCache();
+  await notificationsRepository.create(pool, {
+    userId: studentId,
+    type: "success",
+    message: targetSectionId
+      ? "Đơn đăng ký khóa học của bạn đã được kích hoạt và xếp vào lớp. Chúc bạn học tập hiệu quả!"
+      : "Đơn đăng ký khóa học của bạn đã được kích hoạt."
+  });
+  await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
+  res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
 }));
 app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
   const sectionId = req.body.sectionId;

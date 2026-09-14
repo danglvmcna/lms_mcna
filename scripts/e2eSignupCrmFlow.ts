@@ -119,7 +119,9 @@ async function main() {
     numberOfSessions: 3,
     openingDate,
     schedule: [{ dayOfWeek: "Chủ nhật", startTime: "05:00", endTime: "06:00", room: `E2E-${stamp}` }],
-    status: "open"
+    status: "open",
+    meetingUrl: `https://zoom.us/j/e2e${stamp}`,
+    groupChatUrl: `https://zalo.me/g/e2e${stamp}`
   };
   const section = expectStatus("create class", await call("/api/course-sections", { session: academic, json: sectionPayload }), [200, 201]);
 
@@ -129,6 +131,11 @@ async function main() {
   const publicDetail = expectStatus("public course detail", await call(`/api/public/courses/${course.id}`), 200);
   const publicSection = publicDetail.sections.find((item: any) => item.id === section.id);
   assert(publicSection?.sessions.length === 3 && publicSection.seatsLeft === 5, `public class detail is wrong: ${JSON.stringify(publicSection)}`);
+  assert(
+    !JSON.stringify(publicDetail).includes(`e2e${stamp}`),
+    "public course detail must not expose the class meeting or group links"
+  );
+  console.log("  ✓ public catalog hides class links");
 
   console.log("3. Self sign-up with a personal email");
   const email = `e2e.signup.${stamp}@example.com`;
@@ -194,6 +201,7 @@ async function main() {
     crmCourses.courses.some((item: any) => item.id === course.id && item.sections.some((cls: any) => cls.id === section.id)),
     "CRM course list is missing the class"
   );
+  assert(!JSON.stringify(crmCourses).includes(`e2e${stamp}`), "CRM course list must not expose class links");
   expectStatus("CRM request with wrong signature rejected", await crmCall("GET", "/courses", undefined, { secret: "wrong-secret" }), 401);
 
   const confirmBody = { enrollmentId: enrollment.id, amount: 1500000, reference: `E2E-${stamp}` };
@@ -226,6 +234,14 @@ async function main() {
     crmDealId: `E2E-D-${stamp}`
   }, { eventId: `e2e-enroll-${stamp}` }), 201);
   assert(crmEnrollment.status === "pending_payment" && crmEnrollment.requestedSectionId === section.id, "CRM enrollment has the wrong state");
+  const activated = expectStatus("admin one-click activation", await call(`/api/enrollments/${crmEnrollment.enrollmentId}/activate`, {
+    session: academic,
+    json: {}
+  }), 200);
+  assert(
+    activated.enrollment?.status === "active" && activated.registration?.section_id === section.id,
+    `one-click activation should confirm payment and place the requested class: ${JSON.stringify(activated)}`
+  );
 
   console.log("8. Session materials");
   const teacherStore = expectStatus("teacher store", await call("/api/store", { session: teacher }), 200);
@@ -269,6 +285,12 @@ async function main() {
   console.log("  ✓ placed learner can download");
   const outsider = await login("student@mcna.local", "studente16");
   expectStatus("student outside the class cannot download", await call(`/api/materials/${doc.id}/download`, { session: outsider, redirect: "manual" }), 403);
+  const learnerSection = (learnerStore.courseSections || []).find((item: any) => item.id === section.id);
+  assert(learnerSection?.meetingUrl && learnerSection?.groupChatUrl, "placed learner should see the class meeting and group links");
+  const outsiderStore = expectStatus("outsider store", await call("/api/store", { session: outsider }), 200);
+  const outsiderSection = (outsiderStore.courseSections || []).find((item: any) => item.id === section.id);
+  assert(outsiderSection && !outsiderSection.meetingUrl && !outsiderSection.groupChatUrl, "class links must not reach students outside the class");
+  console.log("  ✓ class links only reach placed learners");
 
   console.log("9. Class shrink guard");
   expectStatus("cannot drop sessions that hold materials", await call(`/api/course-sections/${section.id}`, {

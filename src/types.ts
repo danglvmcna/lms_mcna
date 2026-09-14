@@ -394,9 +394,8 @@ export interface PublicCourseSection {
   schedule: CourseSection["schedule"];
   openingDate?: string;
   numberOfSessions?: number;
-  meetingUrl?: string;
-  groupChatUrl?: string;
-  sessions: Array<{ id: string; topic: string; date?: string; recordingUrl?: string }>;
+  // Meeting/group links and recordings are deliberately absent: they are only for learners placed in the class.
+  sessions: Array<{ id: string; topic: string; date?: string }>;
 }
 
 export interface PublicCourseDetail {

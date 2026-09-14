@@ -102,14 +102,11 @@ export function publicCourseSectionFromRow(row: any, sessionRows: any[]): Public
     schedule: section.schedule,
     openingDate: section.openingDate,
     numberOfSessions: section.numberOfSessions,
-    meetingUrl: section.meetingUrl,
-    groupChatUrl: section.groupChatUrl,
     sessions: sessionRows
       .map(session => ({
         id: session.id,
         topic: session.topic,
-        date: toDateText(session.date || session.session_date),
-        recordingUrl: session.recording_url || undefined
+        date: toDateText(session.date || session.session_date)
       }))
       .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
   };

@@ -157,7 +157,8 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     if (activePresentationSessionNumber && session.number === activePresentationSessionNumber) return true;
     return false;
   }) || null;
-  const activeLessonVideoUrl = currentLessonContentObj?.videoUrl || activePresentationSession?.videoUrl || activePresentationSession?.recordingUrl || "";
+  // Recording links (Zoom cloud, Drive, YouTube) are web pages, not media files, so they get their own button instead of the <video> stage.
+  const activeLessonVideoUrl = currentLessonContentObj?.videoUrl || activePresentationSession?.videoUrl || "";
   const activeLessonVideoTitle = currentLessonContentObj?.title || activePresentationSession?.topic || activePresentationSession?.title || "Video bài giảng";
   const renderPresentationSessionInfo = (session: any) => session ? (
     <div className="relative z-10 bg-black/20 border border-white/10 rounded-2xl p-4 md:p-5 space-y-3">

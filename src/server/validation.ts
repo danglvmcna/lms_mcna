@@ -55,6 +55,7 @@ export const schemas = {
     category: z.string().trim().min(1).default("General"),
     thumbnail: z.string().trim().optional(),
     price: z.coerce.number().min(0).default(0),
+    originalPrice: z.coerce.number().min(0).optional().nullable(),
     level: z.string().trim().optional(),
     tags: z.array(z.string().trim()).default([]),
     openingDate: z.string().trim().optional(),

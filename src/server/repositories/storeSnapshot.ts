@@ -443,7 +443,10 @@ export function limitStoreForRole(store: any, user: User) {
       notifications: store.notifications.filter((item: any) => item.userId === user.id),
       transactions: (store.transactions || []).filter((item: any) => item.studentId === user.id),
       advisorNotes: (store.advisorNotes || []).filter((item: any) => item.studentId === user.id),
-      courseSections: (store.courseSections || []).filter((section: any) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id)),
+      // Every open class is listed for registration, but meeting/group links only reach learners placed in that class.
+      courseSections: (store.courseSections || [])
+        .filter((section: any) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id))
+        .map((section: any) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: undefined, groupChatUrl: undefined }),
       courseRegistrations: (store.courseRegistrations || []).filter((item: any) => item.studentId === user.id),
       scholarshipApplications: (store.scholarshipApplications || []).filter((item: any) => item.studentId === user.id),
       gradeAppeals: (store.gradeAppeals || []).filter((item: any) => item.studentId === user.id),
