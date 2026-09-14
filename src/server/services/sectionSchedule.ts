@@ -16,6 +16,8 @@ export type SectionPayload = {
   status: "pending" | "open" | "closed" | "cancelled";
   openingDate?: string;
   numberOfSessions?: number;
+  meetingUrl?: string;
+  groupChatUrl?: string;
 };
 
 export const normalizeDayText = (value: any) => String(value || "")
@@ -287,6 +289,18 @@ export async function upsertCourseSection(db: any, section: SectionPayload) {
     values.push(section.numberOfSessions || null);
     placeholders.push(`$${values.length}`);
     updates.push("number_of_sessions = EXCLUDED.number_of_sessions");
+  }
+  if (columns.has("meeting_url")) {
+    insertColumns.push("meeting_url");
+    values.push(section.meetingUrl || null);
+    placeholders.push(`$${values.length}`);
+    updates.push("meeting_url = EXCLUDED.meeting_url");
+  }
+  if (columns.has("group_chat_url")) {
+    insertColumns.push("group_chat_url");
+    values.push(section.groupChatUrl || null);
+    placeholders.push(`$${values.length}`);
+    updates.push("group_chat_url = EXCLUDED.group_chat_url");
   }
 
   const row = (await db.query(

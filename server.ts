@@ -1930,10 +1930,15 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
   const sessionRows = sectionRows.length
     ? (await pool.query("SELECT * FROM attendance_sessions WHERE section_id = ANY($1)", [sectionRows.map(row => row.id)])).rows
     : [];
+  const lessonRows = (await pool.query(
+    "SELECT id, title, duration, lesson_order FROM lessons WHERE course_id = $1 ORDER BY lesson_order ASC",
+    [courseRow.id]
+  )).rows;
   res.setHeader("Cache-Control", "public, max-age=30");
   res.json({
     course: publicCourseFromRow(courseRow),
-    sections: sectionRows.map(row => publicCourseSectionFromRow(row, sessionRows.filter(session => session.section_id === row.id)))
+    sections: sectionRows.map(row => publicCourseSectionFromRow(row, sessionRows.filter(session => session.section_id === row.id))),
+    lessons: lessonRows.map(l => ({ id: l.id, title: l.title, duration: l.duration, order: l.lesson_order }))
   });
 }));
 
@@ -2399,12 +2404,63 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   res.status(201).json(result.enrollment);
 }));
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
-  const enrollment = await enrollmentsRepository.activateEnrollment(pool, req.params.id);
-  if (!enrollment) return res.status(404).json({ error: "Enrollment not found." });
-  await enqueueEnrollmentEvent(pool, "enrollment.status_changed", enrollment.id);
-  invalidateStoreCache();
-  await audit(req, "activate_enrollment", enrollment.id, `Activated enrollment for student ID: ${enrollment.studentId}`);
-  res.json(enrollment);
+  const enrollmentId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const enrollmentRow = (await client.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [enrollmentId])).rows[0];
+    if (!enrollmentRow) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Không tìm thấy thông tin ghi danh (Enrollment)." });
+    }
+
+    // 1. Approve pending payment transaction if exists
+    const pendingTx = (await client.query(
+      "SELECT id FROM transactions WHERE student_id = $1 AND course_id = $2 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+      [enrollmentRow.student_id, enrollmentRow.course_id]
+    )).rows[0];
+
+    if (pendingTx) {
+      await financeRepository.reviewTransaction(client, pendingTx.id, "approved", req.user!.id, "Xác nhận thanh toán 1-chạm bởi Admin.");
+    }
+
+    // 2. Determine target section
+    let targetSectionId = req.body.sectionId || enrollmentRow.requested_section_id;
+    if (!targetSectionId) {
+      const openSection = (await client.query(
+        "SELECT id FROM course_sections WHERE course_id = $1 AND status = 'open' ORDER BY opening_date ASC NULLS LAST LIMIT 1",
+        [enrollmentRow.course_id]
+      )).rows[0];
+      targetSectionId = openSection?.id;
+    }
+
+    // 3. Place student into class
+    const placement = await placeEnrollment(client, enrollmentId, targetSectionId, "lms");
+    if (isServiceError(placement)) {
+      await client.query("ROLLBACK");
+      return res.status(placement.status).json({ error: placement.error });
+    }
+
+    await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollmentId);
+    await client.query("COMMIT");
+    invalidateStoreCache();
+
+    await notificationsRepository.create(pool, {
+      userId: enrollmentRow.student_id,
+      type: "success",
+      message: targetSectionId
+        ? "Đơn đăng ký khóa học của bạn đã được kích hoạt và xếp vào lớp thành công! Chúc bạn học tập hiệu quả."
+        : "Đơn đăng ký khóa học của bạn đã được kích hoạt thành công!"
+    });
+
+    await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
+    res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
+  } catch (error: any) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: error.message || "Không thể kích hoạt đơn hàng." });
+  } finally {
+    client.release();
+  }
 }));
 app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
   const sectionId = req.body.sectionId;

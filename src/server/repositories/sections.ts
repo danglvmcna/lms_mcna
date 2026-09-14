@@ -21,9 +21,9 @@ const schedulesCanOverlap = (targetSlot: any, existingSlot: any): boolean => {
 export const sectionsRepository = {
   async createSection(db: Queryable, section: CourseSection): Promise<CourseSection> {
     await db.query(
-      `INSERT INTO course_sections (id, course_id, semester_id, teacher_id, section_code, max_students, schedule, status, opening_date, number_of_sessions)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)`,
-      [section.id, section.courseId, section.semesterId, section.teacherId, section.sectionCode, section.maxStudents, JSON.stringify(section.schedule), section.status, section.openingDate || null, section.numberOfSessions || null]
+      `INSERT INTO course_sections (id, course_id, semester_id, teacher_id, section_code, max_students, schedule, status, opening_date, number_of_sessions, meeting_url, group_chat_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12)`,
+      [section.id, section.courseId, section.semesterId, section.teacherId, section.sectionCode, section.maxStudents, JSON.stringify(section.schedule), section.status, section.openingDate || null, section.numberOfSessions || null, section.meetingUrl || null, section.groupChatUrl || null]
     );
     return section;
   },

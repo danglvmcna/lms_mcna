@@ -856,11 +856,14 @@ export default function StudentAcademics(props: ComponentProps) {
                         </div>
                         <div className="flex-shrink-0 p-3 bg-white rounded-xl border border-white/10 w-28 h-28 flex items-center justify-center">
                           <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                              `MB Bank 099162438104 CONG TY E16 VIET NAM memo HOCPHI ${fee.studentId} remaining ${remaining}`
-                            )}`}
-                            alt="VietQR MB Bank E16"
-                            className="w-24 h-24"
+                            src={`https://img.vietqr.io/image/MB-099162438104-compact2.png?amount=${remaining}&addInfo=${encodeURIComponent(`MCNA HOCPHI ${fee.studentId}`)}&accountName=HOC%20VIEN%20CONG%20NGHE%20MCNA`}
+                            alt="VietQR MB Bank MCNA"
+                            className="w-24 h-24 object-contain"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
+                                `MB Bank 099162438104 HOC VIEN CONG NGHE MCNA memo MCNA HOCPHI ${fee.studentId} remaining ${remaining}`
+                              )}`;
+                            }}
                           />
                         </div>
                       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
+import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Copy } from "lucide-react";
 import { AppStore } from "../../store";
 import ModalPortal from "../ModalPortal";
 import { api } from "../../api";
@@ -11,6 +11,13 @@ interface ComponentProps {
 export default function CourseCatalog(props: ComponentProps) {
   const [catalogPage, setCatalogPage] = useState(0);
   const [sectionSelections, setSectionSelections] = useState<Record<string, string>>({});
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
   const COURSES_PER_PAGE = 9;
   const {
     activeSubTab,
@@ -146,9 +153,23 @@ export default function CourseCatalog(props: ComponentProps) {
                       </div>
 
                       <div className="p-5 space-y-2">
-                        <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-indigo-300">
-                          {course.category}
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-indigo-300">
+                            {course.category}
+                          </span>
+                          {course.price !== undefined && (
+                            <div className="text-right">
+                              {course.originalPrice && course.originalPrice > course.price ? (
+                                <span className="text-[10px] text-white/40 line-through mr-1 font-mono">
+                                  {new Intl.NumberFormat("vi-VN").format(course.originalPrice)} đ
+                                </span>
+                              ) : null}
+                              <span className="text-xs font-bold text-emerald-400 font-mono">
+                                {course.price > 0 ? `${new Intl.NumberFormat("vi-VN").format(course.price)} đ` : "Miễn phí"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         <h5 className="font-display font-bold text-white text-sm line-clamp-1">{course.title}</h5>
                         <p className="text-xs text-white/60 line-clamp-3 leading-relaxed">{course.description}</p>
                       </div>
@@ -481,6 +502,7 @@ export default function CourseCatalog(props: ComponentProps) {
 
       {paymentGuideTx && (() => {
         const matchingCourse = store.courses.find(c => c.id === paymentGuideTx.courseId);
+        const memoText = `MCNA ${paymentGuideTx.studentId?.substring(5,11).toUpperCase()} ${paymentGuideTx.id?.substring(3,9).toUpperCase()}`;
         return (
           <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
@@ -497,53 +519,91 @@ export default function CourseCatalog(props: ComponentProps) {
                   <CreditCard className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-display font-extrabold text-white uppercase tracking-wider">CHUYỂN KHOẢN HỌC PHÍ</h4>
-                  <span className="text-[10px] text-white/40 block font-mono">ID Giao dịch: {paymentGuideTx.id}</span>
+                  <h4 className="text-sm font-display font-extrabold text-white uppercase tracking-wider">THANH TOÁN HỌC PHÍ MCNA</h4>
+                  <span className="text-[10px] text-white/40 block font-mono">Mã đơn hàng: {paymentGuideTx.id}</span>
                 </div>
               </div>
 
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-2.5 text-xs font-sans">
+              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-3 text-xs font-sans">
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-white/40">Khóa học đăng ký:</span>
                   <span className="font-bold text-white truncate max-w-[200px]">{matchingCourse?.title || "Khóa học đào tạo"}</span>
                 </div>
+
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-white/40">Số tiền cần chuyển:</span>
-                  <span className="font-bold text-emerald-400 font-mono text-sm">
-                    {new Intl.NumberFormat("vi-VN").format(paymentGuideTx.amount)} VND
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-400 font-mono text-sm">
+                      {new Intl.NumberFormat("vi-VN").format(paymentGuideTx.amount)} VND
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(String(paymentGuideTx.amount), "amount")}
+                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedField === "amount" ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      {copiedField === "amount" ? "Đã chép" : "Sao chép"}
+                    </button>
+                  </div>
                 </div>
+
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-white/40">Ngân hàng thụ hưởng:</span>
                   <span className="font-bold text-white">MB Bank (Ngân hàng Quân Đội)</span>
                 </div>
+
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-white/40">Số tài khoản:</span>
-                  <span className="font-bold text-cyan-300 font-mono tracking-wider">099162438104</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-cyan-300 font-mono tracking-wider text-sm">099162438104</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard("099162438104", "account")}
+                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedField === "account" ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      {copiedField === "account" ? "Đã chép" : "Sao chép"}
+                    </button>
+                  </div>
                 </div>
+
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-white/40">Chủ tài khoản:</span>
-                  <span className="font-bold text-white uppercase text-[11px]">CONG TY CONG NGHE E16 VIET NAM</span>
+                  <span className="font-bold text-white uppercase text-[11px]">HOC VIEN CONG NGHE MCNA</span>
                 </div>
-                <div className="flex flex-col gap-1.5 pt-1.5">
-                  <span className="text-white/40">Nội dung chuyển khoản (bắt buộc):</span>
-                  <span className="p-2 bg-black/45 text-amber-300 font-mono text-center rounded-xl border border-amber-500/20 select-all font-bold tracking-wider text-[11px]">
-                    E16HP {paymentGuideTx.studentId?.substring(5,11).toUpperCase()} {paymentGuideTx.id?.substring(3,9).toUpperCase()}
+
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/40">Nội dung chuyển khoản (bắt buộc):</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(memoText, "memo")}
+                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedField === "memo" ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      {copiedField === "memo" ? "Đã chép" : "Sao chép"}
+                    </button>
+                  </div>
+                  <span className="p-2.5 bg-black/45 text-amber-300 font-mono text-center rounded-xl border border-amber-500/20 select-all font-bold tracking-wider text-xs">
+                    {memoText}
                   </span>
-                  <span className="text-[9px] text-white/30 text-center italic mt-0.5">
-                    *Mẹo: Hãy sao chép chính xác nội dung trên khi quét QR chuyển khoản.
+                  <span className="text-[9px] text-white/40 text-center italic mt-0.5">
+                    *Mẹo: Nhấn nút sao chép để dán đúng mã đơn hàng khi chuyển khoản.
                   </span>
                 </div>
               </div>
 
               {/* Mock QR VietQR */}
-              <div className="flex flex-col items-center justify-center p-3.5 bg-white rounded-2xl border border-white/10 mx-auto w-34 h-34 relative group">
+              <div className="flex flex-col items-center justify-center p-3.5 bg-white rounded-2xl border border-white/10 mx-auto w-40 h-40 relative group shadow-lg">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                    `Nhanh qua VietQR bank MB 099162438104 amount ${paymentGuideTx.amount} memo E16HP ${paymentGuideTx.id}`
-                  )}`}
-                  alt="VietQR E16 LMS"
-                  className="w-28 h-28"
+                  src={`https://img.vietqr.io/image/MB-099162438104-compact2.png?amount=${paymentGuideTx.amount}&addInfo=${encodeURIComponent(memoText)}&accountName=HOC%20VIEN%20CONG%20NGHE%20MCNA`}
+                  alt="VietQR MCNA"
+                  className="w-34 h-34 object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                      `VietQR MB 099162438104 amount ${paymentGuideTx.amount} memo ${memoText}`
+                    )}`;
+                  }}
                 />
                 <div className="absolute inset-0 bg-slate-950/90 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition rounded-2xl p-2 text-center">
                   <span className="text-[10px] font-mono font-bold text-emerald-400">QUÉT CHUYỂN KHOẢN QR</span>
@@ -553,7 +613,7 @@ export default function CourseCatalog(props: ComponentProps) {
 
               <div className="pt-3 border-t border-white/10 space-y-2">
                 <p className="text-[10px] text-amber-300/80 text-center leading-relaxed">
-                  Sau khi chuyển khoản, hãy chờ bên xử lý thanh toán xác nhận trạng thái (thường trong 1–2 ngày làm việc).
+                  Sau khi bạn chuyển khoản, bộ phận Học vụ MCNA sẽ duyệt đơn và kích hoạt lớp học cho bạn ngay.
                 </p>
                 <button
                   type="button"

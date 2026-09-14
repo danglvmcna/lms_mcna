@@ -141,7 +141,12 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                 <h3 className="font-bold text-base leading-snug group-hover:text-indigo-200">{course.title}</h3>
                 <p className="text-xs text-white/55 line-clamp-2 leading-relaxed">{course.description}</p>
                 <div className="mt-auto pt-3 flex items-center justify-between gap-2 text-xs border-t border-white/5">
-                  <span className="font-bold text-emerald-400">{formatPrice(course.price)}</span>
+                  <div className="flex flex-col">
+                    {course.originalPrice && course.originalPrice > course.price ? (
+                      <span className="text-[10px] text-white/40 line-through">{formatPrice(course.originalPrice)}</span>
+                    ) : null}
+                    <span className="font-bold text-emerald-400">{formatPrice(course.price)}</span>
+                  </div>
                   <span className="text-white/50">{course.openSectionCount > 0 ? `${course.openSectionCount} lớp đang mở` : "Chưa mở lớp"}</span>
                 </div>
               </div>
@@ -156,7 +161,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
     if (!detail) {
       return <div className="py-24 text-center text-sm text-white/50">Đang tải thông tin khóa học...</div>;
     }
-    const { course, sections } = detail;
+    const { course, sections, lessons } = detail;
     return (
       <>
         <button
@@ -168,19 +173,52 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-2 space-y-3">
+          <section className="lg:col-span-2 space-y-4">
             <div className="flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wider">
               <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300">{course.category}</span>
               {course.level && <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/60">{course.level}</span>}
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-extrabold leading-tight">{course.title}</h1>
             <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{course.description}</p>
+
+            {lessons && lessons.length > 0 && (
+              <div className="mt-6 bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3">
+                <h3 className="text-base font-bold flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-indigo-400" />
+                  Đề cương & Nội dung khóa học ({lessons.length} bài)
+                </h3>
+                <div className="divide-y divide-white/5">
+                  {lessons.map((lesson, idx) => (
+                    <div key={lesson.id} className="py-2.5 flex items-start gap-3 text-xs">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-indigo-500/15 text-indigo-300 font-mono font-bold flex items-center justify-center text-[10px]">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-white/90">{lesson.title}</p>
+                        {lesson.content && (
+                          <p className="text-white/50 text-[11px] mt-0.5 line-clamp-2">{lesson.content}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           <aside className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 h-fit text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-white/50">Học phí</span>
-              <span className="font-extrabold text-emerald-400 text-lg">{formatPrice(course.price)}</span>
+              <div className="text-right">
+                {course.originalPrice && course.originalPrice > course.price && (
+                  <span className="text-xs text-white/40 line-through block font-mono">
+                    {formatPrice(course.originalPrice)}
+                  </span>
+                )}
+                <span className="font-extrabold text-emerald-400 text-lg">
+                  {formatPrice(course.price)}
+                </span>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-white/50">Giảng viên</span>
@@ -197,7 +235,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
               <span className="font-semibold">{sections.length}</span>
             </div>
             <p className="text-[11px] text-white/40 leading-relaxed pt-2 border-t border-white/5">
-              Chọn một lớp bên dưới để đăng ký. Sau khi đăng ký, phòng đào tạo xác nhận{course.price > 0 ? " thanh toán và" : ""} xếp lớp rồi mở quyền học.
+              Chọn một lớp bên dưới để đăng ký. Sau khi đăng ký, học viện sẽ xác nhận{course.price > 0 ? " thanh toán và" : ""} xếp lớp rồi kích hoạt khóa học ngay.
             </p>
           </aside>
         </div>

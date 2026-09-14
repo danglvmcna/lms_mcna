@@ -59,6 +59,7 @@ export function courseFromRow(row: any): Course {
     category: row.category,
     thumbnail: row.thumbnail || undefined,
     price: row.price === null || row.price === undefined ? undefined : Number(row.price),
+    originalPrice: row.original_price === null || row.original_price === undefined ? undefined : Number(row.original_price),
     level: row.level || undefined,
     tags: row.tags_json ? JSON.parse(row.tags_json) : [],
     rejectionReason: row.rejection_reason || undefined,
@@ -78,6 +79,7 @@ export function publicCourseFromRow(row: any): PublicCourseSummary {
     category: course.category,
     thumbnail: course.thumbnail,
     price: course.price || 0,
+    originalPrice: course.originalPrice,
     level: course.level,
     tags: course.tags || [],
     openingDate: course.openingDate,
@@ -100,8 +102,15 @@ export function publicCourseSectionFromRow(row: any, sessionRows: any[]): Public
     schedule: section.schedule,
     openingDate: section.openingDate,
     numberOfSessions: section.numberOfSessions,
+    meetingUrl: section.meetingUrl,
+    groupChatUrl: section.groupChatUrl,
     sessions: sessionRows
-      .map(session => ({ id: session.id, topic: session.topic, date: toDateText(session.date || session.session_date) }))
+      .map(session => ({
+        id: session.id,
+        topic: session.topic,
+        date: toDateText(session.date || session.session_date),
+        recordingUrl: session.recording_url || undefined
+      }))
       .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
   };
 }
@@ -259,7 +268,9 @@ export function courseSectionFromRow(row: any): CourseSection {
     openingDate: row.opening_date || undefined,
     numberOfSessions: row.number_of_sessions === null || row.number_of_sessions === undefined
       ? undefined
-      : Number(row.number_of_sessions)
+      : Number(row.number_of_sessions),
+    meetingUrl: row.meeting_url || undefined,
+    groupChatUrl: row.group_chat_url || undefined
   };
 }
 

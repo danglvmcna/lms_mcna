@@ -14,7 +14,10 @@ import {
   ChevronRight,
   Info,
   DollarSign,
-  MessageSquare
+  MessageSquare,
+  Video,
+  ExternalLink,
+  MessageCircle
 } from "lucide-react";
 import { Course, CourseSection, User } from "../types";
 import { api } from "../api";
@@ -72,6 +75,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const [courseDesc, setCourseDesc] = useState("");
   const [courseCategory, setCourseCategory] = useState("General");
   const [coursePrice, setCoursePrice] = useState(0);
+  const [courseOriginalPrice, setCourseOriginalPrice] = useState<number | "">("");
   const [courseLevel, setCourseLevel] = useState("Cơ bản");
   const [courseTags, setCourseTags] = useState("");
   const [courseLessonsCount, setCourseLessonsCount] = useState(10);
@@ -85,6 +89,8 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const [sectionSessionsCount, setSectionSessionsCount] = useState(10);
   const [sectionOpeningDate, setSectionOpeningDate] = useState("");
   const [sectionStatus, setSectionStatus] = useState<"pending" | "open" | "closed" | "cancelled">("open");
+  const [sectionMeetingUrl, setSectionMeetingUrl] = useState("");
+  const [sectionGroupChatUrl, setSectionGroupChatUrl] = useState("");
   const [sectionSlots, setSectionSlots] = useState<Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>>([
     { dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }
   ]);
@@ -138,6 +144,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setCourseDesc("");
     setCourseCategory("Web Development");
     setCoursePrice(0);
+    setCourseOriginalPrice("");
     setCourseLevel("Cơ bản");
     setCourseTags("");
     setCourseLessonsCount(10);
@@ -151,6 +158,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setCourseDesc(course.description);
     setCourseCategory(course.category);
     setCoursePrice(course.price || 0);
+    setCourseOriginalPrice(course.originalPrice || "");
     setCourseLevel(course.level || "Cơ bản");
     setCourseTags(course.tags ? course.tags.join(", ") : "");
     setCourseLessonsCount(course.numberOfLessons || 10);
@@ -168,6 +176,8 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setSectionSessionsCount(10);
     setSectionOpeningDate("");
     setSectionStatus("open");
+    setSectionMeetingUrl("");
+    setSectionGroupChatUrl("");
     setSectionSlots([{ dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }]);
     setFormConflicts([]);
     setShowSectionModal(true);
@@ -184,6 +194,8 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setSectionSessionsCount(sec.numberOfSessions || 10);
     setSectionOpeningDate(sec.openingDate || "");
     setSectionStatus(sec.status);
+    setSectionMeetingUrl(sec.meetingUrl || "");
+    setSectionGroupChatUrl(sec.groupChatUrl || "");
     setSectionSlots(sec.schedule || []);
     setFormConflicts([]);
     setShowSectionModal(true);
@@ -266,6 +278,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       description: courseDesc.trim(),
       category: courseCategory,
       price: Number(coursePrice),
+      originalPrice: courseOriginalPrice !== "" ? Number(courseOriginalPrice) : undefined,
       level: courseLevel,
       tags: tagsArray,
       numberOfLessons: Number(courseLessonsCount)
@@ -314,7 +327,9 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       numberOfSessions: Number(sectionSessionsCount),
       schedule: sectionSlots,
       status: sectionStatus,
-      openingDate: sectionOpeningDate || undefined
+      openingDate: sectionOpeningDate || undefined,
+      meetingUrl: sectionMeetingUrl.trim() || undefined,
+      groupChatUrl: sectionGroupChatUrl.trim() || undefined
     };
 
     try {
@@ -665,7 +680,33 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           </button>
                         </td>
                         <td className="px-5 py-4">{sec.openingDate ? new Date(sec.openingDate).toLocaleDateString("vi-VN") : "Chưa đặt"}</td>
-                        <td className="px-5 py-4 space-y-1">{renderSchedule(sec.schedule)}</td>
+                        <td className="px-5 py-4 space-y-1">
+                          {renderSchedule(sec.schedule)}
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {sec.meetingUrl && (
+                              <a
+                                href={sec.meetingUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 rounded-full font-sans transition"
+                                title={sec.meetingUrl}
+                              >
+                                <Video className="h-3 w-3" /> Zoom/Meet
+                              </a>
+                            )}
+                            {sec.groupChatUrl && (
+                              <a
+                                href={sec.groupChatUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded-full font-sans transition"
+                                title={sec.groupChatUrl}
+                              >
+                                <MessageCircle className="h-3 w-3" /> Nhóm Zalo
+                              </a>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-4">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
                             sec.status === "open" ? "bg-emerald-500/20 text-emerald-400" :
@@ -788,14 +829,26 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Học phí (VND)</label>
+                      <label className="text-xs font-bold text-white/70 font-sans">Học phí bán (VND)</label>
                       <input
                         type="number"
                         min={0}
                         value={coursePrice}
                         onChange={(e) => setCoursePrice(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white/70 font-sans">Giá gốc (gạch ngang)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Để trống nếu không có"
+                        value={courseOriginalPrice}
+                        onChange={(e) => setCourseOriginalPrice(e.target.value === "" ? "" : Number(e.target.value))}
                         className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -909,6 +962,30 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               <div className="text-[11px] text-white/50 font-sans space-y-1">
                                 <div>Giảng viên: <span className="text-white font-medium">{teacherName}</span></div>
                                 <div className="space-y-0.5">{renderSchedule(sec.schedule)}</div>
+                                {(sec.meetingUrl || sec.groupChatUrl) && (
+                                  <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {sec.meetingUrl && (
+                                      <a
+                                        href={sec.meetingUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 rounded-full font-sans transition"
+                                      >
+                                        <Video className="h-3 w-3" /> Zoom/Meet
+                                      </a>
+                                    )}
+                                    {sec.groupChatUrl && (
+                                      <a
+                                        href={sec.groupChatUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded-full font-sans transition"
+                                      >
+                                        <MessageCircle className="h-3 w-3" /> Nhóm Zalo
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1063,6 +1140,30 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       <option value="closed">Đã khóa sĩ số (Closed)</option>
                       <option value="cancelled">Hủy lớp học phần (Cancelled)</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-white/70">Link phòng học online (Zoom / Google Meet)</label>
+                    <input
+                      type="url"
+                      placeholder="https://meet.google.com/xyz hoặc https://zoom.us/j/..."
+                      value={sectionMeetingUrl}
+                      onChange={(e) => setSectionMeetingUrl(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-white/70">Link nhóm thảo luận (Zalo / Discord)</label>
+                    <input
+                      type="url"
+                      placeholder="https://zalo.me/g/... hoặc https://discord.gg/..."
+                      value={sectionGroupChatUrl}
+                      onChange={(e) => setSectionGroupChatUrl(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
                   </div>
                 </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Users, 
   BookOpen, 
+  ShoppingBag,
   GraduationCap, 
   DollarSign, 
   TrendingUp, 
@@ -35,6 +36,7 @@ import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
 
 // Import modular sub-components
+import AdminOrdersManager from "./admin/AdminOrdersManager";
 import StudentRegistry from "./StudentRegistry";
 import AttendanceManager from "./AttendanceManager";
 import TuitionManager from "./TuitionManager";
@@ -71,41 +73,32 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   // Navigation tab states
   // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
   const [activeSubTab, setActiveSubTab] = useState<
+    | "orders"
+    | "course_section_mgmt"
+    | "users"
+    | "audit"
     | "students" 
     | "attendance" 
     | "tuition" 
     | "warnings" 
     | "approval" 
-    | "audit"
     | "admin_guide"
     | "admin_timetable"
     | "teacher_timetable"
     | "class_placement"
     | "notifications"
-    | "users"
-    | "course_section_mgmt"
-  >("admin_guide");
+  >("orders");
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [activeSubTab]);
 
   useEffect(() => {
-    if (activeSystem === "LMS") {
-      const allowedLmsTabs = ["audit", "admin_guide", "notifications", "users", "approval", "course_section_mgmt"];
-      if (!allowedLmsTabs.includes(activeSubTab)) {
-        setActiveSubTab("admin_guide");
-      }
-    } else {
-      const allowedSisTabs = [
-        "students", "class_placement", "admin_guide", "notifications",
-        "course_section_mgmt", "attendance", "admin_timetable", "teacher_timetable", "tuition", "users", "warnings", "audit"
-      ];
-      if (!allowedSisTabs.includes(activeSubTab)) {
-        setActiveSubTab("admin_guide");
-      }
+    const allowed = ["orders", "course_section_mgmt", "users", "audit", "attendance", "class_placement", "tuition", "admin_guide"];
+    if (!allowed.includes(activeSubTab)) {
+      setActiveSubTab("orders");
     }
-  }, [activeSystem, currentUser.role]);
+  }, [currentUser.role]);
 
   // Keep student selection state for quick lookup redirection from other tabs
   const [registryLookupStudentId, setRegistryLookupStudentId] = useState<string | null>(null);
@@ -500,193 +493,73 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         {/* Left Column navbar structured sections */}
         <div className="lg:w-64 flex-shrink-0 space-y-4">
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs space-y-4">
-            
-            {activeSystem === "SIS" && (
-            <>
             <div className="space-y-1.5">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                SCHOLASTIC (Cấu trúc đào tạo)
+                ĐIỀU HÀNH & BÁN HÀNG
               </span>
               <button
-                onClick={() => { setActiveSubTab("admin_guide"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "admin_guide" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                onClick={() => { setActiveSubTab("orders"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
+                  activeSubTab === "orders" ? "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/20" : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Hướng dẫn sử dụng</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("notifications"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "notifications" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Hộp thư thông báo</span>
+                <span className="flex items-center gap-2"><ShoppingBag className="h-4 w-4" /> Đơn hàng & Ghi danh</span>
+                {(() => {
+                  const pendingCount = (store.enrollments || []).filter((e: any) => e.status === "pending_payment" || e.status === "pending").length;
+                  if (pendingCount === 0) return null;
+                  return (
+                    <span className="bg-amber-400 text-indigo-950 font-bold text-[10px] px-1.5 py-0.5 rounded-full font-mono">
+                      {pendingCount}
+                    </span>
+                  );
+                })()}
               </button>
               <button
                 onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
+                  activeSubTab === "course_section_mgmt" ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20" : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
+                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Khóa học & Lớp học</span>
               </button>
             </div>
 
             <div className="space-y-1.5 border-t border-white/5 pt-3">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                STUDENTS & ACADEMICS (Hồ sơ học vụ)
+                HỆ THỐNG & TÀI KHOẢN
               </span>
               <button
-                onClick={() => { setActiveSubTab("students"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "students" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Sổ Học sinh Sinh viên</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("attendance"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "attendance" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Activity className="h-4 w-4" /> Quản trị Điểm danh</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("tuition"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "tuition" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Thanh toán Học phí</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("admin_timetable"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "admin_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Quản lý Thời khóa biểu</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("teacher_timetable"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "teacher_timetable" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Thời khóa biểu Giảng viên</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("class_placement"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "class_placement" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Xếp lớp Học viên</span>
-              </button>
-              <button
                 onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
+                  activeSubTab === "users" ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20" : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
+                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Quản lý Người dùng</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("audit"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "audit" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
+                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
+                  activeSubTab === "audit" ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20" : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống (Audit)</span>
+                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống</span>
               </button>
             </div>
-            </>
-            )}
-
-            {activeSystem === "LMS" && (
-            <div className="space-y-1.5 border-t border-white/5 pt-3">
-              <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                LEARNING PLATFORM (LMS mặc định)
-              </span>
-              <button
-                onClick={() => { setActiveSubTab("admin_guide"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "admin_guide" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Hướng dẫn sử dụng</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("users"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("approval"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "approval" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Duyệt khóa học</span>
-                {pendingCourses.length > 0 && (
-                  <span className="bg-amber-500 text-indigo-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full">
-                    {pendingCourses.length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("course_section_mgmt"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "course_section_mgmt" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Quản lý Khóa học & Lớp</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("notifications"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "notifications" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Hộp thư thông báo</span>
-              </button>
-              <button
-                onClick={() => { setActiveSubTab("audit"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "audit" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống (Audit)</span>
-              </button>
-            </div>
-            )}
-
-            {activeSystem === "SIS" && (
-            <div className="space-y-1.5 border-t border-white/5 pt-3">
-              <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                REPORTS STATS (Thống kê tổng hợp)
-              </span>
-              <button
-                onClick={() => { setActiveSubTab("warnings"); setRegistryLookupStudentId(null); }}
-                className={`w-full text-left py-2 px-3 rounded-xl transition font-medium flex items-center justify-between ${
-                  activeSubTab === "warnings" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" /> Cảnh báo & Thống Kê</span>
-              </button>
-            </div>
-            )}
-
           </div>
         </div>
 
         {/* Right Main viewport area container */}
         <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 min-w-0">
+          
+          {/* ORDERS & ENROLLMENTS GROUP */}
+          {activeSubTab === "orders" && (
+            <AdminOrdersManager
+              store={store}
+              currentUser={currentUser}
+              onRefreshData={onRefreshData}
+              triggerToast={triggerToast}
+            />
+          )}
           
           {/* STUDENTS GROUP (Student registry layout) */}
           {activeSubTab === "students" && (

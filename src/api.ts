@@ -99,6 +99,7 @@ export const api = {
   deleteLesson: (lessonId: string) => apiFetch(`/api/lessons/${lessonId}`, { method: "DELETE" }),
   getEnrollments: () => apiFetch("/api/enrollments"),
   registerEnrollment: (courseId: string, sectionId?: string) => apiFetch("/api/enrollments/register", { method: "POST", body: JSON.stringify({ courseId, sectionId }) }),
+  activateEnrollment: (enrollmentId: string, payload: { sectionId?: string } = {}) => apiFetch<{ success: boolean; enrollment: any; registration: any }>(`/api/enrollments/${enrollmentId}/activate`, { method: "POST", body: JSON.stringify(payload) }),
   approveEnrollment: (enrollmentId: string, payload: { sectionId?: string; semesterId?: string } = {}) => apiFetch(`/api/enrollments/${enrollmentId}/approve`, { method: "PATCH", body: JSON.stringify(payload) }),
   approveCourseRegistration: (registrationId: string) => apiFetch(`/api/course-registrations/${registrationId}/approve`, { method: "PATCH" }),
   bulkPlaceEnrollments: (placements: any[]) => apiFetch("/api/admin/enrollments/bulk-place", { method: "POST", body: JSON.stringify({ placements }) }),

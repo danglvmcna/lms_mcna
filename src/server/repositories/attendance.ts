@@ -67,9 +67,9 @@ export const attendanceRepository = {
     return Math.round((attended / sessionIds.length) * 100);
   },
 
-  async updateSession(db: Queryable, id: string, input: { topic?: string; date?: string; videoUrl?: string; content?: string }) {
+  async updateSession(db: Queryable, id: string, input: { topic?: string; date?: string; videoUrl?: string; recordingUrl?: string; content?: string }) {
     const columns = (await db.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'video_url', 'content')"
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'video_url', 'recording_url', 'content')"
     )).rows.map(row => row.column_name);
 
     const sets: string[] = [];
@@ -91,6 +91,10 @@ export const attendanceRepository = {
     if (input.videoUrl !== undefined && columns.includes("video_url")) {
       sets.push(`video_url = $${paramIndex++}`);
       values.push(input.videoUrl || null);
+    }
+    if (input.recordingUrl !== undefined && columns.includes("recording_url")) {
+      sets.push(`recording_url = $${paramIndex++}`);
+      values.push(input.recordingUrl || null);
     }
     if (input.content !== undefined && columns.includes("content")) {
       sets.push(`content = $${paramIndex++}`);
@@ -115,6 +119,7 @@ export const attendanceRepository = {
       date: row.date || row.session_date,
       topic: row.topic,
       videoUrl: row.video_url || undefined,
+      recordingUrl: row.recording_url || undefined,
       content: row.content || undefined,
       code: row.code || undefined,
       expiresAt: row.expires_at || undefined

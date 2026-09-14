@@ -578,20 +578,6 @@ function AppShell() {
               </button>
             </div>
 
-            {/* Standalone Action button in the middle */}
-            <div className="pt-6 w-full flex justify-center">
-              <button
-                onClick={handleExportStandaloneHTMLFile}
-                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer ${
-                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2.5 px-3 text-[10px]"
-                }`}
-                title="Tải tệp tin Standalone HTML"
-              >
-                <Download className="h-4 w-4 shrink-0" />
-                {!isSidebarCollapsed && <span>Tải Standalone HTML</span>}
-              </button>
-            </div>
-
             {/* Flex spacer to push menu content down if needed */}
             <div className="flex-1" />
           </aside>
@@ -619,12 +605,6 @@ function AppShell() {
 
                 <div className="space-y-4 pt-4 text-xs">
                   <button
-                    onClick={handleExportStandaloneHTMLFile}
-                    className="w-full text-left py-2.5 px-3 bg-white/5 rounded-xl border border-white/10 text-white font-bold"
-                  >
-                    Tải Standalone HTML
-                  </button>
-                  <button
                     onClick={handleLogout}
                     className="w-full text-left py-2.5 px-3 bg-red-500/15 text-red-400 font-bold rounded-xl flex items-center gap-1.5"
                   >
@@ -648,37 +628,17 @@ function AppShell() {
                 </button>
 
                 <h3 className="font-display font-black text-white text-sm md:text-base leading-none uppercase tracking-widest hidden md:block">
-                  HỆ THỐNG ĐÀO TẠO E16 LMS
+                  HỌC VIỆN CÔNG NGHỆ MCNA
                 </h3>
               </div>
 
-              {/* Header right: System Switcher */}
-              {["admin", "student"].includes(currentUser.role) ? (
-                <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 relative z-10 backdrop-blur-xl transition duration-200 shadow-md">
-                  <button
-                    onClick={() => setActiveSystem("SIS")}
-                    className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold font-sans tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
-                      activeSystem === "SIS"
-                        ? "bg-indigo-600 text-white shadow-lg border border-indigo-400/30"
-                        : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <span>Hành chính SIS</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveSystem("LMS")}
-                    className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold font-sans tracking-wide transition-all cursor-pointer flex items-center gap-1.5 ${
-                      activeSystem === "LMS"
-                        ? "bg-indigo-600 text-white shadow-lg border border-indigo-400/30"
-                        : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <span>LMS Học tập</span>
-                  </button>
-                </div>
-              ) : (
-                <div />
-              )}
+              {/* Header right: Clean Status Badge */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Hệ thống trực tuyến
+                </span>
+              </div>
             </header>
 
             {/* Inner responsive Padding page body */}

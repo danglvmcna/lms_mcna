@@ -285,7 +285,9 @@ export const schemas = {
       specificDate: z.string().trim().optional()
     })).default([]),
     status: z.enum(["pending", "open", "closed", "cancelled"]).default("open"),
-    openingDate: z.string().trim().optional()
+    openingDate: z.string().trim().optional(),
+    meetingUrl: z.string().trim().optional().nullable(),
+    groupChatUrl: z.string().trim().optional().nullable()
   }),
   bulkIssueTuition: z.object({
     semesterId: z.string().trim().min(1),
@@ -321,6 +323,7 @@ export const schemas = {
     topic: z.string().trim().min(1).optional(),
     date: z.string().trim().min(1).optional(),
     videoUrl: z.string().trim().optional().nullable(),
+    recordingUrl: z.string().trim().optional().nullable(),
     content: z.string().trim().optional().nullable()
   }),
   // Multipart for slide/document (fields arrive as strings), JSON for youtube/link.

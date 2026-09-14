@@ -244,6 +244,8 @@ export default function AttendanceManager({
   const [editTopic, setEditTopic] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [editRecordingUrl, setEditRecordingUrl] = useState("");
+  const [editDate, setEditDate] = useState("");
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
 
@@ -397,7 +399,9 @@ export default function AttendanceManager({
       await api.updateAttendanceSession(activeSessionId, {
         topic: editTopic,
         content: editContent,
-        videoUrl: editVideoUrl
+        videoUrl: editVideoUrl,
+        recordingUrl: editRecordingUrl.trim() || undefined,
+        date: editDate.trim() || undefined
       });
       triggerToast("Cập nhật thông tin buổi học thành công!");
       setShowEditSessionModal(false);
@@ -890,6 +894,8 @@ export default function AttendanceManager({
                               setEditTopic(activeSession.topic || "");
                               setEditContent(activeSession.content || "");
                               setEditVideoUrl(activeSession.videoUrl || "");
+                              setEditRecordingUrl(activeSession.recordingUrl || "");
+                              setEditDate(activeSession.date || "");
                               setShowEditSessionModal(true);
                             }}
                             className="px-2.5 py-1 bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-white rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
@@ -902,8 +908,9 @@ export default function AttendanceManager({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <div>
-                            <span className="text-white/40 block text-[10px] uppercase font-bold">Chủ đề:</span>
+                            <span className="text-white/40 block text-[10px] uppercase font-bold">Chủ đề & Thời gian:</span>
                             <span className="text-white font-medium text-sm">{activeSession.topic || "Chưa thiết lập"}</span>
+                            <span className="text-indigo-400 font-mono text-[11px] block mt-0.5">{activeSession.date}</span>
                           </div>
                           <div>
                             <span className="text-white/40 block text-[10px] uppercase font-bold">Nội dung bài học:</span>
@@ -913,29 +920,47 @@ export default function AttendanceManager({
                           </div>
                         </div>
                         
-                        <div className="space-y-2">
-                          <span className="text-white/40 block text-[10px] uppercase font-bold">Video bài giảng:</span>
-                          {activeSession.videoUrl ? (
-                            <div className="space-y-2">
-                              <video 
-                                src={activeSession.videoUrl} 
-                                controls 
-                                className="w-full max-h-40 bg-black rounded-xl border border-white/10 shadow-inner"
-                              />
-                              <a 
-                                href={activeSession.videoUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="text-cyan-400 hover:underline inline-block font-mono text-[10px]"
-                              >
-                                Mở link video trong tab mới ↗
-                              </a>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-8 bg-black/20 rounded-xl border border-white/5 border-dashed text-white/40 font-sans">
-                              <span>Chưa tải lên video bài giảng.</span>
-                            </div>
-                          )}
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <span className="text-white/40 block text-[10px] uppercase font-bold">Video bài giảng / Recording:</span>
+                            {activeSession.recordingUrl ? (
+                              <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl space-y-1">
+                                <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
+                                  📹 Video Recording buổi học
+                                </span>
+                                <a
+                                  href={activeSession.recordingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-cyan-400 hover:underline block truncate font-mono text-[10px]"
+                                >
+                                  {activeSession.recordingUrl} ↗
+                                </a>
+                              </div>
+                            ) : null}
+
+                            {activeSession.videoUrl ? (
+                              <div className="space-y-2">
+                                <video 
+                                  src={activeSession.videoUrl} 
+                                  controls 
+                                  className="w-full max-h-36 bg-black rounded-xl border border-white/10 shadow-inner"
+                                />
+                                <a 
+                                  href={activeSession.videoUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="text-cyan-400 hover:underline inline-block font-mono text-[10px]"
+                                >
+                                  Mở link video bài giảng trong tab mới ↗
+                                </a>
+                              </div>
+                            ) : !activeSession.recordingUrl ? (
+                              <div className="flex flex-col items-center justify-center py-6 bg-black/20 rounded-xl border border-white/5 border-dashed text-white/40 font-sans">
+                                <span>Chưa cập nhật video hay recording buổi học.</span>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1434,9 +1459,20 @@ export default function AttendanceManager({
               </div>
 
               <div className="space-y-1">
+                <label className="text-white/70 font-semibold block">Ngày học / Thời gian (cho phép dời lịch nếu trùng nghỉ lễ)</label>
+                <input
+                  type="text"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  placeholder="Ví dụ: 2026-09-20 (09:00 - 11:30)"
+                  className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-white/70 font-semibold block">Nội dung chi tiết bài học</label>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
                   placeholder="Mô tả tóm tắt nội dung bài học, các kiến thức truyền đạt, bài tập về nhà..."
@@ -1445,13 +1481,25 @@ export default function AttendanceManager({
               </div>
 
               <div className="space-y-1">
-                <label className="text-white/70 font-semibold block">Video bài giảng (URL hoặc tải lên)</label>
+                <label className="text-white/70 font-semibold block">Link Video Recording buổi học (Zoom Cloud / Drive / YouTube)</label>
+                <input
+                  type="url"
+                  value={editRecordingUrl}
+                  onChange={(e) => setEditRecordingUrl(e.target.value)}
+                  placeholder="https://us02web.zoom.us/rec/... hoặc https://drive.google.com/..."
+                  className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-mono text-xs"
+                />
+                <p className="text-[10px] text-white/40 font-sans">Học viên có thể xem trực tiếp video ghi lại buổi học này sau giờ học.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-white/70 font-semibold block">Video bài giảng tải lên nội bộ (mp4/webm)</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={editVideoUrl}
                     onChange={(e) => setEditVideoUrl(e.target.value)}
-                    placeholder="Đường dẫn video (mp4, youtube, ...)"
+                    placeholder="Đường dẫn video (mp4, webm, ...)"
                     className="flex-1 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400"
                   />
                   <label className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition flex items-center gap-1 cursor-pointer shrink-0">

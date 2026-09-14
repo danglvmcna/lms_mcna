@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin } from "lucide-react";
+import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin, Video, ExternalLink, MessageSquare } from "lucide-react";
 import { AppStore } from "../../store";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
@@ -142,6 +142,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         topic: attendanceSession?.topic,
         content: attendanceSession?.content,
         videoUrl: attendanceSession?.videoUrl || lessonsInSession.find((lesson: any) => lesson.videoUrl)?.videoUrl,
+        recordingUrl: attendanceSession?.recordingUrl,
         lessons: lessonsInSession,
         assignments: assignmentsInSession,
         quizzes: quizzesInSession
@@ -156,7 +157,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     if (activePresentationSessionNumber && session.number === activePresentationSessionNumber) return true;
     return false;
   }) || null;
-  const activeLessonVideoUrl = currentLessonContentObj?.videoUrl || activePresentationSession?.videoUrl || "";
+  const activeLessonVideoUrl = currentLessonContentObj?.videoUrl || activePresentationSession?.videoUrl || activePresentationSession?.recordingUrl || "";
   const activeLessonVideoTitle = currentLessonContentObj?.title || activePresentationSession?.topic || activePresentationSession?.title || "Video bài giảng";
   const renderPresentationSessionInfo = (session: any) => session ? (
     <div className="relative z-10 bg-black/20 border border-white/10 rounded-2xl p-4 md:p-5 space-y-3">
@@ -423,12 +424,36 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       const section = (store.courseSections || []).find(s => s.id === activeLearningSectionId);
                       if (!section) return null;
                       return (
-                        <button
-                          onClick={() => setShowSectionDetailModal(true)}
-                          className="px-2.5 py-1 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-700 hover:text-indigo-800 text-[10.5px] font-mono font-bold rounded-lg border border-indigo-500/20 flex items-center gap-1 transition cursor-pointer w-fit shrink-0"
-                        >
-                          <Calendar className="h-3.5 w-3.5" /> Chi tiết lớp {section.sectionCode}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => setShowSectionDetailModal(true)}
+                            className="px-2.5 py-1 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-700 hover:text-indigo-800 text-[10.5px] font-mono font-bold rounded-lg border border-indigo-500/20 flex items-center gap-1 transition cursor-pointer w-fit shrink-0"
+                          >
+                            <Calendar className="h-3.5 w-3.5" /> Chi tiết lớp {section.sectionCode}
+                          </button>
+                          {section.meetingUrl && (
+                            <a
+                              href={section.meetingUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-700 hover:text-emerald-800 text-[10.5px] font-mono font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer w-fit shrink-0"
+                              title="Vào phòng học trực tuyến Zoom / Google Meet"
+                            >
+                              <Video className="h-3.5 w-3.5 text-emerald-600" /> Vào Zoom/Meet ↗
+                            </a>
+                          )}
+                          {section.groupChatUrl && (
+                            <a
+                              href={section.groupChatUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 hover:text-blue-800 text-[10.5px] font-mono font-bold rounded-lg border border-blue-500/20 flex items-center gap-1 transition cursor-pointer w-fit shrink-0"
+                              title="Tham gia nhóm Zalo / Discord của lớp học"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-blue-600" /> Nhóm Zalo lớp ↗
+                            </a>
+                          )}
+                        </div>
                       );
                     })()}
                   </div>
@@ -532,6 +557,19 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                                     </span>
                                     <ChevronRight className="h-3.5 w-3.5" />
                                   </button>
+                                )}
+                                {session.recordingUrl && (
+                                  <a
+                                    href={session.recordingUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 transition cursor-pointer"
+                                  >
+                                    <span className="inline-flex items-center gap-1.5 font-mono font-bold text-[9px] uppercase tracking-widest">
+                                      <Video className="h-3.5 w-3.5 text-emerald-400" /> Video Recording buổi học
+                                    </span>
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </a>
                                 )}
                               </div>
                             )}
@@ -829,7 +867,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         <h5 className="text-xl md:text-2xl font-display font-extrabold text-white leading-tight">{currentLessonContentObj.title}</h5>
 
                         <div className="flex flex-wrap items-center gap-4 text-xs text-white/40 pt-2 border-b border-white/5 pb-4">
-                          <span className="flex items-center gap-1.5"><User className="h-4 w-4 text-indigo-400" /> Hệ thống giáo dục E16</span>
+                          <span className="flex items-center gap-1.5"><User className="h-4 w-4 text-indigo-400" /> Học viện Công nghệ MCNA</span>
                           <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-indigo-400" /> Thời lượng: {currentLessonContentObj.duration}</span>
                         </div>
                       </div>
@@ -965,6 +1003,37 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                     </span>
                   </div>
                 </div>
+
+                {/* Section Online Channels (Zoom/Meet, Zalo/Discord) */}
+                {(section.meetingUrl || section.groupChatUrl) && (
+                  <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl space-y-2">
+                    <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold block">Kênh lớp học trực tuyến</span>
+                    <div className="flex flex-wrap gap-2.5">
+                      {section.meetingUrl && (
+                        <a
+                          href={section.meetingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition"
+                        >
+                          <Video className="h-3.5 w-3.5 text-emerald-400" /> Vào phòng Zoom/Meet
+                          <ExternalLink className="h-3 w-3 opacity-60" />
+                        </a>
+                      )}
+                      {section.groupChatUrl && (
+                        <a
+                          href={section.groupChatUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold transition"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-400" /> Tham gia nhóm Zalo lớp
+                          <ExternalLink className="h-3 w-3 opacity-60" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Section Schedule slots */}
                 <div className="space-y-2.5">

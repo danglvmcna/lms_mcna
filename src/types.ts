@@ -31,6 +31,7 @@ export interface Course {
   category: string;
   thumbnail?: string;
   price?: number;
+  originalPrice?: number;
   level?: "Cơ bản" | "Trung cấp" | "Nâng cao";
   tags?: string[];
   rejectionReason?: string;
@@ -270,6 +271,7 @@ export interface AttendanceSession {
   date: string;
   topic: string;
   videoUrl?: string;
+  recordingUrl?: string;
   content?: string;
   code?: string;
   expiresAt?: string;
@@ -362,6 +364,8 @@ export interface CourseSection {
   status: "pending" | "open" | "closed" | "cancelled";
   openingDate?: string;
   numberOfSessions?: number;
+  meetingUrl?: string;          // Link Zoom / Google Meet
+  groupChatUrl?: string;        // Link Nhóm Zalo / Discord
 }
 
 // Public (unauthenticated) catalog shapes: only what a visitor may see before signing up.
@@ -372,6 +376,7 @@ export interface PublicCourseSummary {
   category: string;
   thumbnail?: string;
   price: number;
+  originalPrice?: number;
   level?: Course["level"];
   tags: string[];
   openingDate?: string;
@@ -389,12 +394,15 @@ export interface PublicCourseSection {
   schedule: CourseSection["schedule"];
   openingDate?: string;
   numberOfSessions?: number;
-  sessions: Array<{ id: string; topic: string; date?: string }>;
+  meetingUrl?: string;
+  groupChatUrl?: string;
+  sessions: Array<{ id: string; topic: string; date?: string; recordingUrl?: string }>;
 }
 
 export interface PublicCourseDetail {
   course: PublicCourseSummary;
   sections: PublicCourseSection[];
+  lessons?: Array<{ id: string; title: string; duration: string; order: number }>;
 }
 
 export interface RegistrationPeriod {

@@ -186,6 +186,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     date: row.date || row.session_date,
     topic: row.topic,
     videoUrl: row.video_url || undefined,
+    recordingUrl: row.recording_url || undefined,
     content: row.content || undefined,
     code: row.code || undefined,
     expiresAt: row.expires_at || undefined
