@@ -1,4 +1,4 @@
-import { AcademicWarning, Assignment, Course, CourseSection, Enrollment, LessonProgress, PublicCourseSection, PublicCourseSummary, Question, Quiz, QuizAttempt, SessionMaterial, Submission, TuitionFee, User, UserRole } from "../types";
+import { Assignment, Course, CourseSection, Enrollment, LessonProgress, PublicCourseSection, PublicCourseSummary, Question, Quiz, QuizAttempt, SessionMaterial, Submission, User, UserRole } from "../types";
 
 export type DbUserRow = {
   id: string;
@@ -224,39 +224,12 @@ export function submissionFromRow(row: any): Submission {
   };
 }
 
-export function tuitionFeeFromRow(row: any): TuitionFee {
-  return {
-    id: row.id,
-    studentId: row.student_id,
-    semesterId: row.semester_id || "",
-    amount: Number(row.amount),
-    dueDate: row.due_date,
-    status: row.status,
-    paidAmount: Number(row.paid_amount || 0),
-    paidAt: row.paid_at || undefined,
-    receiptCode: row.receipt_code || undefined
-  };
-}
 
-export function academicWarningFromRow(row: any): AcademicWarning {
-  return {
-    id: row.id,
-    studentId: row.student_id,
-    type: row.type,
-    courseId: row.course_id || undefined,
-    message: row.message,
-    isResolved: Boolean(row.is_resolved),
-    resolvedBy: row.resolved_by || undefined,
-    resolvedAt: row.resolved_at || undefined,
-    createdAt: row.created_at
-  };
-}
 
 export function courseSectionFromRow(row: any): CourseSection {
   return {
     id: row.id,
     courseId: row.course_id,
-    semesterId: row.semester_id,
     teacherId: row.teacher_id,
     sectionCode: row.section_code,
     maxStudents: Number(row.max_students),

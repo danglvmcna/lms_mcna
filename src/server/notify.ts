@@ -22,17 +22,7 @@ export async function notifyStudent(db: Queryable, studentId: string, message: s
   await notifyUsers(db, [studentId], { type: "info", message, ...meta });
 }
 
-export async function notifyParentOf(db: Queryable, studentId: string, message: string, meta: Partial<NotificationInput> = {}) {
-  const parentLinks = await db.query("SELECT parent_id FROM parent_links WHERE student_id = $1", [studentId]);
-  await notifyUsers(db, parentLinks.rows.map(row => row.parent_id), { type: "info", message, ...meta });
-}
-
 export async function notifyRole(db: Queryable, role: UserRole, message: string, meta: Partial<NotificationInput> = {}) {
   const users = await db.query("SELECT id FROM users WHERE role = $1 AND is_active = true", [role]);
   await notifyUsers(db, users.rows.map(row => row.id), { type: "info", message, ...meta });
-}
-
-export async function notifyAdvisorOf(db: Queryable, studentId: string, message: string, meta: Partial<NotificationInput> = {}) {
-  const assignments = await db.query("SELECT advisor_id FROM advisor_assignments WHERE student_id = $1", [studentId]);
-  await notifyUsers(db, assignments.rows.map(row => row.advisor_id), { type: "info", message, ...meta });
 }

@@ -1,10 +1,10 @@
-import { User, Course, StudentProfile, LMSDataStore } from "./types";
+import { User, Course, LMSDataStore } from "./types";
 import { hashPassword } from "./authHash";
-import { recomputeAndPersistAllGpas } from "./store";
 
 const credential = (password: string, salt: string) => hashPassword(password, salt);
 
-export function backfillMegaDemoData(store: LMSDataStore) {
+export function backfillMegaDemoData(storeInput: LMSDataStore) {
+  const store: any = storeInput;
   // 0. Generate specific students with distinct statuses for explicit business logic testing
   const specificStudentsData = [
     {
@@ -68,8 +68,8 @@ export function backfillMegaDemoData(store: LMSDataStore) {
         phone: "09" + Math.floor(10000000 + Math.random() * 90000000)
       });
 
-      if (!store.studentProfiles) store.studentProfiles = [];
-      store.studentProfiles.push({
+      if (!(store as any).studentProfiles) (store as any).studentProfiles = [];
+      (store as any).studentProfiles.push({
         id: `profile_${s.id}`,
         userId: s.id,
         studentCode: `SV202410${idx + 1}`,
@@ -88,13 +88,12 @@ export function backfillMegaDemoData(store: LMSDataStore) {
         notes: s.notes
       });
 
-      if (!store.advisorAssignments) store.advisorAssignments = [];
-      if (!store.advisorAssignments.some(aa => aa.studentId === s.id)) {
-        store.advisorAssignments.push({
+      if (!(store as any).advisorAssignments) (store as any).advisorAssignments = [];
+      if (!(store as any).advisorAssignments.some((aa: any) => aa.studentId === s.id)) {
+        (store as any).advisorAssignments.push({
           id: `aa_${s.id}`,
           advisorId: "user_advisor",
           studentId: s.id,
-          semesterId: "sem_spring25",
           assignedAt: new Date("2026-02-01T00:00:00Z").toISOString()
         });
       }
@@ -156,7 +155,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           id: "cr_student_active_fsweb",
           studentId: s.id,
           sectionId: "section_cs101_01",
-          semesterId: "sem_spring25",
           status: "registered",
           registeredAt: "2025-01-05T09:00:00Z",
           credits: 4
@@ -180,7 +178,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           id: "cr_student_on_leave_fsweb",
           studentId: s.id,
           sectionId: "section_cs101_01",
-          semesterId: "sem_spring25",
           status: "dropped",
           registeredAt: "2025-01-05T09:00:00Z",
           droppedAt: "2026-02-28T10:00:00Z",
@@ -225,7 +222,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           id: "cr_student_suspended_fsweb",
           studentId: s.id,
           sectionId: "section_cs101_01",
-          semesterId: "sem_spring25",
           status: "failed",
           registeredAt: "2025-01-05T09:00:00Z",
           credits: 4,
@@ -275,8 +271,8 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           gradedAt: new Date("2025-10-12T10:00:00Z").toISOString()
         });
         store.courseRegistrations.push(
-          { id: "cr_student_graduated_fsweb", studentId: s.id, sectionId: "section_cs101_01", semesterId: "sem_spring25", status: "completed", registeredAt: "2025-01-05T09:00:00Z", credits: 4, grade: "95", letterGrade: "A", gradePoint: 4.0, gradePostedAt: "2025-10-12T10:00:00Z" },
-          { id: "cr_student_graduated_python", studentId: s.id, sectionId: "section_bus201_01", semesterId: "sem_spring25", status: "completed", registeredAt: "2025-01-05T09:00:00Z", credits: 3, grade: "90", letterGrade: "A", gradePoint: 4.0, gradePostedAt: "2025-10-12T10:00:00Z" }
+          { id: "cr_student_graduated_fsweb", studentId: s.id, sectionId: "section_cs101_01", status: "completed", registeredAt: "2025-01-05T09:00:00Z", credits: 4, grade: "95", letterGrade: "A", gradePoint: 4.0, gradePostedAt: "2025-10-12T10:00:00Z" },
+          { id: "cr_student_graduated_python", studentId: s.id, sectionId: "section_bus201_01", status: "completed", registeredAt: "2025-01-05T09:00:00Z", credits: 3, grade: "90", letterGrade: "A", gradePoint: 4.0, gradePostedAt: "2025-10-12T10:00:00Z" }
         );
         store.attendanceRecords.push(
           { id: "ar_student_graduated_session_cs1", sessionId: "session_cs1", studentId: s.id, status: "present" },
@@ -310,7 +306,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           id: "cr_student_withdrawn_fsweb",
           studentId: s.id,
           sectionId: "section_cs101_01",
-          semesterId: "sem_spring25",
           status: "withdrawn",
           registeredAt: "2025-01-05T09:00:00Z",
           droppedAt: "2026-02-28T10:00:00Z",
@@ -537,7 +532,7 @@ export function backfillMegaDemoData(store: LMSDataStore) {
   if (studentsToGen <= 0) return;
 
   const newStudents: User[] = [];
-  const newProfiles: StudentProfile[] = [];
+  const newProfiles: any[] = [];
 
   const addresses = [
     "Số 1 Đại Cồ Việt, Bách Khoa, Hai Bà Trưng, Hà Nội",
@@ -606,7 +601,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       id: `aa_gen_${index}`,
       advisorId: "user_advisor",
       studentId: sId,
-      semesterId: "sem_spring25",
       assignedAt: new Date("2026-02-01T00:00:00Z").toISOString()
     });
 
@@ -729,7 +723,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
     store.tuitionFees.push({
       id: feeId,
       studentId: sId,
-      semesterId: "sem_spring25",
       amount: totalAmount,
       dueDate: "2026-06-30",
       status: feeStatus,
@@ -785,7 +778,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
   if (!store.registrationPeriods.some(rp => rp.semesterId === "sem_fall26")) {
     store.registrationPeriods.push({
       id: "rp_fall26",
-      semesterId: "sem_fall26",
       name: "Đăng ký học Kỳ 2026.1",
       startDate: "2026-08-01",
       endDate: "2026-12-31",
@@ -813,7 +805,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       store.courseSections.push({
         id: sectionId,
         courseId: crs.id,
-        semesterId: "sem_fall26",
         teacherId: crs.teacherId,
         sectionCode: `${crs.id.toUpperCase().replace("COURSE_", "")}-01`,
         maxStudents: 40,
@@ -828,12 +819,12 @@ export function backfillMegaDemoData(store: LMSDataStore) {
 
   // 6. Register student users to Kỳ 2026.1 sections
   if (!store.courseRegistrations) store.courseRegistrations = [];
-  const studentsForFall26 = store.users.filter(u => u.role === "student");
-  const sectionsForFall26 = store.courseSections.filter(sec => sec.semesterId === "sem_fall26");
+  const studentsForFall26 = (store.users || []).filter((u: any) => u.role === "student");
+  const sectionsForFall26 = (store.courseSections || []).filter((sec: any) => sec.semesterId === "sem_fall26");
 
   const sectionCounts = new Map<string, number>();
-  sectionsForFall26.forEach(sec => {
-    const count = store.courseRegistrations.filter(r => r.sectionId === sec.id && r.status === "registered").length;
+  sectionsForFall26.forEach((sec: any) => {
+    const count = (store.courseRegistrations || []).filter((r: any) => r.sectionId === sec.id && r.status === "registered").length;
     sectionCounts.set(sec.id, count);
   });
 
@@ -864,8 +855,8 @@ export function backfillMegaDemoData(store: LMSDataStore) {
     return false;
   };
 
-  studentsForFall26.forEach((student, studIdx) => {
-    const hasReg = store.courseRegistrations.some(r => r.studentId === student.id && r.semesterId === "sem_fall26");
+  studentsForFall26.forEach((student: any, studIdx: number) => {
+    const hasReg = (store.courseRegistrations || []).some((r: any) => r.studentId === student.id && (r as any).semesterId === "sem_fall26");
     if (!hasReg && sectionsForFall26.length > 0) {
       // Select sections that are not yet full
       const availableSections = sectionsForFall26.filter(sec => {
@@ -890,7 +881,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
           id: `cr_${student.id}_${sec.id}`,
           studentId: student.id,
           sectionId: sec.id,
-          semesterId: "sem_fall26",
           status: "registered",
           registeredAt: new Date("2026-08-15T09:00:00Z").toISOString(),
           credits: 3
@@ -924,7 +914,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       store.attendanceSessions.push({
         id: sess1Id,
         courseId: sec.courseId,
-        semesterId: "sem_fall26",
         teacherId: sec.teacherId,
         date: "2026-09-15T08:00:00Z",
         topic: "Bài học mở đầu: Giới thiệu đề cương môn học"
@@ -950,7 +939,6 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       store.attendanceSessions.push({
         id: sess2Id,
         courseId: sec.courseId,
-        semesterId: "sem_fall26",
         teacherId: sec.teacherId,
         date: "2026-09-22T08:00:00Z",
         topic: "Buổi 2: Kiến thức nền tảng và bài tập thực hành"
@@ -971,106 +959,4 @@ export function backfillMegaDemoData(store: LMSDataStore) {
     }
   });
 
-  // 8. Advisor assignments for Kỳ 2026.1
-  if (!store.advisorAssignments) store.advisorAssignments = [];
-  studentsForFall26.forEach((student, index) => {
-    const hasAdv = store.advisorAssignments.some(aa => aa.studentId === student.id && aa.semesterId === "sem_fall26");
-    if (!hasAdv) {
-      store.advisorAssignments.push({
-        id: `aa_fall26_${index}`,
-        advisorId: "user_advisor",
-        studentId: student.id,
-        semesterId: "sem_fall26",
-        assignedAt: new Date("2026-08-01T00:00:00Z").toISOString()
-      });
-    }
-  });
-
-  // 9. Generate Tuition Fees and Transactions for Kỳ 2026.1
-  if (!store.tuitionFees) store.tuitionFees = [];
-  if (!store.transactions) store.transactions = [];
-
-  const fall26Registrations = store.courseRegistrations.filter(r => r.semesterId === "sem_fall26");
-  
-  // Group registrations by student
-  const regsByStudent = new Map<string, typeof fall26Registrations>();
-  fall26Registrations.forEach(reg => {
-    const list = regsByStudent.get(reg.studentId) || [];
-    list.push(reg);
-    regsByStudent.set(reg.studentId, list);
-  });
-
-  let feeIndex = 0;
-  regsByStudent.forEach((regs, studentId) => {
-    const feeId = `fee_fall26_${studentId}`;
-    if (!store.tuitionFees.some(f => f.id === feeId)) {
-      const isPaid = Math.random() > 0.4;
-      const isPending = !isPaid && Math.random() > 0.3;
-
-      let feeStatus: "paid" | "unpaid" = "unpaid";
-      let paidAmount = 0;
-      let paidAtDate: string | undefined = undefined;
-      let receiptCode: string | undefined = undefined;
-
-      let totalFee = 0;
-      const txRows: any[] = [];
-
-      regs.forEach((reg, regIdx) => {
-        const section = store.courseSections.find(s => s.id === reg.sectionId);
-        const course = section ? store.courses.find(c => c.id === section.courseId) : undefined;
-        const coursePrice = course?.price || 2000000;
-        totalFee += coursePrice;
-
-        if (isPaid) {
-          paidAtDate = new Date("2026-08-20T10:00:00Z").toISOString();
-          txRows.push({
-            id: `tx_fall26_${studentId}_${reg.id}`,
-            studentId,
-            courseId: course?.id,
-            amount: coursePrice,
-            status: "approved",
-            paymentMethod: "Chuyển khoản ngân hàng",
-            createdAt: paidAtDate,
-            processedAt: paidAtDate,
-            processedBy: "user_finance",
-            notes: `Học phí Kỳ 2026.1 - Môn ${course?.title || ""}`
-          });
-        } else if (isPending) {
-          const pendingAt = new Date("2026-08-25T11:00:00Z").toISOString();
-          txRows.push({
-            id: `tx_fall26_${studentId}_${reg.id}`,
-            studentId,
-            courseId: course?.id,
-            amount: coursePrice,
-            status: "pending",
-            paymentMethod: "Chuyển khoản ngân hàng",
-            createdAt: pendingAt
-          });
-        }
-      });
-
-      if (isPaid) {
-        feeStatus = "paid";
-        paidAmount = totalFee;
-        receiptCode = `RC_F26_${feeIndex++}`;
-        store.transactions.push(...txRows);
-      } else if (isPending) {
-        store.transactions.push(...txRows);
-      }
-
-      store.tuitionFees.push({
-        id: feeId,
-        studentId,
-        semesterId: "sem_fall26",
-        amount: totalFee,
-        dueDate: "2026-09-30",
-        status: feeStatus,
-        paidAmount,
-        paidAt: paidAtDate,
-        receiptCode
-      });
-    }
-  });
-
-  recomputeAndPersistAllGpas(store);
 }

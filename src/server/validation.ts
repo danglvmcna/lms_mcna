@@ -117,8 +117,7 @@ export const schemas = {
     sectionId: z.string().trim().optional()
   }),
   approveEnrollment: z.object({
-    sectionId: z.string().trim().min(1).optional(),
-    semesterId: z.string().trim().min(1).optional()
+    sectionId: z.string().trim().min(1).optional()
   }),
   issueCertificate: z.object({
     enrollmentId: z.string().trim().min(1)
@@ -179,7 +178,6 @@ export const schemas = {
   attendanceSession: z.object({
     courseId: z.string().trim().min(1),
     sectionId: z.string().trim().min(1).optional(),
-    semesterId: z.string().trim().optional(),
     date: z.string().trim().min(1),
     topic: z.string().trim().min(1),
     records: z.array(z.object({
@@ -210,11 +208,7 @@ export const schemas = {
     content: z.string().min(1).max(2000),
     shareWithParent: z.boolean().default(false)
   }),
-  advisorAssignment: z.object({
-    advisorId: z.string().min(1),
-    studentId: z.string().min(1),
-    semesterId: z.string().optional()
-  }),
+
   courseRegistration: z.object({
     sectionId: z.string().min(1)
   }),
@@ -229,27 +223,11 @@ export const schemas = {
     status: z.enum(["approved", "rejected"]),
     resolutionNote: z.string().optional()
   }),
-  leaveRequest: z.object({
-    type: z.enum(["medical", "personal", "financial"]),
-    semesterId: z.string().min(1),
-    reason: z.string().min(1).max(2000),
-    resumeSemesterId: z.string().optional()
-  }),
+
   reviewNote: z.object({
     reviewNote: z.string().optional()
   }),
-  scholarship: z.object({
-    name: z.string().min(1),
-    type: z.enum(["full", "partial", "merit", "need-based"]),
-    amount: z.coerce.number().optional(),
-    discountPercent: z.coerce.number().optional(),
-    semesterId: z.string().optional(),
-    conditions: z.string().optional()
-  }),
-  scholarshipApplication: z.object({
-    scholarshipId: z.string().min(1),
-    semesterId: z.string().min(1)
-  }),
+
   graduationApplicationReview: z.object({
     note: z.string().optional()
   }),
@@ -273,7 +251,6 @@ export const schemas = {
   }),
   courseSection: z.object({
     courseId: z.string().trim().min(1),
-    semesterId: z.string().trim().min(1),
     teacherId: z.string().trim().min(1).optional(),
     sectionCode: z.string().trim().min(1),
     maxStudents: z.coerce.number().int().min(1),
@@ -290,15 +267,10 @@ export const schemas = {
     meetingUrl: z.string().trim().optional().nullable(),
     groupChatUrl: z.string().trim().optional().nullable()
   }),
-  bulkIssueTuition: z.object({
-    semesterId: z.string().trim().min(1),
-    amount: z.coerce.number().positive().default(15000000),
-    dueDate: z.string().trim().optional()
-  }),
+
   generateAttendanceLink: z.object({
     courseId: z.string().trim().min(1),
     sectionId: z.string().trim().min(1).optional(),
-    semesterId: z.string().trim().optional(),
     topic: z.string().trim().min(1)
   }),
   selfCheckin: z.object({

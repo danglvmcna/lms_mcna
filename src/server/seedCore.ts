@@ -13,7 +13,7 @@ async function cleanupParentSeedData(db: Queryable) {
 function getBackfilledSeedStore() {
   const store = getInitialStore();
   backfillMegaDemoData(store);
-  store.studentProfiles = (store.studentProfiles || []).map(profile => ({
+  (store as any).studentProfiles = ((store as any).studentProfiles || []).map((profile: any) => ({
     ...profile,
     guardianName: undefined,
     guardianPhone: undefined,
@@ -29,8 +29,8 @@ export async function seedCoreLearningData(db: Queryable) {
   const initialProfileCount = Number((await db.query("SELECT COUNT(*) AS count FROM student_profiles")).rows[0].count);
   const needsMegaBackfill = initialCourseCount < 40 || initialProfileCount < 300;
 
-  // 1. Seed Academic Years & Semesters
-  for (const y of store.academicYears) {
+  // 1. Seed Academic Years & Semesters (if present in seed store)
+  for (const y of ((store as any).academicYears || [])) {
     await db.query(
       `INSERT INTO academic_years (id, name, start_date, end_date, is_current)
        VALUES ($1,$2,$3,$4,$5)
@@ -43,7 +43,7 @@ export async function seedCoreLearningData(db: Queryable) {
     );
   }
 
-  for (const s of store.semesters) {
+  for (const s of ((store as any).semesters || [])) {
     await db.query(
       `INSERT INTO semesters (id, academic_year_id, name, type, start_date, end_date, registration_open, registration_close, is_current)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -117,8 +117,9 @@ export async function seedCoreLearningData(db: Queryable) {
   }
 
   // 4. Seed Program Courses Curriculum
+  // 4. Seed Program Courses Curriculum (if any)
   if (Number((await db.query("SELECT COUNT(*) AS count FROM program_courses")).rows[0].count) === 0) {
-    for (const pc of store.programCourses) {
+    for (const pc of ((store as any).programCourses || [])) {
       await db.query(
         "INSERT INTO program_courses (id, program_id, course_id, credits, is_required, semester) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
         [pc.id, pc.programId, pc.courseId, pc.credits, pc.isRequired, pc.semester]
@@ -128,7 +129,7 @@ export async function seedCoreLearningData(db: Queryable) {
 
   // 5. Seed Student Profiles & Enrollments
   if (Number((await db.query("SELECT COUNT(*) AS count FROM student_profiles")).rows[0].count) === 0) {
-    for (const p of store.studentProfiles) {
+    for (const p of ((store as any).studentProfiles || [])) {
       await db.query(
         `INSERT INTO student_profiles (
           id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
@@ -145,7 +146,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
   if (needsMegaBackfill) {
-    for (const p of store.studentProfiles) {
+    for (const p of ((store as any).studentProfiles || [])) {
       await db.query(
         `INSERT INTO student_profiles (
           id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
@@ -170,7 +171,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  // Seed SIS section data used by course registration workflows.
+  // Seed section data
   if (Number((await db.query("SELECT COUNT(*) AS count FROM course_sections")).rows[0].count) === 0) {
     for (const section of store.courseSections || []) {
       await db.query(
@@ -180,7 +181,7 @@ export async function seedCoreLearningData(db: Queryable) {
         [
           section.id,
           section.courseId,
-          section.semesterId,
+          (section as any).semesterId || null,
           section.teacherId,
           section.sectionCode,
           section.maxStudents,
@@ -212,7 +213,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  for (const period of store.registrationPeriods || []) {
+  for (const period of ((store as any).registrationPeriods || [])) {
     await db.query(
       `INSERT INTO registration_periods (id, semester_id, name, start_date, end_date, allowed_years, is_open)
        VALUES ($1,$2,$3,$4,$5,$6,$7)
@@ -244,16 +245,16 @@ export async function seedCoreLearningData(db: Queryable) {
           registration.id,
           registration.studentId,
           registration.sectionId,
-          registration.semesterId,
+          (registration as any).semesterId || null,
           registration.status,
           registration.registeredAt,
           registration.droppedAt || null,
           registration.grade || null,
           registration.letterGrade || null,
           registration.gradePoint ?? null,
-          registration.credits,
-          Boolean(registration.isRetake),
-          Boolean(registration.examBan),
+          (registration as any).credits || 0,
+          Boolean((registration as any).isRetake),
+          Boolean((registration as any).examBan),
           registration.gradePostedAt || null
         ]
       );
@@ -325,7 +326,7 @@ export async function seedCoreLearningData(db: Queryable) {
 
   // 8. Seed Tuition Fees
   if (Number((await db.query("SELECT COUNT(*) AS count FROM tuition_fees")).rows[0].count) === 0) {
-    for (const f of store.tuitionFees) {
+    for (const f of ((store as any).tuitionFees || [])) {
       await db.query(
         "INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount, paid_at, receipt_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING",
         [f.id, f.studentId, f.semesterId || null, f.amount, f.dueDate, f.status, f.paidAmount, f.paidAt || null, f.receiptCode || null]
@@ -334,7 +335,7 @@ export async function seedCoreLearningData(db: Queryable) {
   }
 
   if (Number((await db.query("SELECT COUNT(*) AS count FROM scholarships")).rows[0].count) === 0) {
-    for (const scholarship of store.scholarships || []) {
+    for (const scholarship of ((store as any).scholarships || [])) {
       await db.query(
         `INSERT INTO scholarships (id, name, type, amount, discount_percent, semester_id, conditions)
          VALUES ($1,$2,$3,$4,$5,$6,$7)
@@ -358,7 +359,7 @@ export async function seedCoreLearningData(db: Queryable) {
         `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, date, topic)
          VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (id) DO NOTHING`,
-        [session.id, session.courseId, session.semesterId, session.teacherId, session.date, session.topic]
+        [session.id, session.courseId, (session as any).semesterId || null, session.teacherId, session.date, session.topic]
       );
     }
   }
@@ -389,7 +390,7 @@ export async function seedCoreLearningData(db: Queryable) {
   }
 
   if (Number((await db.query("SELECT COUNT(*) AS count FROM advisor_assignments")).rows[0].count) === 0) {
-    for (const assignment of store.advisorAssignments || []) {
+    for (const assignment of ((store as any).advisorAssignments || [])) {
       await db.query(
         `INSERT INTO advisor_assignments (id, advisor_id, student_id, semester_id, assigned_at)
          VALUES ($1,$2,$3,$4,$5)
@@ -401,7 +402,7 @@ export async function seedCoreLearningData(db: Queryable) {
 
   // 9. Seed Academic Warnings & Advisor Notes
   if (Number((await db.query("SELECT COUNT(*) AS count FROM academic_warnings")).rows[0].count) === 0) {
-    for (const w of store.academicWarnings) {
+    for (const w of ((store as any).academicWarnings || [])) {
       await db.query(
         "INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
         [w.id, w.studentId, w.type, w.message, w.isResolved, w.createdAt]

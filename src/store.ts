@@ -1,18 +1,13 @@
 import { 
   LMSDataStore, User, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, 
-  Assignment, Submission, Certificate, Notification, ForumPost, AuditLog, AcademicYear, Semester, 
-  Department, Program, ProgramCourse, StudentProfile, AttendanceSession, AttendanceRecord, TuitionFee, 
-  AcademicWarning, OfficialTranscript, AdvisorNote, CourseSection, RegistrationPeriod, CourseRegistration, 
-  Scholarship, ScholarshipApplication, GradeAppeal, AdvisorAssignment, LeaveRequest, GraduationApplication, 
+  Assignment, Submission, Certificate, Notification, ForumPost, AuditLog, 
+  Department, Program, AttendanceSession, AttendanceRecord, 
+  CourseSection, CourseRegistration, 
   SystemEvent 
 } from "./types";
 import { generateId } from "./utils";
 import { hashPassword } from "./authHash";
 import { backfillMegaDemoData } from "./mockSeeds";
-import {
-  calculateCourseGradePercent,
-  collectCourseGradeInputs
-} from "./gradeUtils";
 
 const STORAGE_KEY = "e16_lms_data";
 
@@ -475,39 +470,6 @@ export function getInitialStore(): LMSDataStore {
         createdAt: new Date("2026-05-25T08:00:00Z").toISOString()
       }
     ],
-    academicYears: [
-      {
-        id: "ay_2024_2025",
-        name: "2024–2025",
-        startDate: "2024-09-01",
-        endDate: "2025-06-30",
-        isCurrent: true
-      }
-    ],
-    semesters: [
-      {
-        id: "sem_fall24",
-        academicYearId: "ay_2024_2025",
-        name: "Fall 2024",
-        type: "fall",
-        startDate: "2024-09-01",
-        endDate: "2025-01-15",
-        registrationOpen: "2024-08-01",
-        registrationClose: "2024-08-31",
-        isCurrent: false
-      },
-      {
-        id: "sem_spring25",
-        academicYearId: "ay_2024_2025",
-        name: "Spring 2025",
-        type: "spring",
-        startDate: "2025-02-01",
-        endDate: "2025-06-30",
-        registrationOpen: "2025-01-01",
-        registrationClose: "2025-01-31",
-        isCurrent: true
-      }
-    ],
     departments: [
       {
         id: "dept_cs",
@@ -544,52 +506,11 @@ export function getInitialStore(): LMSDataStore {
         description: "Đào tạo kỹ năng quản trị, khởi nghiệp và điều hành doanh nghiệp."
       }
     ],
-    programCourses: [
-      {
-        id: "pc_1",
-        programId: "prog_se",
-        courseId: course1Id,
-        credits: 4,
-        isRequired: true,
-        semester: 1
-      },
-      {
-        id: "pc_2",
-        programId: "prog_se",
-        courseId: course2Id,
-        credits: 3,
-        isRequired: false,
-        semester: 2
-      }
-    ],
-    studentProfiles: [
-      {
-        id: "profile_student",
-        userId: studentId,
-        studentCode: "SV2024001",
-        programId: "prog_se",
-        departmentId: "dept_cs",
-        academicYear: 2,
-        enrollmentDate: "2024-09-01",
-        expectedGraduation: "2028-06-30",
-        status: "active",
-        gpa: 3.2,
-        totalCreditsEarned: 45,
-        address: "Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
-        phone: "0912345678",
-        dateOfBirth: "2002-03-15",
-        gender: "Nữ",
-        guardianName: undefined,
-        guardianPhone: undefined,
-        guardianEmail: undefined,
-        notes: "Sinh viên tiêu biểu lớp Kỹ thuật Phần mềm."
-      }
-    ],
+
     attendanceSessions: [
       {
         id: "session_cs1",
         courseId: "course_fsweb",
-        semesterId: "sem_spring25",
         teacherId: "user_teacher",
         date: "2025-02-15",
         topic: "Core HTTP and network boundaries"
@@ -597,7 +518,6 @@ export function getInitialStore(): LMSDataStore {
       {
         id: "session_cs2",
         courseId: "course_fsweb",
-        semesterId: "sem_spring25",
         teacherId: "user_teacher",
         date: "2025-02-22",
         topic: "RESTful API routes"
@@ -605,7 +525,6 @@ export function getInitialStore(): LMSDataStore {
       {
         id: "session_cs3",
         courseId: "course_fsweb",
-        semesterId: "sem_spring25",
         teacherId: "user_teacher",
         date: "2025-03-01",
         topic: "State systems"
@@ -616,28 +535,6 @@ export function getInitialStore(): LMSDataStore {
       { id: "ar_2", sessionId: "session_cs2", studentId: "user_student", status: "absent" },
       { id: "ar_3", sessionId: "session_cs3", studentId: "user_student", status: "absent" }
     ],
-    tuitionFees: [
-      {
-        id: "fee_spring25_student",
-        studentId: studentId,
-        semesterId: "sem_spring25",
-        amount: 15000000,
-        dueDate: "2025-03-31",
-        status: "unpaid",
-        paidAmount: 0
-      }
-    ],
-    academicWarnings: [
-      {
-        id: "warning_attendance",
-        studentId: "user_student",
-        type: "low_attendance",
-        message: "Cảnh báo chuyên cần: Tỉ lệ chuyên cần môn Full-Stack của bạn hiện tại là 33% (dưới mốc tối thiểu 80%).",
-        isResolved: false,
-        createdAt: "2026-05-18T10:00:00Z"
-      }
-    ],
-    officialTranscripts: [],
     advisorNotes: [
       {
         id: "note_1",
@@ -652,7 +549,6 @@ export function getInitialStore(): LMSDataStore {
       {
         id: "section_cs101_01",
         courseId: "course_fsweb",
-        semesterId: "sem_spring25",
         teacherId: "user_teacher",
         sectionCode: "CS101-01",
         maxStudents: 30,
@@ -665,7 +561,6 @@ export function getInitialStore(): LMSDataStore {
       {
         id: "section_bus201_01",
         courseId: "course_python",
-        semesterId: "sem_spring25",
         teacherId: "user_teacher",
         sectionCode: "BUS201-01",
         maxStudents: 40,
@@ -676,147 +571,19 @@ export function getInitialStore(): LMSDataStore {
         status: "open"
       }
     ],
-    registrationPeriods: [
-      {
-        id: "rp_spring25",
-        semesterId: "sem_spring25",
-        name: "Đăng ký tháng Mùa Xuân 2025",
-        startDate: "2024-12-01",
-        endDate: "2026-12-31",
-        allowedYears: [1, 2, 3, 4],
-        isOpen: true
-      }
-    ],
     courseRegistrations: [
       {
         id: "cr_fsweb",
         studentId: "user_student",
         sectionId: "section_cs101_01",
-        semesterId: "sem_spring25",
         status: "registered",
         registeredAt: "2025-01-05T09:00:00Z",
         credits: 3
       }
     ],
-    scholarships: [
-      {
-        id: "sch_merit_2025",
-        name: "Học bổng Khuyến khích Học tập 2025",
-        type: "merit",
-        discountPercent: 30,
-        semesterId: "sem_spring25",
-        conditions: "Điểm trung bình tích lũy GPA tối thiểu đạt từ 3.2 trở lên"
-      }
-    ],
-    scholarshipApplications: [],
-    gradeAppeals: [
-      {
-        id: "appeal_cs101",
-        studentId: "user_student",
-        courseRegistrationId: "cr_fsweb",
-        reason: "Bài nộp của em đầy đủ chức năng nhưng điểm chưa chính xác, mong thầy xem xét lại.",
-        status: "pending",
-        originalGrade: 60,
-        submittedAt: "2026-05-20T10:00:00Z"
-      }
-    ],
-    advisorAssignments: [
-      {
-        id: "aa_student",
-        advisorId: "user_advisor",
-        studentId: "user_student",
-        semesterId: "sem_spring25",
-        assignedAt: "2025-02-01T08:00:00Z"
-      }
-    ],
-    leaveRequests: [],
-    graduationApplications: [],
     systemEvents: [],
     teacherAttendance: []
   };
-}
-
-export function calculateStudentGpa(store: LMSDataStore, studentId: string): { gpa: number; earnedCredits: number } {
-  const studentEnrollments = store.enrollments.filter(e => e.studentId === studentId && e.status !== "cancelled");
-  const enrollmentsByCourse = studentEnrollments.reduce((groups, enrollment) => {
-    if (!groups.has(enrollment.courseId)) groups.set(enrollment.courseId, []);
-    groups.get(enrollment.courseId)!.push(enrollment);
-    return groups;
-  }, new Map<string, typeof studentEnrollments>());
-
-  let totalGradeWeightedPoints = 0;
-  let totalCreditsForGpa = 0;
-  let totalCreditsEarned = 0;
-
-  enrollmentsByCourse.forEach((courseEnrollments, courseId) => {
-    const programCourse = store.programCourses.find(pc => pc.courseId === courseId);
-    const credits = programCourse ? programCourse.credits : 3;
-    const grade = calculateCourseGradePercent(collectCourseGradeInputs(store, studentId, courseId));
-
-    if (grade.hasGrades && grade.gradePoint !== null) {
-      totalGradeWeightedPoints += grade.gradePoint * credits;
-      totalCreditsForGpa += credits;
-      if (grade.countsForGpa) {
-        totalCreditsEarned += credits;
-      }
-    } else {
-      const totalLessons = store.lessons.filter(l => l.courseId === courseId).length;
-      const hasCompletedEnrollment = courseEnrollments.some(enrollment => {
-        const progressCount = store.lessonProgress.filter(p => p.enrollmentId === enrollment.id && p.completed).length;
-        return enrollment.status === "completed" || (totalLessons > 0 && progressCount === totalLessons);
-      });
-      if (hasCompletedEnrollment) {
-        totalCreditsEarned += credits;
-      }
-    }
-  });
-
-  const gpa = totalCreditsForGpa > 0 ? Number((totalGradeWeightedPoints / totalCreditsForGpa).toFixed(2)) : 0.0;
-  return { gpa, earnedCredits: totalCreditsEarned };
-}
-
-export function recomputeAndPersistAllGpas(store: LMSDataStore) {
-  if (!store.studentProfiles) {
-    store.studentProfiles = [];
-  }
-  
-  store.studentProfiles = store.studentProfiles.map(profile => {
-    const { gpa, earnedCredits } = calculateStudentGpa(store, profile.userId);
-    
-    // Check graduation: does the student complete all Program Course requirements?
-    const progCourses = store.programCourses.filter(pc => pc.programId === profile.programId);
-    let allCompletedAndPassed = progCourses.length > 0;
-    
-    if (progCourses.length > 0) {
-      for (const pc of progCourses) {
-        const enrollment = store.enrollments.find(e => e.studentId === profile.userId && e.courseId === pc.courseId && e.status !== "cancelled");
-        if (!enrollment) {
-          allCompletedAndPassed = false;
-          break;
-        }
-        
-        const grade = calculateCourseGradePercent(collectCourseGradeInputs(store, profile.userId, pc.courseId));
-        if (!grade.hasGrades || !grade.countsForGpa) {
-          allCompletedAndPassed = false;
-          break;
-        }
-      }
-    } else {
-      allCompletedAndPassed = false;
-    }
-
-    let status = profile.status;
-    if (allCompletedAndPassed && profile.status === "active") {
-      status = "graduated";
-    }
-
-    return {
-      ...profile,
-      gpa,
-      totalCreditsEarned: earnedCredits,
-      status
-    };
-  });
 }
 
 export class AppStore {
@@ -853,32 +620,18 @@ export class AppStore {
           normalizeLegacyRoles(this.storeInstance);
 
           // Ensure all system-level collection tables are initialized
-          if (!this.storeInstance.academicYears) this.storeInstance.academicYears = initial.academicYears;
-          if (!this.storeInstance.semesters) this.storeInstance.semesters = initial.semesters;
           if (!this.storeInstance.departments) this.storeInstance.departments = initial.departments;
           if (!this.storeInstance.programs) this.storeInstance.programs = initial.programs;
-          if (!this.storeInstance.programCourses) this.storeInstance.programCourses = initial.programCourses;
-          if (!this.storeInstance.studentProfiles) this.storeInstance.studentProfiles = initial.studentProfiles;
           if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
           if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
-          if (!this.storeInstance.tuitionFees) this.storeInstance.tuitionFees = initial.tuitionFees || [];
-          if (!this.storeInstance.academicWarnings) this.storeInstance.academicWarnings = initial.academicWarnings || [];
-          if (!this.storeInstance.officialTranscripts) this.storeInstance.officialTranscripts = initial.officialTranscripts || [];
           if (!this.storeInstance.advisorNotes) this.storeInstance.advisorNotes = initial.advisorNotes || [];
           if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
-          if (!this.storeInstance.registrationPeriods) this.storeInstance.registrationPeriods = initial.registrationPeriods || [];
           if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
-          if (!this.storeInstance.scholarships) this.storeInstance.scholarships = initial.scholarships || [];
-          if (!this.storeInstance.scholarshipApplications) this.storeInstance.scholarshipApplications = initial.scholarshipApplications || [];
-          if (!this.storeInstance.gradeAppeals) this.storeInstance.gradeAppeals = initial.gradeAppeals || [];
-          if (!this.storeInstance.advisorAssignments) this.storeInstance.advisorAssignments = initial.advisorAssignments || [];
-          if (!this.storeInstance.leaveRequests) this.storeInstance.leaveRequests = initial.leaveRequests || [];
-          if (!this.storeInstance.graduationApplications) this.storeInstance.graduationApplications = initial.graduationApplications || [];
           if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
           if (!this.storeInstance.teacherAttendance) this.storeInstance.teacherAttendance = initial.teacherAttendance || [];
 
           // Ensure new seeded roles are present
-          const rolesToBackfill = ["admin", "parent"];
+          const rolesToBackfill = ["admin"];
           const hasAllRoles = rolesToBackfill.every(r => this.storeInstance!.users.some(u => u.role === r));
           if (!hasAllRoles) {
             // Append missing users

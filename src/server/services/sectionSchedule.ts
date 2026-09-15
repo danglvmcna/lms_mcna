@@ -8,7 +8,6 @@ export type SectionScheduleSlot = { dayOfWeek: string; startTime: string; endTim
 export type SectionPayload = {
   id?: string;
   courseId: string;
-  semesterId: string;
   teacherId: string;
   sectionCode: string;
   maxStudents: number;
@@ -140,7 +139,7 @@ export const generatedSessionOrder = (topic: any) => {
 
 export async function ensureSectionAttendanceSessionsForSchedule(
   db: any,
-  section: { id: string; course_id: string; semester_id: string; teacher_id: string; number_of_sessions?: number | null; opening_date?: string | null },
+  section: { id: string; course_id: string; teacher_id: string; number_of_sessions?: number | null; opening_date?: string | null },
   schedule: SectionScheduleSlot[] = []
 ) {
   const targetCount = Number(section.number_of_sessions || 0);
@@ -178,8 +177,8 @@ export async function ensureSectionAttendanceSessionsForSchedule(
 
     if (current) {
       usedIds.add(current.id);
-      const sets = ["semester_id = $1", "teacher_id = $2"];
-      const values: any[] = [section.semester_id || null, section.teacher_id];
+      const sets = ["teacher_id = $1"];
+      const values: any[] = [section.teacher_id];
       let paramIndex = values.length + 1;
 
       if (hasDate) {
@@ -203,8 +202,8 @@ export async function ensureSectionAttendanceSessionsForSchedule(
       continue;
     }
 
-    const insertColumns = ["id", "course_id", "semester_id", "teacher_id", "topic"];
-    const values: any[] = [generateId("ats"), section.course_id, section.semester_id || null, section.teacher_id, seed.topic];
+    const insertColumns = ["id", "course_id", "teacher_id", "topic"];
+    const values: any[] = [generateId("ats"), section.course_id, section.teacher_id, seed.topic];
     const placeholders = values.map((_, index) => `$${index + 1}`);
     if (hasDate) {
       insertColumns.push("date");
@@ -254,12 +253,11 @@ export async function upsertCourseSection(db: any, section: SectionPayload) {
   const id = section.id || generateId("section");
   const scheduleJson = JSON.stringify(section.schedule || []);
   const columns = await getCourseSectionColumnSet(db);
-  const insertColumns = ["id", "course_id", "semester_id", "teacher_id", "section_code", "max_students", "status"];
-  const values: any[] = [id, section.courseId, section.semesterId, section.teacherId, section.sectionCode, Number(section.maxStudents), section.status];
+  const insertColumns = ["id", "course_id", "teacher_id", "section_code", "max_students", "status"];
+  const values: any[] = [id, section.courseId, section.teacherId, section.sectionCode, Number(section.maxStudents), section.status];
   const placeholders = values.map((_, index) => `$${index + 1}`);
   const updates = [
     "course_id = EXCLUDED.course_id",
-    "semester_id = EXCLUDED.semester_id",
     "teacher_id = EXCLUDED.teacher_id",
     "section_code = EXCLUDED.section_code",
     "max_students = EXCLUDED.max_students",

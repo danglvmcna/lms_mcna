@@ -166,17 +166,7 @@ function AppShell() {
     return () => clearTimeout(timer);
   }, [appNotice]);
 
-  const [activeSystem, setActiveSystem] = useState<"SIS" | "LMS">("SIS");
 
-  useEffect(() => {
-    if (currentUser) {
-      if (["teacher", "student"].includes(currentUser.role)) {
-        setActiveSystem("LMS");
-      } else {
-        setActiveSystem("SIS");
-      }
-    }
-  }, [currentUser]);
 
   // Refresh reactive data from store changes
   const refreshStoreData = () => {
@@ -654,7 +644,6 @@ function AppShell() {
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onRefreshData={refreshStoreDataFromServer}
-                    activeSystem={activeSystem}
                     updateStore={updateStore}
                   />
                 )}
@@ -663,7 +652,6 @@ function AppShell() {
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onRefreshData={refreshStoreDataFromServer}
-                    activeSystem={activeSystem}
                     updateStore={updateStore}
                   />
                 )}
@@ -672,7 +660,6 @@ function AppShell() {
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onRefreshData={refreshStoreDataFromServer}
-                    activeSystem={activeSystem}
                   />
                 )}
               </React.Suspense>

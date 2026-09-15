@@ -98,9 +98,9 @@ export async function requestEnrollment(input: RequestEnrollmentInput): Promise<
       )).rows[0];
       registrationId = generateId("reg");
       await client.query(
-        `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-         VALUES ($1, $2, $3, $4, 'waitlisted', $5, $6, false)`,
-        [registrationId, input.studentId, section.id, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+        `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
+         VALUES ($1, $2, $3, 'waitlisted', $4, $5, false)`,
+        [registrationId, input.studentId, section.id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
       );
     }
 
@@ -179,9 +179,8 @@ export async function placeEnrollment(
        JOIN course_sections cs ON cs.id = cr.section_id
        WHERE cr.student_id = $1
          AND cs.course_id = $2
-         AND cr.semester_id = $3
          AND cr.status IN ('registered', 'waitlisted')`,
-      [enrollment.student_id, enrollment.course_id, section.semester_id]
+      [enrollment.student_id, enrollment.course_id]
     )).rows[0];
 
     if (!existingRegistration) {
@@ -190,10 +189,10 @@ export async function placeEnrollment(
         [enrollment.course_id]
       )).rows[0];
       registration = (await client.query(
-        `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-         VALUES ($1, $2, $3, $4, 'registered', $5, $6, false)
+        `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
+         VALUES ($1, $2, $3, 'registered', $4, $5, false)
          RETURNING *`,
-        [generateId("reg"), enrollment.student_id, sectionId, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+        [generateId("reg"), enrollment.student_id, sectionId, new Date().toISOString(), Number(creditsRow?.credits || 3)]
       )).rows[0];
     } else {
       registration = (await client.query(

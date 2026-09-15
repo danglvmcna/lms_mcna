@@ -35,16 +35,13 @@ import {
   LifeBuoy
 } from "lucide-react";
 import NotificationInbox from "./NotificationInbox";
-import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceRecord, AttendanceSession, TuitionFee, AcademicWarning } from "../types";
+import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceRecord, AttendanceSession } from "../types";
 import { AppStore } from "../store";
 import CourseCatalog from "./student/CourseCatalog";
 import MyLearningWorkspace from "./student/MyLearningWorkspace";
 import QuizConsole from "./student/QuizConsole";
 import AssignmentSubmit from "./student/AssignmentSubmit";
 import StudentAcademics from "./student/StudentAcademics";
-import ParentPanel from "./ParentPanel";
-import Timetable from "./Timetable";
-import UserGuide from "./UserGuide";
 import { generateId, escapeHTML } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
@@ -62,8 +59,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
 
   // Safeguard StudentProfile backfill so it never crashes
-  const studentProfiles = store.studentProfiles || [];
-  let myProfile = studentProfiles.find(p => p.userId === currentUser.id);
+  const studentProfiles = (store as any).studentProfiles || [];
+  let myProfile = studentProfiles.find((p: any) => p.userId === currentUser.id);
   if (!myProfile) {
     myProfile = {
       id: "profile_" + currentUser.id,
@@ -232,17 +229,11 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
 
   // Compute active variables
-  const semesters = store.semesters || [];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const activeSemesterId = semesters.find((s: any) => s.isCurrent)?.id ||
-    semesters.find((s: any) => s.startDate && s.endDate && todayStr >= String(s.startDate).slice(0, 10) && todayStr <= String(s.endDate).slice(0, 10))?.id ||
-    semesters[0]?.id ||
-    "";
-
+  const semesters = (store as any).semesters || [];
   const publishedCourses = store.courses.filter(c => {
     if (c.status !== "published") return false;
     const sections = (store.courseSections || []).filter(
-      (s: any) => s.courseId === c.id && s.semesterId === activeSemesterId
+      (s: any) => s.courseId === c.id
     );
     const validSections = sections.filter(s => s.schedule && s.schedule.length > 0);
     return validSections.length > 0;
@@ -250,7 +241,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
   // Timetable conflict calculations for catalog courses
   const studentRegisteredSections = (store.courseRegistrations || [])
-    .filter((r: any) => r.studentId === currentUser.id && r.semesterId === activeSemesterId && r.status === "registered")
+    .filter((r: any) => r.studentId === currentUser.id && r.status === "registered")
     .map((r: any) => (store.courseSections || []).find((sec: any) => sec.id === r.sectionId))
     .filter(Boolean);
 
@@ -296,7 +287,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
   const isCourseConflicting = (courseId: string): boolean => {
     const sections = (store.courseSections || []).filter(
-      (s: any) => s.courseId === courseId && s.semesterId === activeSemesterId && s.schedule && s.schedule.length > 0
+      (s: any) => s.courseId === courseId && s.schedule && s.schedule.length > 0
     );
     if (sections.length === 0) return false;
     return sections.every(s => isSectionConflicting(s));
@@ -863,31 +854,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         {/* Tab SIS 1: My Profile Section */}
         <StudentAcademics {...studentPanelProps} />
         <QuizConsole {...studentPanelProps} />
-
-        {activeSubTab === "student_guide" && (
-          <UserGuide
-            role="student"
-            activeSystem={activeSystem}
-            onClose={() => setActiveSubTab("catalog")}
-          />
-        )}
-
-        {activeSubTab === "student_timetable" && (
-          <Timetable
-            role="student"
-            currentUser={currentUser}
-            store={store}
-            onRefreshData={onRefreshData}
-          />
-        )}
-
-        {activeSubTab === "parent_view" && (
-          <ParentPanel 
-            currentUser={currentUser} 
-            onLogout={onLogout} 
-            onRefreshData={onRefreshData} 
-          />
-        )}
 
         </div>
       </div>

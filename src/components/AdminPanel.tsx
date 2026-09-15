@@ -35,15 +35,8 @@ import { useApiStore } from "../hooks/apiHooks";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
 
-// Import modular sub-components
 import AdminOrdersManager from "./admin/AdminOrdersManager";
-import StudentRegistry from "./StudentRegistry";
 import AttendanceManager from "./AttendanceManager";
-import TuitionManager from "./TuitionManager";
-import WarningAndReports from "./WarningAndReports";
-import Timetable from "./Timetable";
-import ClassPlacement from "./ClassPlacement";
-import UserGuide from "./UserGuide";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";
@@ -387,8 +380,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     let valB: any = b[sortField as keyof User];
 
     if (sortField === "studentCode" || sortField === "gpa") {
-      const profileA = store.studentProfiles?.find(p => p.userId === a.id);
-      const profileB = store.studentProfiles?.find(p => p.userId === b.id);
+      const profileA = (store as any).studentProfiles?.find((p: any) => p.userId === a.id);
+      const profileB = (store as any).studentProfiles?.find((p: any) => p.userId === b.id);
       if (sortField === "studentCode") {
         valA = profileA?.studentCode || "";
         valB = profileB?.studentCode || "";
@@ -561,81 +554,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             />
           )}
           
-          {/* STUDENTS GROUP (Student registry layout) */}
-          {activeSubTab === "students" && (
-            <StudentRegistry 
-              store={store} 
-              currentUser={currentUser} 
-              onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* ATTENDANCE GROUP */}
-          {activeSubTab === "attendance" && (
-            <AttendanceManager 
-              store={store} 
-              currentUser={currentUser} 
-              onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TUITION BILLINGS GROUP */}
-          {activeSubTab === "tuition" && (
-            <TuitionManager 
-              store={store} 
-              currentUser={currentUser} 
-              onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-           {/* TIMETABLE MANAGEMENT GROUP */}
-          {activeSubTab === "admin_timetable" && (
-            <Timetable
-              role="admin"
-              currentUser={currentUser}
-              store={store}
-              onRefreshData={onRefreshData}
-            />
-          )}
-
-          {/* TEACHER TIMETABLE DIRECT VIEW */}
-          {activeSubTab === "teacher_timetable" && (
-            <Timetable
-              role="admin"
-              currentUser={currentUser}
-              store={store}
-              onRefreshData={onRefreshData}
-              defaultLookupType="teacher"
-            />
-          )}
-
-          {/* CLASS PLACEMENT GROUP */}
-          {activeSubTab === "class_placement" && (
-            <ClassPlacement
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-            />
-          )}
-
           {/* COURSE & SECTION MANAGEMENT GROUP */}
           {activeSubTab === "course_section_mgmt" && (
             <CourseSectionManager
               store={store}
               currentUser={currentUser}
               onRefreshData={onRefreshData}
-            />
-          )}
-
-          {/* USER GUIDE GROUP */}
-          {activeSubTab === "admin_guide" && (
-            <UserGuide
-              role={currentUser.role}
-              activeSystem={activeSystem}
-              onClose={() => setActiveSubTab("overview")}
             />
           )}
 
@@ -797,7 +721,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {paginatedUsers.map(usr => {
-                        const profile = store.studentProfiles?.find(p => p.userId === usr.id);
+                        const profile = (store as any).studentProfiles?.find((p: any) => p.userId === usr.id);
                         return (
                           <tr key={usr.id} className="hover:bg-white/2 transition">
                             <td className="py-3 px-3 font-semibold text-white">{usr.name}</td>
@@ -878,26 +802,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             </div>
           )}
 
-          {/* SYSTEM ACADEMIC WARNINGS AND REPORTS STATS */}
-          {activeSubTab === "warnings" && (
-            <div className="space-y-6">
-              <div className="border-b border-white/5 pb-4">
-                <h4 className="text-base font-display font-semibold text-white">Quản lý Cảnh báo Học thuật & Thống kê</h4>
-                <p className="text-xs text-white/50">Xem và giải quyết các cảnh báo chuyên môn, GPA hoặc học phí chậm trong toàn hệ thống.</p>
-              </div>
-              <WarningAndReports 
-                store={store} 
-                currentUser={currentUser} 
-                onRefreshData={onRefreshData} 
-                triggerToast={triggerToast} 
-                onSelectStudentProfile={(userId) => {
-                  setRegistryLookupStudentId(userId);
-                  setActiveSubTab("students");
-                }}
-                defaultTab="warnings"
-              />
-            </div>
-          )}
+
 
           {/* SYSTEM SECURITY COMPLIANCE AUDIT LOGS */}
           {activeSubTab === "audit" && (

@@ -927,7 +927,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         const section = (store.courseSections || []).find(s => s.id === activeLearningSectionId);
         if (!section) return null;
         const course = store.courses.find(c => c.id === section.courseId);
-        const semester = store.semesters.find(s => s.id === section.semesterId);
         const teacher = store.users.find(u => u.id === section.teacherId);
         const registrations = (store.courseRegistrations || []).filter(r => r.sectionId === section.id && r.status === "registered");
         
@@ -972,10 +971,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                     <span className="text-white/50 text-[10px] block font-mono">{teacher?.email || ""}</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[10px] text-white/40 block">Học kỳ</span>
-                    <span className="font-bold text-white text-xs block">{semester?.name || "Không rõ học kỳ"}</span>
+                    <span className="text-[10px] text-white/40 block">Khai giảng</span>
+                    <span className="font-bold text-white text-xs block">{section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Đang cập nhật"}</span>
                     <span className="text-white/50 text-[10px] block font-mono">
-                      {semester?.startDate ? `${new Date(semester.startDate).toLocaleDateString()} - ${new Date(semester.endDate).toLocaleDateString()}` : ""}
+                      {section.numberOfSessions ? `${section.numberOfSessions} buổi học` : ""}
                     </span>
                   </div>
                   <div className="space-y-1 pt-2 border-t border-white/5 md:border-none">

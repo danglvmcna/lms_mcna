@@ -117,7 +117,7 @@ import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
-import { DbUserRow, toPublicUser, tuitionFeeFromRow, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow } from "./src/server/mappers";
+import { DbUserRow, toPublicUser, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow } from "./src/server/mappers";
 import { validateBody, schemas } from "./src/server/validation";
 import { seedAuthUsers, seedCoreLearningData } from "./src/server/seedCore";
 import { usersRepository } from "./src/server/repositories/users";
@@ -126,16 +126,9 @@ import { enrollmentsRepository } from "./src/server/repositories/enrollments";
 import { quizzesRepository } from "./src/server/repositories/quizzes";
 import { assignmentsRepository } from "./src/server/repositories/assignments";
 import { financeRepository } from "./src/server/repositories/finance";
-import { academicsRepository } from "./src/server/repositories/academics";
 import { auditRepository } from "./src/server/repositories/audit";
 import { limitStoreForRole, storeSnapshotFromDb, invalidateStoreCache } from "./src/server/repositories/storeSnapshot";
-import { advisorsRepository } from "./src/server/repositories/advisors";
-import { parentRepository } from "./src/server/repositories/parent";
 import { courseRegistrationsRepository } from "./src/server/repositories/courseRegistrations";
-import { gradeAppealsRepository } from "./src/server/repositories/gradeAppeals";
-import { leaveRequestsRepository } from "./src/server/repositories/leaveRequests";
-import { graduationRepository } from "./src/server/repositories/graduation";
-import { scholarshipsRepository } from "./src/server/repositories/scholarships";
 import { notificationsRepository } from "./src/server/repositories/notifications";
 import { notifyStudent, notifyRole } from "./src/server/notify";
 import { attendanceRepository } from "./src/server/repositories/attendance";
@@ -166,8 +159,9 @@ import { verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
-import { toGradePoint, toLetterGrade } from "./src/server/gpaCalculator";
 import { startScheduler } from "./src/server/scheduler";
+import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
+
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
 import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail } from "./src/server/emailProvisioning/emailWorker";
@@ -722,16 +716,6 @@ function requireRole(roles: Array<User["role"] | string>) {
   };
 }
 
-async function resolveLinkedStudent(req: AuthRequest, res: express.Response, next: express.NextFunction) {
-  try {
-    const linkedStudentId = await parentRepository.getLinkedStudent(pool, req.user!.id);
-    if (!linkedStudentId) return res.status(403).json({ error: "No linked student found for this parent account." });
-    req.linkedStudentId = linkedStudentId;
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
 
 async function audit(req: AuthRequest, action: string, target: string, detail: string) {
   if (!req.user) return;
@@ -995,18 +979,17 @@ async function validateCourseSectionScheduleConflicts(db: Queryable, section: Se
     }
   }
 
-  if (!section.teacherId || !section.semesterId || schedule.length === 0) return errors;
+  if (!section.teacherId || schedule.length === 0) return errors;
 
   const existingSections = (await db.query(
     `SELECT cs.*, c.title AS course_title, u.name AS teacher_name
      FROM course_sections cs
      LEFT JOIN courses c ON c.id = cs.course_id
      LEFT JOIN users u ON u.id = cs.teacher_id
-     WHERE cs.semester_id = $1
-       AND cs.status <> 'cancelled'
-       AND cs.id <> $2
-       AND (cs.teacher_id = $3 OR cs.schedule IS NOT NULL OR cs.schedule_json IS NOT NULL)`,
-    [section.semesterId, section.id || "", section.teacherId]
+     WHERE cs.status <> 'cancelled'
+       AND cs.id <> $1
+       AND (cs.teacher_id = $2 OR cs.schedule IS NOT NULL OR cs.schedule_json IS NOT NULL)`,
+    [section.id || "", section.teacherId]
   )).rows;
 
   for (const existing of existingSections) {
@@ -1087,15 +1070,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync structural tables (academic_years, semesters, departments, programs, program_courses)
-    if (store.programCourses !== undefined) {
-      const clientIds = (store.programCourses || []).map(x => x.id);
-      if (clientIds.length > 0) {
-        await client.query(`DELETE FROM program_courses WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
-      } else {
-        await client.query(`DELETE FROM program_courses`);
-      }
-    }
+    // Sync structural tables (departments, programs)
     if (store.programs !== undefined) {
       const clientIds = (store.programs || []).map(x => x.id);
       if (clientIds.length > 0) {
@@ -1110,95 +1085,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
         await client.query(`DELETE FROM departments WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
       } else {
         await client.query(`DELETE FROM departments`);
-      }
-    }
-    if (store.semesters !== undefined) {
-      const clientIds = (store.semesters || []).map(x => x.id);
-      if (clientIds.length > 0) {
-        await client.query(`DELETE FROM semesters WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
-      } else {
-        await client.query(`DELETE FROM semesters`);
-      }
-    }
-    if (store.academicYears !== undefined) {
-      const clientIds = (store.academicYears || []).map(x => x.id);
-      if (clientIds.length > 0) {
-        await client.query(`DELETE FROM academic_years WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
-      } else {
-        await client.query(`DELETE FROM academic_years`);
-      }
-    }
-    if (store.academicYears !== undefined) {
-      const dbRes = await client.query("SELECT id, name, start_date, end_date, is_current FROM academic_years");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientYears = store.academicYears || [];
-      for (const year of clientYears) {
-        const dbVal = dbMap.get(year.id);
-        const isDirty = !dbVal ||
-          dbVal.name !== year.name ||
-          dbVal.start_date !== year.startDate ||
-          dbVal.end_date !== year.endDate ||
-          Boolean(dbVal.is_current) !== Boolean(year.isCurrent);
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO academic_years (id, name, start_date, end_date, is_current)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO UPDATE SET
-               name = EXCLUDED.name,
-               start_date = EXCLUDED.start_date,
-               end_date = EXCLUDED.end_date,
-               is_current = EXCLUDED.is_current`,
-            [year.id, year.name, year.startDate, year.endDate, Boolean(year.isCurrent)]
-          );
-        }
-      }
-    }
-
-    if (store.semesters !== undefined) {
-      const dbRes = await client.query("SELECT id, academic_year_id, name, type, start_date, end_date, registration_open, registration_close, is_current FROM semesters");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientSemesters = store.semesters || [];
-      for (const sem of clientSemesters) {
-        const dbVal = dbMap.get(sem.id);
-        const isDirty = !dbVal ||
-          dbVal.academic_year_id !== (sem.academicYearId || null) ||
-          dbVal.name !== sem.name ||
-          dbVal.type !== (sem.type || null) ||
-          dbVal.start_date !== (sem.startDate || null) ||
-          dbVal.end_date !== (sem.endDate || null) ||
-          dbVal.registration_open !== (sem.registrationOpen || null) ||
-          dbVal.registration_close !== (sem.registrationClose || null) ||
-          Boolean(dbVal.is_current) !== Boolean(sem.isCurrent);
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO semesters (id, academic_year_id, name, type, start_date, end_date, registration_open, registration_close, is_current)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT (id) DO UPDATE SET
-               academic_year_id = EXCLUDED.academic_year_id,
-               name = EXCLUDED.name,
-               type = EXCLUDED.type,
-               start_date = EXCLUDED.start_date,
-               end_date = EXCLUDED.end_date,
-               registration_open = EXCLUDED.registration_open,
-               registration_close = EXCLUDED.registration_close,
-               is_current = EXCLUDED.is_current`,
-            [
-              sem.id,
-              sem.academicYearId || null,
-              sem.name,
-              sem.type || null,
-              sem.startDate || null,
-              sem.endDate || null,
-              sem.registrationOpen || null,
-              sem.registrationClose || null,
-              Boolean(sem.isCurrent)
-            ]
-          );
-        }
       }
     }
 
@@ -1270,43 +1156,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
               prog.type || "degree",
               Number(prog.totalCredits) || 0,
               prog.description || null
-            ]
-          );
-        }
-      }
-    }
-
-    if (store.programCourses !== undefined) {
-      const dbRes = await client.query("SELECT id, program_id, course_id, credits, is_required, semester FROM program_courses");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientProgCourses = store.programCourses || [];
-      for (const pc of clientProgCourses) {
-        const dbVal = dbMap.get(pc.id);
-        const isDirty = !dbVal ||
-          dbVal.program_id !== pc.programId ||
-          dbVal.course_id !== pc.courseId ||
-          Number(dbVal.credits) !== (Number(pc.credits) || 0) ||
-          Boolean(dbVal.is_required) !== Boolean(pc.isRequired) ||
-          Number(dbVal.semester) !== (Number(pc.semester) || 1);
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO program_courses (id, program_id, course_id, credits, is_required, semester)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (id) DO UPDATE SET
-               program_id = EXCLUDED.program_id,
-               course_id = EXCLUDED.course_id,
-               credits = EXCLUDED.credits,
-               is_required = EXCLUDED.is_required,
-               semester = EXCLUDED.semester`,
-            [
-              pc.id,
-              pc.programId,
-              pc.courseId,
-              Number(pc.credits) || 0,
-              Boolean(pc.isRequired),
-              Number(pc.semester) || 1
             ]
           );
         }
@@ -1480,7 +1329,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
         const isDirty = !dbVal ||
           dbVal.course_id !== sec.courseId ||
-          dbVal.semester_id !== sec.semesterId ||
           dbVal.teacher_id !== sec.teacherId ||
           dbVal.section_code !== sec.sectionCode ||
           Number(dbVal.max_students) !== (Number(sec.maxStudents) || 30) ||
@@ -1493,7 +1341,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
           await upsertCourseSection(client, {
             id: sec.id,
             courseId: sec.courseId,
-            semesterId: sec.semesterId,
             teacherId: sec.teacherId,
             sectionCode: sec.sectionCode,
             maxStudents: Number(sec.maxStudents) || 30,
@@ -1893,10 +1740,7 @@ app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "s
 }));
 app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
 app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
-app.get("/api/dashboard/finance", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (_req, res) => res.json(await financeRepository.getDashboard(pool))));
-app.get("/api/dashboard/academic", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => res.json({ ...dashboardFromStore(await storeSnapshotFromDb(pool), req.user!), warnings: await academicsRepository.listWarnings(pool) })));
-app.get("/api/dashboard/advisor", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getDashboard(pool, req.user!.id))));
-app.get("/api/dashboard/parent", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getDashboard(pool, req.linkedStudentId!))));
+
 
 const PUBLIC_COURSE_SELECT = `
   SELECT c.*, u.name AS teacher_name,
@@ -3317,56 +3161,7 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "s
   res.json(user);
 }));
 
-app.get("/api/academics/warnings", requireAuth, asyncHandler(async (req, res) => {
-  const requestedStudentId = typeof req.query.studentId === "string" ? req.query.studentId : undefined;
-  const result = await academicsRepository.listWarningsForUser(pool, req.user!, requestedStudentId);
-  if ("error" in result) return res.status(result.status).json({ error: result.error });
-  res.json(result.warnings);
-}));
-app.post("/api/academics/warnings", requireAuth, requireRole(["admin", "teacher", "super_admin"]), validateBody(schemas.createWarning), asyncHandler(async (req, res) => {
-  const warning = await academicsRepository.createWarning(pool, req.body);
-  await audit(req, "create_academic_warning", warning.studentId, warning.message);
-  res.status(201).json(warning);
-}));
-app.post("/api/academics/warnings/:id/resolve", requireAuth, requireRole(["admin", "teacher", "super_admin"]), asyncHandler(async (req, res) => {
-  const warning = await academicsRepository.resolveWarning(pool, req.params.id);
-  if (!warning) return res.status(404).json({ error: "Warning not found." });
-  await audit(req, "resolve_academic_warning", warning.id, warning.studentId);
-  res.json(warning);
-}));
-app.get("/api/advisor/students", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getAssignments(pool, req.user!.id))));
-app.get("/api/advisor/at-risk", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getAtRiskStudents(pool, req.user!.id))));
-app.get("/api/advisor/notes/:studentId", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getNotes(pool, req.params.studentId))));
-app.post("/api/advisor/notes", requireAuth, requireRole(["teacher"]), validateBody(schemas.advisorNote), asyncHandler(async (req, res) => {
-  const note = await advisorsRepository.createNote(pool, { advisorId: req.user!.id, ...req.body });
-  await audit(req, "add_advisor_note", note.student_id, note.type);
-  res.status(201).json(note);
-}));
 
-app.patch("/api/advisor/student-profile/:studentId", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateStudentNotes), asyncHandler(async (req, res) => {
-  const { notes } = req.body;
-  await pool.query(
-    "UPDATE student_profiles SET notes = $1 WHERE user_id = $2",
-    [notes, req.params.studentId]
-  );
-  await audit(req, "update_student_notes", req.params.studentId, "Advisor updated student academic plan/notes.");
-  res.json({ ok: true, message: "Cập nhật đề xuất lộ trình thành công!" });
-}));
-app.post("/api/advisor/assignments", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.advisorAssignment), asyncHandler(async (req, res) => {
-  const assignment = await advisorsRepository.assignStudent(pool, req.body.advisorId, req.body.studentId, req.body.semesterId);
-  res.status(assignment ? 201 : 409).json(assignment || { error: "Advisor assignment already exists." });
-}));
-app.delete("/api/advisor/assignments/:id", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
-  const assignment = await advisorsRepository.unassignStudent(pool, req.params.id);
-  if (!assignment) return res.status(404).json({ error: "Advisor assignment not found." });
-  res.json(assignment);
-}));
-
-app.get("/api/parent/grades", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getGrades(pool, req.linkedStudentId!))));
-app.get("/api/parent/attendance", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getAttendance(pool, req.linkedStudentId!))));
-app.get("/api/parent/tuition", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getTuition(pool, req.linkedStudentId!))));
-app.get("/api/parent/warnings", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getWarnings(pool, req.linkedStudentId!))));
-app.get("/api/parent/notifications", requireAuth, requireRole(["parent"]), asyncHandler(async (req, res) => res.json(await parentRepository.getNotifications(pool, req.user!.id))));
 
 app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => res.json(await notificationsRepository.listForUser(pool, req.user!.id, req.query.unreadOnly === "true"))));
 // IMPORTANT: /read-all must be registered BEFORE /:id/read to avoid Express matching "read-all" as an id param
@@ -3537,153 +3332,7 @@ app.patch("/api/course-registrations/:id/approve", requireAuth, requireRole(["ma
   }
 }));
 
-app.post("/api/grade-appeals", requireAuth, requireRole(["student"]), validateBody(schemas.gradeAppeal), asyncHandler(async (req, res) => {
-  const result = await gradeAppealsRepository.create(pool, req.user!.id, req.body);
-  if ("error" in result) return res.status(result.status).json({ error: result.error });
-  res.status(201).json(result.row);
-}));
-app.get("/api/grade-appeals", requireAuth, requireRole(["student", "teacher", "manager", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await gradeAppealsRepository.list(pool, req.user!))));
-app.patch("/api/grade-appeals/:id/review", requireAuth, requireRole(["teacher"]), validateBody(schemas.gradeAppealReview), asyncHandler(async (req, res) => {
-  const appeal = await gradeAppealsRepository.review(pool, req.params.id, req.user!.id, req.body.revisedGrade);
-  if (!appeal) return res.status(404).json({ error: "Grade appeal not found." });
-  res.json(appeal);
-}));
-app.patch("/api/grade-appeals/:id/resolve", requireAuth, requireRole(["admin"]), validateBody(schemas.gradeAppealResolve), asyncHandler(async (req, res) => {
-  const appeal = await gradeAppealsRepository.resolve(pool, req.params.id, req.user!.id, req.body.status, req.body.resolutionNote);
-  if (!appeal) return res.status(404).json({ error: "Grade appeal not found." });
-  res.json(appeal);
-}));
-app.patch("/api/grade-appeals/:id/escalate", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
-  const appeal = await gradeAppealsRepository.escalate(pool, req.params.id, req.user!.id);
-  if (!appeal) return res.status(404).json({ error: "Rejected appeal not found or already escalated." });
-  res.json(appeal);
-}));
 
-app.post("/api/leave-requests", requireAuth, requireRole(["student"]), validateBody(schemas.leaveRequest), asyncHandler(async (req, res) => res.status(201).json(await leaveRequestsRepository.create(pool, req.user!.id, req.body))));
-app.get("/api/leave-requests", requireAuth, requireRole(["student", "manager", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await leaveRequestsRepository.list(pool, req.user!))));
-app.patch("/api/leave-requests/:id/approve", requireAuth, requireRole(["admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
-  const request = await leaveRequestsRepository.approve(pool, req.params.id, req.user!.id, req.body.reviewNote);
-  if (!request) return res.status(404).json({ error: "Leave request not found." });
-  res.json(request);
-}));
-app.patch("/api/leave-requests/:id/reject", requireAuth, requireRole(["admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
-  const request = await leaveRequestsRepository.reject(pool, req.params.id, req.user!.id, req.body.reviewNote);
-  if (!request) return res.status(404).json({ error: "Leave request not found." });
-  res.json(request);
-}));
-
-app.post("/api/graduation-applications", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
-  const result = await graduationRepository.create(pool, req.user!.id);
-  if ("error" in result) return res.status(result.status).json({ error: result.error });
-  res.status(201).json(result.row);
-}));
-app.get("/api/graduation-applications", requireAuth, requireRole(["student", "manager", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await graduationRepository.list(pool, req.user!))));
-app.patch("/api/graduation-applications/:id/approve", requireAuth, requireRole(["admin"]), validateBody(schemas.graduationApplicationReview), asyncHandler(async (req, res) => {
-  const application = await graduationRepository.approve(pool, req.params.id, req.user!.id, req.body.note);
-  if (!application) return res.status(404).json({ error: "Graduation application not found." });
-  if ("error" in application) return res.status(application.status).json({ error: application.error });
-  res.json(application);
-}));
-app.patch("/api/graduation-applications/:id/reject", requireAuth, requireRole(["admin"]), validateBody(schemas.graduationApplicationReview), asyncHandler(async (req, res) => {
-  const application = await graduationRepository.reject(pool, req.params.id, req.user!.id, req.body.note);
-  if (!application) return res.status(404).json({ error: "Graduation application not found." });
-  res.json(application);
-}));
-
-app.get("/api/scholarships", requireAuth, asyncHandler(async (_req, res) => res.json(await scholarshipsRepository.list(pool))));
-app.post("/api/scholarships", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.scholarship), asyncHandler(async (req, res) => res.status(201).json(await scholarshipsRepository.create(pool, req.body))));
-app.get("/api/scholarship-applications", requireAuth, requireRole(["student", "teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await scholarshipsRepository.listApplications(pool, req.user!))));
-app.post("/api/scholarship-applications", requireAuth, requireRole(["student"]), validateBody(schemas.scholarshipApplication), asyncHandler(async (req, res) => {
-  const result = await scholarshipsRepository.apply(pool, req.user!.id, req.body);
-  if ("error" in result) return res.status(result.status).json({ error: result.error });
-  res.status(201).json(result.row);
-}));
-app.patch("/api/scholarship-applications/:id/approve", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
-  const application = await scholarshipsRepository.approve(pool, req.params.id, req.user!.id, req.body.reviewNote);
-  if (!application) return res.status(404).json({ error: "Scholarship application not found." });
-  res.json(application);
-}));
-app.patch("/api/scholarship-applications/:id/reject", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
-  const application = await scholarshipsRepository.reject(pool, req.params.id, req.user!.id, req.body.reviewNote);
-  if (!application) return res.status(404).json({ error: "Scholarship application not found." });
-  res.json(application);
-}));
-
-app.get("/api/academic-warnings", requireAuth, asyncHandler(async (req, res) => {
-  const requestedStudentId = typeof req.query.studentId === "string" ? req.query.studentId : undefined;
-  const result = await academicsRepository.listWarningsForUser(pool, req.user!, requestedStudentId);
-  if ("error" in result) return res.status(result.status).json({ error: result.error });
-  res.json(result.warnings);
-}));
-app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const warning = await academicsRepository.resolveWarning(pool, req.params.id, req.user!.id);
-  if (!warning) return res.status(404).json({ error: "Warning not found." });
-  res.json(warning);
-}));
-
-app.post("/api/tuition/pay", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
-  const ownerStudentId = req.user!.role === "student" ? req.user!.id : undefined;
-  const client = await pool.connect();
-  let result;
-  try {
-    await client.query("BEGIN");
-    result = await financeRepository.payTuition(client, req.body.feeId, req.body.paidAmount, ownerStudentId);
-    if (!result) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Tuition fee not found." }); }
-    await client.query("COMMIT");
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
-  await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);
-  res.json(result);
-}));
-
-app.post("/api/tuition/confirm-transfer", requireAuth, requireRole(["student"]), validateBody(schemas.confirmTransfer), asyncHandler(async (req, res) => {
-  const { feeId, amount } = req.body;
-  const client = await pool.connect();
-  let txId = "";
-  try {
-  await client.query("BEGIN");
-  const fee = (await client.query(
-    "SELECT id, student_id, amount, paid_amount FROM tuition_fees WHERE id = $1 FOR UPDATE",
-    [feeId]
-  )).rows[0];
-  if (!fee || fee.student_id !== req.user!.id) {
-    await client.query("ROLLBACK");
-    return res.status(404).json({ error: "Tuition fee not found." });
-  }
-  const remaining = Math.max(0, Number(fee.amount) - Number(fee.paid_amount || 0));
-  const tuitionNote = `tuition_fee_pay:${feeId}`;
-  const pendingAmount = Number((await client.query(
-    `SELECT COALESCE(SUM(amount), 0) AS total
-     FROM transactions
-     WHERE student_id = $1
-       AND status = 'pending'
-       AND (notes = $2 OR notes LIKE $2 || ' |%')`,
-    [req.user!.id, tuitionNote]
-  )).rows[0]?.total || 0);
-  if (remaining <= 0 || Number(amount) + pendingAmount > remaining) {
-    await client.query("ROLLBACK");
-    return res.status(400).json({ error: "Invalid transfer amount." });
-  }
-  txId = generateId("tx");
-  await client.query(
-    `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, notes)
-     VALUES ($1, $2, NULL, $3, 'pending', 'Chuyển khoản Ngân hàng (QR)', $4, $5)`,
-    [txId, req.user!.id, Number(amount), new Date().toISOString(), tuitionNote]
-  );
-  await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-  await audit(req, "request_tuition_confirm", feeId, `Pending bank transfer of ${amount} for tuition.`);
-  res.json({ ok: true, transactionId: txId });
-}));
 
 const reviewTransactionHandler = asyncHandler(async (req, res) => {
   const client = await pool.connect();
@@ -3720,60 +3369,7 @@ const reviewTransactionHandler = asyncHandler(async (req, res) => {
 app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 app.patch("/api/payments/transactions/:id/review", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 
-const bulkIssueTuitionHandler = asyncHandler(async (req, res) => {
-  const { semesterId, amount, dueDate } = req.body;
-  const dueDateValue = dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const profiles = (await client.query(
-      "SELECT user_id FROM student_profiles WHERE status = 'active'"
-    )).rows;
-    const created: any[] = [];
-    for (const profile of profiles) {
-      const exists = (await client.query(
-        "SELECT id FROM tuition_fees WHERE student_id = $1 AND semester_id = $2",
-        [profile.user_id, semesterId]
-      )).rows[0];
-      if (exists) continue;
-      const id = generateId("tf");
-      const row = (await client.query(
-        `INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount)
-         VALUES ($1,$2,$3,$4,$5,'unpaid',0)
-         RETURNING *`,
-        [id, profile.user_id, semesterId, Number(amount), dueDateValue]
-      )).rows[0];
-      await notificationsRepository.create(client, {
-        userId: profile.user_id,
-        type: "info",
-        message: `Thông báo nộp học phí: học kỳ ${semesterId}, số tiền ${Number(amount).toLocaleString()} VND.`,
-        relatedEntityType: "tuition_fee",
-        relatedEntityId: id
-      });
-      created.push(row);
-    }
-    await client.query("COMMIT");
-    await audit(req, "bulk_issue_tuition", semesterId, `Issued ${created.length} tuition fees.`);
-    res.status(201).json({ createdCount: created.length, fees: created.map(tuitionFeeFromRow) });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-});
 
-app.post("/api/finance/tuition/bulk-issue", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.bulkIssueTuition), bulkIssueTuitionHandler);
-app.post("/api/payments/tuition/bulk-issue", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.bulkIssueTuition), bulkIssueTuitionHandler);
-
-const scanOverdueHandler = asyncHandler(async (req, res) => {
-  const overdue = await financeRepository.checkOverdueFees(pool);
-  await audit(req, "scan_overdue_tuition", "tuition_fees", `Found ${overdue.length} overdue fees.`);
-  res.json({ overdueCount: overdue.length, fees: overdue });
-});
-
-app.post("/api/finance/tuition/scan-overdue", requireAuth, requireRole(["manager", "admin", "super_admin"]), scanOverdueHandler);
-app.post("/api/payments/tuition/scan-overdue", requireAuth, requireRole(["manager", "admin", "super_admin"]), scanOverdueHandler);
 
 const paymentWebhookHandler = asyncHandler(async (req, res) => {
   const signature = req.header("X-Payment-Signature");

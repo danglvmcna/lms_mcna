@@ -436,7 +436,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     guardianName: editParent || undefined,
                     guardianPhone: editParentPhone || undefined
                   }).then(() => {
-                    storeData.studentProfiles = (storeData.studentProfiles || []).map(p => {
+                    (storeData as any).studentProfiles = ((storeData as any).studentProfiles || []).map((p: any) => {
                       if (p.userId === currentUser.id) {
                         AppStore.log(currentUser.id, "update_profile", p.studentCode, "Cập nhật hồ sơ thông tin trực tuyến.");
                         return {

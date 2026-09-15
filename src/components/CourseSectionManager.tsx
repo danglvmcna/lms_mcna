@@ -82,7 +82,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
   // Section Form States
   const [sectionCourseId, setSectionCourseId] = useState("");
-  const [sectionSemesterId, setSectionSemesterId] = useState("");
   const [sectionTeacherId, setSectionTeacherId] = useState("");
   const [sectionCode, setSectionCode] = useState("");
   const [sectionMaxStudents, setSectionMaxStudents] = useState(50);
@@ -127,7 +126,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
   // Get teacher lists
   const teachers = (store.users || []).filter((u: any) => u.role === "teacher");
-  const semesters = store.semesters || [];
 
   // Sync section course ID if a course is already selected
   useEffect(() => {
@@ -169,7 +167,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const handleOpenCreateSection = () => {
     setSectionModalMode("create");
     setEditingSectionId(null);
-    setSectionSemesterId(semesters.find((s: any) => s.isCurrent)?.id || semesters[0]?.id || "");
     setSectionTeacherId(teachers[0]?.id || "");
     setSectionCode("");
     setSectionMaxStudents(50);
@@ -187,7 +184,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setSectionModalMode("edit");
     setEditingSectionId(sec.id);
     setSectionCourseId(sec.courseId);
-    setSectionSemesterId(sec.semesterId);
     setSectionTeacherId(sec.teacherId);
     setSectionCode(sec.sectionCode);
     setSectionMaxStudents(sec.maxStudents);
@@ -205,12 +201,11 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const checkConflicts = (
     sectionId: string | null,
     teacherId: string,
-    slots: Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>,
-    semesterId: string
+    slots: Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>
   ): string[] => {
     const sections = store.courseSections || [];
     const activeSections = sections.filter(
-      (s: any) => s.id !== sectionId && s.semesterId === semesterId && s.status !== "cancelled"
+      (s: any) => s.id !== sectionId && s.status !== "cancelled"
     );
 
     const conflicts: string[] = [];
@@ -311,7 +306,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       return;
     }
 
-    const conflicts = checkConflicts(editingSectionId, sectionTeacherId, sectionSlots, sectionSemesterId);
+    const conflicts = checkConflicts(editingSectionId, sectionTeacherId, sectionSlots);
     if (conflicts.length > 0) {
       setFormConflicts(conflicts);
       showToast("⚠️ Trùng lịch! Vui lòng kiểm tra lại thời khóa biểu.");
@@ -320,7 +315,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
     const payload = {
       courseId: sectionCourseId,
-      semesterId: sectionSemesterId,
       teacherId: sectionTeacherId || undefined,
       sectionCode: sectionCode.trim().toUpperCase(),
       maxStudents: Number(sectionMaxStudents),
@@ -629,7 +623,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 <tr>
                   <th className="px-5 py-3.5">Mã Lớp</th>
                   <th className="px-5 py-3.5">Khóa học</th>
-                  <th className="px-5 py-3.5">Tháng</th>
                   <th className="px-5 py-3.5">Giảng viên</th>
                   <th className="px-5 py-3.5">Sĩ số</th>
                   <th className="px-5 py-3.5">Ngày khai giảng</th>
@@ -646,7 +639,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   .map((sec: CourseSection) => {
                     const course = (store.courses || []).find((c: any) => c.id === sec.courseId) || { title: "Không rõ" };
                     const teacherName = teachers.find(u => u.id === sec.teacherId)?.name || "Chưa phân công";
-                    const semesterName = semesters.find((s: any) => s.id === sec.semesterId)?.name || "Chưa chọn";
                     const currentCount = getSectionRegisteredCount(sec.id);
 
                     return (
@@ -664,7 +656,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           </button>
                         </td>
                         <td className="px-5 py-4 font-semibold">{course.title}</td>
-                        <td className="px-5 py-4">{semesterName}</td>
                         <td className="px-5 py-4">{teacherName}</td>
                         <td className="px-5 py-4 font-mono">
                           <button
@@ -918,7 +909,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         .filter((sec: CourseSection) => sec.courseId === editingCourseId)
                         .map((sec: CourseSection) => {
                           const teacherName = teachers.find(u => u.id === sec.teacherId)?.name || "Chưa phân công";
-                          const semesterName = semesters.find((s: any) => s.id === sec.semesterId)?.name || "Chưa chọn";
                           const currentCount = getSectionRegisteredCount(sec.id);
 
                           return (
@@ -926,7 +916,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               <div className="flex justify-between items-start">
                                 <div>
                                   <span className="font-mono font-bold text-indigo-300 text-xs block">{sec.sectionCode}</span>
-                                  <span className="text-[10px] text-white/40 font-sans">{semesterName} | Sĩ số: {currentCount}/{sec.maxStudents}</span>
+                                  <span className="text-[10px] text-white/40 font-sans">Sĩ số: {currentCount}/{sec.maxStudents}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <button
@@ -1047,32 +1037,16 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Mã Lớp học phần *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="ví dụ: CS101-01"
-                      value={sectionCode}
-                      onChange={(e) => setSectionCode(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Tháng áp dụng *</label>
-                    <select
-                      required
-                      value={sectionSemesterId}
-                      onChange={(e) => setSectionSemesterId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
-                    >
-                      {semesters.map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.name} {s.isCurrent ? "(Hiện tại)" : ""}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-white/70">Mã Lớp học *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ví dụ: AI01-01"
+                    value={sectionCode}
+                    onChange={(e) => setSectionCode(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1502,8 +1476,6 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 </h3>
                 <p className="text-xs text-white/50 mt-1">
                   Môn học: <strong className="text-white font-semibold">{(store.courses || []).find((c: any) => c.id === selectedSectionForStudents.courseId)?.title || "Không rõ"}</strong>
-                  <span className="mx-2">|</span>
-                  Tháng/Học kỳ: <strong className="text-white font-semibold">{(store.semesters || []).find((s: any) => s.id === selectedSectionForStudents.semesterId)?.name || "Không rõ"}</strong>
                 </p>
               </div>
 

@@ -21,9 +21,9 @@ const schedulesCanOverlap = (targetSlot: any, existingSlot: any): boolean => {
 export const sectionsRepository = {
   async createSection(db: Queryable, section: CourseSection): Promise<CourseSection> {
     await db.query(
-      `INSERT INTO course_sections (id, course_id, semester_id, teacher_id, section_code, max_students, schedule, status, opening_date, number_of_sessions, meeting_url, group_chat_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12)`,
-      [section.id, section.courseId, section.semesterId, section.teacherId, section.sectionCode, section.maxStudents, JSON.stringify(section.schedule), section.status, section.openingDate || null, section.numberOfSessions || null, section.meetingUrl || null, section.groupChatUrl || null]
+      `INSERT INTO course_sections (id, course_id, teacher_id, section_code, max_students, schedule, status, opening_date, number_of_sessions, meeting_url, group_chat_url)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11)`,
+      [section.id, section.courseId, section.teacherId, section.sectionCode, section.maxStudents, JSON.stringify(section.schedule), section.status, section.openingDate || null, section.numberOfSessions || null, section.meetingUrl || null, section.groupChatUrl || null]
     );
     return section;
   },
@@ -37,9 +37,9 @@ export const sectionsRepository = {
 
   async registerToSection(db: Queryable, reg: CourseRegistration): Promise<CourseRegistration> {
     await db.query(
-      `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, dropped_at, grade, letter_grade, grade_point, credits, is_retake)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [reg.id, reg.studentId, reg.sectionId, reg.semesterId, reg.status, reg.registeredAt, reg.droppedAt || null, reg.grade || null, reg.letterGrade || null, reg.gradePoint ?? null, reg.credits, reg.isRetake || false]
+      `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, dropped_at, grade, letter_grade, grade_point, credits, is_retake)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [reg.id, reg.studentId, reg.sectionId, reg.status, reg.registeredAt, reg.droppedAt || null, reg.grade || null, reg.letterGrade || null, reg.gradePoint ?? null, reg.credits, reg.isRetake || false]
     );
     return reg;
   },
@@ -51,17 +51,13 @@ export const sectionsRepository = {
     const targetRow = targetRes.rows[0];
     const targetSchedule = parseSchedule(targetRow);
 
-    // 2. Get schedules of student's already registered sections in same semester
-    const secRes = await db.query("SELECT semester_id FROM course_sections WHERE id = $1", [sectionId]);
-    const semId = secRes.rows[0]?.semester_id;
-    if (!semId) return false;
-
+    // 2. Get schedules of student's already registered sections
     const currentRegs = await db.query(
       `SELECT cs.* 
        FROM course_registrations cr
        JOIN course_sections cs ON cr.section_id = cs.id
-       WHERE cr.student_id = $1 AND cr.semester_id = $2 AND cr.status NOT IN ('dropped', 'waitlisted', 'withdrawn')`,
-      [studentId, semId]
+       WHERE cr.student_id = $1 AND cr.status NOT IN ('dropped', 'waitlisted', 'withdrawn')`,
+      [studentId]
     );
 
     const existingSchedules = currentRegs.rows.flatMap(r => {

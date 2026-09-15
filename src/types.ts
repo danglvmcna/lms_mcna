@@ -190,25 +190,6 @@ export interface Transaction {
   notes?: string;
 }
 
-export interface AcademicYear {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  isCurrent: boolean;
-}
-
-export interface Semester {
-  id: string;
-  academicYearId: string;
-  name: string;
-  type: "fall" | "spring" | "summer";
-  startDate: string;
-  endDate: string;
-  registrationOpen: string;
-  registrationClose: string;
-  isCurrent?: boolean;
-}
 
 export interface Department {
   id: string;
@@ -228,45 +209,11 @@ export interface Program {
   description: string;
 }
 
-export interface ProgramCourse {
-  id: string;
-  programId: string;
-  courseId: string;
-  credits: number;
-  isRequired: boolean;
-  semester: number;
-}
-
-export interface StudentProfile {
-  id: string;
-  userId: string;
-  studentCode: string;
-  programId: string;
-  departmentId: string;
-  academicYear: number;
-  enrollmentDate: string;
-  expectedGraduation: string;
-  status: "active" | "on-leave" | "suspended" | "graduated" | "withdrawn";
-  gpa: number;
-  totalCreditsEarned: number;
-  address?: string;
-  phone?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  guardianName?: string;
-  guardianPhone?: string;
-  guardianEmail?: string;
-  notes?: string;
-  feeHold?: boolean;
-  academicProbation?: boolean;
-  className?: string;
-}
 
 export interface AttendanceSession {
   id: string;
   courseId: string;
   sectionId?: string;
-  semesterId: string;
   teacherId: string;
   date: string;
   topic: string;
@@ -301,47 +248,7 @@ export interface AttendanceRecord {
   note?: string;
 }
 
-export interface TuitionFee {
-  id: string;
-  studentId: string;
-  semesterId: string;
-  amount: number;
-  dueDate: string;
-  status: "unpaid" | "partial" | "paid";
-  paidAmount: number;
-  paidAt?: string;
-  receiptCode?: string;
-}
 
-export interface AcademicWarning {
-  id: string;
-  studentId: string;
-  type: "low_gpa" | "low_attendance" | "unpaid_fee" | "exam_ban" | "overdue_assignment" | "low-gpa" | "attendance" | "unpaid-fee" | "overdue-assignment";
-  courseId?: string;
-  message: string;
-  isResolved: boolean;
-  resolvedBy?: string;
-  resolvedAt?: string;
-  createdAt: string;
-}
-
-export interface OfficialTranscriptEntry {
-  courseId: string;
-  courseName: string;
-  credits: number;
-  grade: number;
-  letterGrade: "A" | "B" | "C" | "D" | "F";
-  semesterId: string;
-}
-
-export interface OfficialTranscript {
-  id: string;
-  studentId: string;
-  entries: OfficialTranscriptEntry[];
-  cumulativeGpa: number;
-  totalCredits: number;
-  generatedAt: string;
-}
 
 export interface AdvisorNote {
   id: string;
@@ -356,7 +263,6 @@ export interface AdvisorNote {
 export interface CourseSection {
   id: string;
   courseId: string;
-  semesterId: string;
   teacherId: string;
   sectionCode: string;          // e.g. "CS101-01"
   maxStudents: number;          // capacity cap
@@ -404,21 +310,11 @@ export interface PublicCourseDetail {
   lessons?: Array<{ id: string; title: string; duration: string; order: number }>;
 }
 
-export interface RegistrationPeriod {
-  id: string;
-  semesterId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  allowedYears: number[];   // which year-of-study can register
-  isOpen: boolean;
-}
 
 export interface CourseRegistration {
   id: string;
   studentId: string;
   sectionId: string;
-  semesterId: string;
   status: "registered" | "waitlisted" | "dropped" | "withdrawn" | "completed" | "failed";
   registeredAt: string;
   droppedAt?: string;
@@ -431,72 +327,6 @@ export interface CourseRegistration {
   gradePostedAt?: string;
 }
 
-export interface Scholarship {
-  id: string;
-  name: string;
-  type: "full" | "partial" | "merit" | "need-based";
-  amount?: number;                 // fixed amount OR
-  discountPercent?: number;        // percentage off tuition
-  semesterId: string;
-  conditions: string;      // description of eligibility
-}
-
-export interface ScholarshipApplication {
-  id: string;
-  studentId: string;
-  scholarshipId: string;
-  semesterId: string;
-  status: "pending" | "approved" | "rejected";
-  appliedAt: string;
-  reviewedBy?: string;
-  reviewNote?: string;
-}
-
-export interface GradeAppeal {
-  id: string;
-  studentId: string;
-  courseRegistrationId: string;
-  reason: string;
-  status: "pending" | "under_review" | "approved" | "rejected";
-  originalGrade: number;
-  revisedGrade?: number;
-  submittedAt: string;
-  resolvedAt?: string;
-  resolvedBy?: string;
-  resolutionNote?: string;
-}
-
-export interface AdvisorAssignment {
-  id: string;
-  advisorId: string;
-  studentId: string;
-  semesterId: string;
-  assignedAt: string;
-}
-
-export interface LeaveRequest {
-  id: string;
-  studentId: string;
-  type: "medical" | "personal" | "financial";
-  semesterId: string;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
-  requestedAt: string;
-  reviewedBy?: string;
-  reviewNote?: string;
-  resumeSemesterId: string;        // semester they plan to return
-}
-
-export interface GraduationApplication {
-  id: string;
-  studentId: string;
-  status: "pending" | "eligible" | "approved" | "rejected";
-  appliedAt: string;
-  reviewedBy?: string;
-  totalCreditsAtApplication: number;
-  gpaAtApplication: number;
-  note?: string;
-}
 
 export interface SystemEvent {
   id: string;
@@ -533,28 +363,14 @@ export interface LMSDataStore {
   forumPosts: ForumPost[];
   auditLogs: AuditLog[];
   transactions: Transaction[];
-  academicYears: AcademicYear[];
-  semesters: Semester[];
   departments: Department[];
   programs: Program[];
-  programCourses: ProgramCourse[];
-  studentProfiles: StudentProfile[];
   attendanceSessions: AttendanceSession[];
   sessionMaterials?: SessionMaterial[];
   attendanceRecords: AttendanceRecord[];
-  tuitionFees: TuitionFee[];
-  academicWarnings: AcademicWarning[];
-  officialTranscripts: OfficialTranscript[];
   advisorNotes: AdvisorNote[];
   courseSections?: CourseSection[];
-  registrationPeriods?: RegistrationPeriod[];
   courseRegistrations?: CourseRegistration[];
-  scholarships?: Scholarship[];
-  scholarshipApplications?: ScholarshipApplication[];
-  gradeAppeals?: GradeAppeal[];
-  advisorAssignments?: AdvisorAssignment[];
-  leaveRequests?: LeaveRequest[];
-  graduationApplications?: GraduationApplication[];
   systemEvents?: SystemEvent[];
   teacherAttendance?: TeacherAttendance[];
 }

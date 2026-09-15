@@ -10,14 +10,7 @@ import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
 
 const DAYS_OF_WEEK = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
 
-const resolveCurrentSemesterId = (store: any) => {
-  const semesters = store?.semesters || [];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  return semesters.find((s: any) => s.isCurrent)?.id ||
-    semesters.find((s: any) => s.startDate && s.endDate && todayStr >= String(s.startDate).slice(0, 10) && todayStr <= String(s.endDate).slice(0, 10))?.id ||
-    semesters[0]?.id ||
-    "";
-};
+
 
 
 interface ComponentProps {
@@ -230,7 +223,6 @@ export default function CourseBuilder(props: ComponentProps) {
   };
 
   // Form states
-  const [formSemesterId, setFormSemesterId] = React.useState(() => resolveCurrentSemesterId(store));
   const [formSectionCode, setFormSectionCode] = React.useState("");
   const [formMaxStudents, setFormMaxStudents] = React.useState<number>(30);
   const [formSessionsCount, setFormSessionsCount] = React.useState<number>(10);
@@ -244,12 +236,11 @@ export default function CourseBuilder(props: ComponentProps) {
   const checkConflicts = (
     sectionId: string | null,
     teacherId: string,
-    slots: Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>,
-    semesterId: string
+    slots: Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>
   ): string[] => {
     const sections = store.courseSections || [];
     const activeSections = sections.filter(
-      (s: any) => s.id !== sectionId && s.semesterId === semesterId && s.status !== "cancelled"
+      (s: any) => s.id !== sectionId && s.status !== "cancelled"
     );
 
     const conflicts: string[] = [];
@@ -306,7 +297,6 @@ export default function CourseBuilder(props: ComponentProps) {
   const handleOpenCreateSection = () => {
     setSectionModalMode("create");
     setEditingSectionId(null);
-    setFormSemesterId(resolveCurrentSemesterId(store));
     setFormSectionCode("");
     setFormMaxStudents(30);
     setFormSessionsCount(activeCourse?.numberOfLessons || 10);
@@ -319,7 +309,6 @@ export default function CourseBuilder(props: ComponentProps) {
   const handleOpenEditSection = (sec: any) => {
     setSectionModalMode("edit");
     setEditingSectionId(sec.id);
-    setFormSemesterId(sec.semesterId);
     setFormSectionCode(sec.sectionCode);
     setFormMaxStudents(sec.maxStudents);
     setFormSessionsCount(sec.numberOfSessions || activeCourse?.numberOfLessons || 10);
@@ -358,7 +347,7 @@ export default function CourseBuilder(props: ComponentProps) {
       return;
     }
 
-    const conflicts = checkConflicts(editingSectionId, currentUser.id, formSlots, formSemesterId);
+    const conflicts = checkConflicts(editingSectionId, currentUser.id, formSlots);
     if (conflicts.length > 0) {
       setFormConflicts(conflicts);
       if (props.triggerToast) props.triggerToast("Phát hiện xung đột trùng lịch biểu. Vui lòng kiểm tra chi tiết báo đỏ.");
@@ -368,7 +357,6 @@ export default function CourseBuilder(props: ComponentProps) {
     try {
       const payload = {
         courseId: activeCourse.id,
-        semesterId: formSemesterId,
         teacherId: currentUser.id,
         sectionCode: formSectionCode,
         maxStudents: formMaxStudents,
@@ -386,46 +374,6 @@ export default function CourseBuilder(props: ComponentProps) {
     } catch (err: any) {
       if (props.triggerToast) props.triggerToast(err.message || "Không thể lưu lớp học phần.");
     }
-    return;
-
-    const storeData = AppStore.get();
-    const generateId = (prefix: string) => `${prefix}_${Math.random().toString(36).substr(2, 9)}`;
-
-    if (sectionModalMode === "create") {
-      const newSection = {
-        id: generateId("section"),
-        courseId: activeCourse.id,
-        semesterId: formSemesterId,
-        teacherId: currentUser.id,
-        sectionCode: formSectionCode,
-        maxStudents: formMaxStudents,
-        schedule: formSlots,
-        status: formStatus
-      };
-
-      if (!storeData.courseSections) storeData.courseSections = [];
-      storeData.courseSections.push(newSection);
-      AppStore.log(currentUser.id, "create_section_from_builder", newSection.sectionCode, `Khởi tạo lớp học phần ${newSection.sectionCode} cho khóa ${activeCourse.title} trực tiếp từ CourseBuilder.`);
-    } else {
-      storeData.courseSections = (storeData.courseSections || []).map((s: any) => {
-        if (s.id === editingSectionId) {
-          AppStore.log(currentUser.id, "edit_section_from_builder", s.sectionCode, `Cập nhật lớp học phần ${formSectionCode} từ CourseBuilder.`);
-          return {
-            ...s,
-            semesterId: formSemesterId,
-            sectionCode: formSectionCode,
-            maxStudents: formMaxStudents,
-            schedule: formSlots,
-            status: formStatus
-          };
-        }
-        return s;
-      });
-    }
-
-    AppStore.save(storeData);
-    setShowSectionModal(false);
-    props.onRefreshData();
   };
 
   const addFormSlot = () => {
@@ -1571,34 +1519,21 @@ export default function CourseBuilder(props: ComponentProps) {
 
               <form onSubmit={handleSaveSection} className="space-y-4 text-xs font-sans">
                 {/* Basic info row */}
+                <div className="space-y-1">
+                  <label className="text-white/60 block font-bold">Mã lớp học *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: AI01-L02"
+                    value={formSectionCode}
+                    onChange={(e) => setFormSectionCode(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500/40 font-mono"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-white/60 block font-bold">Tháng</label>
-                    <select
-                      value={formSemesterId}
-                      onChange={(e) => setFormSemesterId(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500/40"
-                    >
-                      {(store.semesters || []).map((s: any) => (
-                        <option key={s.id} value={s.id} className="bg-slate-900">{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-white/60 block font-bold">Mã lớp học phần</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: CS101-L02"
-                      value={formSectionCode}
-                      onChange={(e) => setFormSectionCode(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500/40 font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-white/60 block font-bold">Sĩ số tối đa (Học sinh)</label>
+                    <label className="text-white/60 block font-bold">Sĩ số tối đa (Học viên)</label>
                     <input
                       type="number"
                       min={5}

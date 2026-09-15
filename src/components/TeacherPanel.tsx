@@ -31,11 +31,8 @@ import QuizBuilder from "./teacher/QuizBuilder";
 import AssignmentGrader from "./teacher/AssignmentGrader";
 import GradebookTable from "./teacher/GradebookTable";
 import TeacherAnalytics from "./teacher/TeacherAnalytics";
-import Timetable from "./Timetable";
-import UserGuide from "./UserGuide";
 import ModalPortal from "./ModalPortal";
 import AttendanceManager from "./AttendanceManager";
-import AdvisorPanel from "./AdvisorPanel";
 import NotificationInbox from "./NotificationInbox";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
@@ -706,29 +703,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
             />
           )}
 
-          {activeSubTab === "timetable" && (
-            <Timetable
-              role="teacher"
-              currentUser={currentUser}
-              store={store}
-              onRefreshData={onRefreshData}
-              onRedirectToAttendance={(courseId, sectionId) => {
-                setAttendanceCourseId(courseId);
-                setAttendanceSectionId(sectionId);
-                setLockAttendanceSelectors(true);
-                setActiveSubTab("attendance");
-              }}
-            />
-          )}
-
-          {activeSubTab === "teacher_guide" && (
-            <UserGuide
-              role="teacher"
-              activeSystem={activeSystem}
-              onClose={() => setActiveSubTab(activeSystem === "SIS" ? "timetable" : "courses")}
-            />
-          )}
-
           {activeSubTab === "attendance" && (
             <AttendanceManager
               store={store}
@@ -742,16 +716,8 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 setAttendanceCourseId(null);
                 setAttendanceSectionId(null);
                 setLockAttendanceSelectors(false);
-                setActiveSubTab("timetable");
+                setActiveSubTab("courses");
               }}
-            />
-          )}
-
-          {activeSubTab === "advising" && (
-            <AdvisorPanel
-              currentUser={currentUser}
-              onLogout={onLogout}
-              onRefreshData={onRefreshData}
             />
           )}
         </div>

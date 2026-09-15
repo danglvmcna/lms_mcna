@@ -19,18 +19,16 @@ const createEmptyStore = (): LMSDataStore => ({
   forumPosts: [],
   auditLogs: [],
   transactions: [],
-  academicYears: [],
-  semesters: [],
   departments: [],
   programs: [],
-  programCourses: [],
-  studentProfiles: [],
   attendanceSessions: [],
+  sessionMaterials: [],
   attendanceRecords: [],
-  tuitionFees: [],
-  academicWarnings: [],
-  officialTranscripts: [],
-  advisorNotes: []
+  advisorNotes: [],
+  courseSections: [],
+  courseRegistrations: [],
+  systemEvents: [],
+  teacherAttendance: []
 });
 
 const hydrateStore = (store: LMSDataStore) => {

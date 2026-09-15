@@ -114,7 +114,7 @@ async function main() {
       client,
       "academic_years",
       ["id", "name", "start_date", "end_date", "is_current"],
-      store.academicYears.map(y => [y.id, y.name, y.startDate, y.endDate, y.isCurrent ? 1 : 0]),
+      ((store as any).academicYears || []).map((y: any) => [y.id, y.name, y.startDate, y.endDate, y.isCurrent ? 1 : 0]),
       `(id) DO UPDATE SET name = EXCLUDED.name, start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date, is_current = EXCLUDED.is_current`
     );
 
@@ -122,7 +122,7 @@ async function main() {
       client,
       "semesters",
       ["id", "academic_year_id", "name", "type", "start_date", "end_date", "registration_open", "registration_close", "is_current"],
-      store.semesters.map(s => [s.id, s.academicYearId, s.name, s.type, s.startDate, s.endDate, s.registrationOpen, s.registrationClose, s.isCurrent ? 1 : 0]),
+      ((store as any).semesters || []).map((s: any) => [s.id, s.academicYearId, s.name, s.type, s.startDate, s.endDate, s.registrationOpen, s.registrationClose, s.isCurrent ? 1 : 0]),
       `(id) DO UPDATE SET academic_year_id = EXCLUDED.academic_year_id, name = EXCLUDED.name, type = EXCLUDED.type, start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date, registration_open = EXCLUDED.registration_open, registration_close = EXCLUDED.registration_close, is_current = EXCLUDED.is_current`
     );
 
@@ -208,7 +208,7 @@ async function main() {
       client,
       "tuition_fees",
       ["id", "student_id", "semester_id", "amount", "due_date", "status", "paid_amount", "paid_at", "receipt_code"],
-      store.tuitionFees.map(f => [f.id, f.studentId, f.semesterId || null, f.amount, f.dueDate, f.status, f.paidAmount, f.paidAt || null, f.receiptCode || null]),
+      ((store as any).tuitionFees || []).map((f: any) => [f.id, f.studentId, f.semesterId || null, f.amount, f.dueDate, f.status, f.paidAmount, f.paidAt || null, f.receiptCode || null]),
       `(id) DO UPDATE SET student_id = EXCLUDED.student_id, semester_id = EXCLUDED.semester_id, amount = EXCLUDED.amount, due_date = EXCLUDED.due_date, status = EXCLUDED.status, paid_amount = EXCLUDED.paid_amount, paid_at = EXCLUDED.paid_at, receipt_code = EXCLUDED.receipt_code`
     );
 
@@ -216,7 +216,7 @@ async function main() {
       client,
       "academic_warnings",
       ["id", "student_id", "type", "message", "is_resolved", "created_at"],
-      store.academicWarnings.map(w => [w.id, w.studentId, w.type, w.message, w.isResolved ? 1 : 0, w.createdAt]),
+      ((store as any).academicWarnings || []).map((w: any) => [w.id, w.studentId, w.type, w.message, w.isResolved ? 1 : 0, w.createdAt]),
       `(id) DO UPDATE SET student_id = EXCLUDED.student_id, type = EXCLUDED.type, message = EXCLUDED.message, is_resolved = EXCLUDED.is_resolved, created_at = EXCLUDED.created_at`
     );
 
@@ -232,7 +232,7 @@ async function main() {
       client,
       "student_profiles",
       ["id", "user_id", "student_code", "program_id", "department_id", "academic_year", "enrollment_date", "expected_graduation", "status", "gpa", "total_credits_earned", "address", "phone", "date_of_birth", "gender", "notes"],
-      (store.studentProfiles || []).map(p => [p.id, p.userId, p.studentCode, p.programId, p.departmentId, p.academicYear, p.enrollmentDate, p.expectedGraduation, p.status, p.gpa, p.totalCreditsEarned, p.address || null, p.phone || null, p.dateOfBirth || null, p.gender || null, p.notes || null]),
+      ((store as any).studentProfiles || []).map(p => [p.id, p.userId, p.studentCode, p.programId, p.departmentId, p.academicYear, p.enrollmentDate, p.expectedGraduation, p.status, p.gpa, p.totalCreditsEarned, p.address || null, p.phone || null, p.dateOfBirth || null, p.gender || null, p.notes || null]),
       `(id) DO UPDATE SET user_id = EXCLUDED.user_id, student_code = EXCLUDED.student_code, program_id = EXCLUDED.program_id, department_id = EXCLUDED.department_id, academic_year = EXCLUDED.academic_year, enrollment_date = EXCLUDED.enrollment_date, expected_graduation = EXCLUDED.expected_graduation, status = EXCLUDED.status, gpa = EXCLUDED.gpa, total_credits_earned = EXCLUDED.total_credits_earned, address = EXCLUDED.address, phone = EXCLUDED.phone, date_of_birth = EXCLUDED.date_of_birth, gender = EXCLUDED.gender, notes = EXCLUDED.notes`
     );
 
@@ -243,7 +243,7 @@ async function main() {
       (store.courseSections || []).map(section => [
         section.id,
         section.courseId,
-        section.semesterId,
+        (section as any).semesterId,
         section.teacherId,
         section.sectionCode,
         section.maxStudents,
@@ -281,7 +281,7 @@ async function main() {
       "course_registrations",
       ["id", "student_id", "section_id", "semester_id", "status", "registered_at", "dropped_at", "grade", "letter_grade", "grade_point", "credits", "is_retake", "exam_ban", "grade_posted_at"],
       (store.courseRegistrations || []).map(r => [
-        r.id, r.studentId, r.sectionId, r.semesterId, r.status, r.registeredAt, r.droppedAt || null,
+        r.id, r.studentId, r.sectionId, (r as any).semesterId || null, r.status, r.registeredAt, r.droppedAt || null,
         r.grade || null, r.letterGrade || null, r.gradePoint ?? null, r.credits, r.isRetake ? 1 : 0, r.examBan ? 1 : 0, r.gradePostedAt || null
       ]),
       `(id) DO UPDATE SET status = EXCLUDED.status, dropped_at = EXCLUDED.dropped_at, grade = EXCLUDED.grade, letter_grade = EXCLUDED.letter_grade, grade_point = EXCLUDED.grade_point, exam_ban = EXCLUDED.exam_ban, grade_posted_at = EXCLUDED.grade_posted_at`
@@ -291,7 +291,7 @@ async function main() {
       client,
       "registration_periods",
       ["id", "semester_id", "name", "start_date", "end_date", "allowed_years", "is_open"],
-      (store.registrationPeriods || []).map(rp => [
+      ((store as any).registrationPeriods || []).map(rp => [
         rp.id, rp.semesterId, rp.name, rp.startDate, rp.endDate, rp.allowedYears || [1, 2, 3, 4], rp.isOpen
       ]),
       `(id) DO UPDATE SET end_date = EXCLUDED.end_date, is_open = EXCLUDED.is_open, allowed_years = EXCLUDED.allowed_years`
@@ -301,7 +301,7 @@ async function main() {
       client,
       "advisor_assignments",
       ["id", "advisor_id", "student_id", "semester_id", "assigned_at"],
-      (store.advisorAssignments || []).map(aa => [aa.id, aa.advisorId, aa.studentId, aa.semesterId || null, aa.assignedAt]),
+      ((store as any).advisorAssignments || []).map(aa => [aa.id, aa.advisorId, aa.studentId, aa.semesterId || null, aa.assignedAt]),
       `(id) DO UPDATE SET advisor_id = EXCLUDED.advisor_id, student_id = EXCLUDED.student_id, semester_id = EXCLUDED.semester_id, assigned_at = EXCLUDED.assigned_at`
     );
 
@@ -309,7 +309,7 @@ async function main() {
       client,
       "attendance_sessions",
       ["id", "course_id", "semester_id", "teacher_id", "session_date", "date", "topic"],
-      (store.attendanceSessions || []).map(session => [session.id, session.courseId, session.semesterId, session.teacherId, session.date, session.date, session.topic]),
+      (store.attendanceSessions || []).map(session => [session.id, session.courseId, (session as any).semesterId, session.teacherId, session.date, session.date, session.topic]),
       `(id) DO UPDATE SET course_id = EXCLUDED.course_id, semester_id = EXCLUDED.semester_id, teacher_id = EXCLUDED.teacher_id, session_date = EXCLUDED.session_date, date = EXCLUDED.date, topic = EXCLUDED.topic`
     );
 
@@ -325,7 +325,7 @@ async function main() {
       client,
       "scholarships",
       ["id", "name", "type", "amount", "discount_percent", "semester_id", "conditions"],
-      (store.scholarships || []).map(s => [s.id, s.name, s.type, s.amount ?? null, s.discountPercent ?? null, s.semesterId || null, s.conditions || null]),
+      ((store as any).scholarships || []).map(s => [s.id, s.name, s.type, s.amount ?? null, s.discountPercent ?? null, s.semesterId || null, s.conditions || null]),
       `(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, amount = EXCLUDED.amount, discount_percent = EXCLUDED.discount_percent, semester_id = EXCLUDED.semester_id, conditions = EXCLUDED.conditions`
     );
 

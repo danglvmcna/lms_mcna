@@ -231,14 +231,8 @@ export default function CourseCatalog(props: ComponentProps) {
             const matchEnroll = myEnrollments.find(e => e.courseId === crs.id);
             const isEnrolled = !!matchEnroll;
 
-            const semesters = store.semesters || [];
-            const todayStr = new Date().toISOString().slice(0, 10);
-            const activeSemesterId = semesters.find((s: any) => s.isCurrent)?.id ||
-              semesters.find((s: any) => s.startDate && s.endDate && todayStr >= String(s.startDate).slice(0, 10) && todayStr <= String(s.endDate).slice(0, 10))?.id ||
-              semesters[0]?.id ||
-              "";
             const courseSections = (store.courseSections || []).filter(
-              (s: any) => s.courseId === crs.id && s.semesterId === activeSemesterId && s.schedule && s.schedule.length > 0
+              (s: any) => s.courseId === crs.id && s.status === "open" && s.schedule && s.schedule.length > 0
             );
             const isAllSectionsFull = courseSections.length > 0 && courseSections.every((s: any) => {
               const regCount = (store.courseRegistrations || []).filter((r: any) => r.sectionId === s.id && r.status === "registered").length;
@@ -247,7 +241,7 @@ export default function CourseCatalog(props: ComponentProps) {
 
             // Timetable conflict checks for student
             const studentRegisteredSections = (store.courseRegistrations || [])
-              .filter((r: any) => r.studentId === currentUser.id && r.semesterId === activeSemesterId && r.status === "registered")
+              .filter((r: any) => r.studentId === currentUser.id && r.status === "registered")
               .map((r: any) => (store.courseSections || []).find((sec: any) => sec.id === r.sectionId))
               .filter(Boolean);
 

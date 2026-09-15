@@ -71,12 +71,7 @@ async function main() {
     const teacher = (await client.query("SELECT id, name, email FROM users WHERE lower(email) = lower($1) AND role = 'teacher'", [teacherEmail])).rows[0]
       || (await client.query("SELECT id, name, email FROM users WHERE role = 'teacher' ORDER BY created_at LIMIT 1")).rows[0];
     if (!teacher) throw new Error("No teacher account found. Create one or pass --teacher-email=<teacher email>.");
-
-    const semester = args.get("semester")
-      ? (await client.query("SELECT id, name FROM semesters WHERE id = $1", [args.get("semester")])).rows[0]
-      : (await client.query("SELECT id, name FROM semesters ORDER BY is_current DESC, start_date DESC LIMIT 1")).rows[0];
-    if (!semester) throw new Error("Semester not found. Pass --semester=<semester id>.");
-    console.log(`Teacher: ${teacher.name} <${teacher.email}> | Semester: ${semester.name} (${semester.id})`);
+    console.log(`Teacher: ${teacher.name} <${teacher.email}>`);
 
     for (const course of catalog.courses) {
       const firstClass = catalog.classes.filter(cls => cls.course === course.key).map(cls => cls.openingDate).sort()[0] || null;
@@ -144,7 +139,6 @@ async function main() {
       await upsertCourseSection(client, {
         id: sectionId,
         courseId: courseId(course.key),
-        semesterId: semester.id,
         teacherId: teacher.id,
         sectionCode: `${course.code}-${day}${month}`,
         maxStudents: catalog.defaultMaxStudents,

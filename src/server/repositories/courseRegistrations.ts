@@ -78,28 +78,7 @@ export const courseRegistrationsRepository = {
         return { error: "Clear outstanding fees before registering for courses.", status: 403 };
       }
 
-      // Check registration period open dates, allowed years matching
-      const periods = (await client.query(
-        `SELECT * FROM registration_periods 
-         WHERE semester_id = $1 
-           AND is_open = true 
-           AND NOW()::date >= start_date::date 
-           AND NOW()::date <= end_date::date`,
-        [section.semester_id]
-      )).rows;
-      if (periods.length === 0) {
-        await client.query("ROLLBACK");
-        return { error: "Kỳ đăng ký học phần hiện đang đóng hoặc không khả dụng cho tháng này.", status: 403 };
-      }
-      const studentYear = Number(profile.academic_year || 1);
-      const isYearAllowed = periods.some(period => {
-        const allowed = Array.isArray(period.allowed_years) ? period.allowed_years : [];
-        return allowed.map(Number).includes(studentYear);
-      });
-      if (!isYearAllowed) {
-        await client.query("ROLLBACK");
-        return { error: `Sinh viên năm ${studentYear} không được phép đăng ký trong khung giờ này.`, status: 403 };
-      }
+
 
       // Check schedule conflict using the shared parseSchedule helper
       const targetSchedule = parseSchedule(section);
@@ -108,8 +87,8 @@ export const courseRegistrationsRepository = {
         `SELECT cs.* 
          FROM course_registrations cr
          JOIN course_sections cs ON cr.section_id = cs.id
-         WHERE cr.student_id = $1 AND cr.semester_id = $2 AND cr.status = 'registered'`,
-        [studentId, section.semester_id]
+         WHERE cr.student_id = $1 AND cr.status = 'registered'`,
+        [studentId]
       )).rows;
 
       const existingSchedules = currentRegs.flatMap(r => parseSchedule(r));
@@ -150,10 +129,10 @@ export const courseRegistrationsRepository = {
       const credits = await resolveSectionCredits(client, sectionId, section.course_id);
 
       const row = (await client.query(
-        `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,false)
+        `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
+         VALUES ($1,$2,$3,$4,$5,$6,false)
          RETURNING *`,
-        [generateId("reg"), studentId, sectionId, section.semester_id, status, new Date().toISOString(), credits]
+        [generateId("reg"), studentId, sectionId, status, new Date().toISOString(), credits]
       )).rows[0];
 
       await client.query("COMMIT");
@@ -169,17 +148,16 @@ export const courseRegistrationsRepository = {
 
   async drop(db: Queryable, registrationId: string, studentId: string) {
     const reg = (await db.query(
-      `SELECT cr.*, s.start_date, cs.teacher_id
+      `SELECT cr.*, cs.teacher_id
        FROM course_registrations cr
-       JOIN semesters s ON s.id = cr.semester_id
        JOIN course_sections cs ON cs.id = cr.section_id
        WHERE cr.id = $1 AND cr.student_id = $2`,
       [registrationId, studentId]
     )).rows[0];
     if (!reg) return null;
 
-    const semesterStart = new Date(reg.start_date).getTime();
-    const dropDeadline = semesterStart + 14 * 24 * 60 * 60 * 1000;
+    const registeredTime = new Date(reg.registered_at).getTime();
+    const dropDeadline = registeredTime + 14 * 24 * 60 * 60 * 1000;
     const nextStatus = Date.now() <= dropDeadline ? "dropped" : "withdrawn";
     const grade = nextStatus === "withdrawn" ? "W" : null;
     const row = (await db.query(

@@ -1,7 +1,7 @@
 import { getInitialStore } from "../../store";
 import { Course, Enrollment, LessonProgress, User } from "../../types";
 import { Queryable } from "../db";
-import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, sessionMaterialFromRow, submissionFromRow, toPublicUser, tuitionFeeFromRow, academicWarningFromRow } from "../mappers";
+import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, sessionMaterialFromRow, submissionFromRow, toPublicUser } from "../mappers";
 
 // In-memory cache variables to optimize server performance
 let cachedSnapshot: any = null;
@@ -90,8 +90,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     tuitionFeesRes,
     academicWarningsRes,
     auditLogsRes,
-    academicYearsRes,
-    semestersRes,
+
     departmentsRes,
     programsRes,
     programCoursesRes,
@@ -101,8 +100,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM tuition_fees"),
     db.query("SELECT * FROM academic_warnings"),
     db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200"),
-    db.query("SELECT * FROM academic_years"),
-    db.query("SELECT * FROM semesters"),
+
     db.query("SELECT * FROM departments"),
     db.query("SELECT * FROM programs"),
     db.query("SELECT * FROM program_courses"),
@@ -164,13 +162,28 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
   const quizAttempts = quizAttemptsRes.rows.map(quizAttemptFromRow);
   const assignments = assignmentsRes.rows.map(assignmentFromRow);
   const submissions = submissionsRes.rows.map(submissionFromRow);
-  const tuitionFees = tuitionFeesRes.rows.map(tuitionFeeFromRow);
-  const academicWarnings = academicWarningsRes.rows.map(academicWarningFromRow);
+  const tuitionFees = tuitionFeesRes.rows.map(row => ({
+    id: row.id,
+    studentId: row.student_id,
+    amount: Number(row.amount),
+    dueDate: row.due_date,
+    status: row.status,
+    paidAmount: Number(row.paid_amount || 0),
+    paidAt: row.paid_at || undefined,
+    receiptCode: row.receipt_code || undefined
+  }));
+  const academicWarnings = academicWarningsRes.rows.map(row => ({
+    id: row.id,
+    studentId: row.student_id,
+    type: row.type,
+    message: row.message,
+    isResolved: Boolean(row.is_resolved),
+    createdAt: row.created_at
+  }));
   const auditLogs = auditLogsRes.rows.map(row => ({ id: row.id, userId: row.user_id, action: row.action, target: row.target, detail: row.detail || "", createdAt: row.created_at }));
 
   // New academic structural tables
-  const academicYears = academicYearsRes.rows.map(row => ({ id: row.id, name: row.name, startDate: normalizeDateOnly(row.start_date), endDate: normalizeDateOnly(row.end_date), isCurrent: Boolean(row.is_current) }));
-  const semesters = semestersRes.rows.map(row => ({ id: row.id, academicYearId: row.academic_year_id, name: row.name, type: row.type, startDate: normalizeDateOnly(row.start_date), endDate: normalizeDateOnly(row.end_date), registrationOpen: normalizeDateOnly(row.registration_open), registrationClose: normalizeDateOnly(row.registration_close), isCurrent: Boolean(row.is_current) }));
+
   const departments = departmentsRes.rows.map(row => ({ id: row.id, name: row.name, code: row.code, headTeacherId: row.head_teacher_id, description: row.description }));
   const programs = programsRes.rows.map(row => ({ id: row.id, departmentId: row.department_id, name: row.name, code: row.code, type: row.type, totalCredits: row.total_credits, description: row.description }));
   const programCourses = programCoursesRes.rows.map(row => ({ id: row.id, programId: row.program_id, courseId: row.course_id, credits: row.credits, isRequired: Boolean(row.is_required), semester: row.semester }));
@@ -181,7 +194,6 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     id: row.id,
     courseId: row.course_id,
     sectionId: row.section_id || undefined,
-    semesterId: row.semester_id,
     teacherId: row.teacher_id,
     date: row.date || row.session_date,
     topic: row.topic,
@@ -209,7 +221,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
   // Missing registration & requests
   const courseSections = courseSectionsRes.rows.map(courseSectionFromRow);
   const registrationPeriods = registrationPeriodsRes.rows.map(row => ({ id: row.id, semesterId: row.semester_id, name: row.name, startDate: row.start_date, endDate: row.end_date, allowedYears: Array.isArray(row.allowed_years) ? row.allowed_years.map(Number) : JSON.parse(row.allowed_years_json || '[]'), isOpen: Boolean(row.is_open) }));
-  const courseRegistrations = courseRegistrationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, semesterId: row.semester_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
+  const courseRegistrations = courseRegistrationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
   const scholarships = scholarshipsRes.rows.map(row => ({ id: row.id, name: row.name, type: row.type, amount: row.amount === null ? undefined : Number(row.amount), discountPercent: row.discount_percent === null ? undefined : Number(row.discount_percent), semesterId: row.semester_id, conditions: row.conditions }));
   const scholarshipApplications = scholarshipApplicationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, scholarshipId: row.scholarship_id, semesterId: row.semester_id, status: row.status, appliedAt: row.applied_at, reviewedBy: row.reviewed_by || undefined, reviewNote: row.review_note || undefined }));
   const gradeAppeals = gradeAppealsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, courseRegistrationId: row.course_registration_id, reason: row.reason, status: row.status, originalGrade: Number(row.original_grade), revisedGrade: row.revised_grade === null ? undefined : Number(row.revised_grade), submittedAt: row.submitted_at, resolvedAt: row.resolved_at || undefined, resolvedBy: row.resolved_by || undefined, resolutionNote: row.resolution_note || undefined }));
@@ -250,8 +262,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     tuitionFees,
     academicWarnings,
     auditLogs,
-    academicYears,
-    semesters,
+
     departments,
     programs,
     programCourses,
@@ -304,8 +315,7 @@ export function limitStoreForRole(store: any, user: User) {
     forumPosts: [],
     auditLogs: [],
     transactions: [],
-    academicYears: store.academicYears || [],
-    semesters: store.semesters || [],
+
     departments: store.departments || [],
     programs: store.programs || [],
     programCourses: store.programCourses || [],

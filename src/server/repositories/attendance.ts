@@ -11,19 +11,19 @@ export const attendanceRepository = {
     const sessionDateOnly = session.date.slice(0, 10);
     if (columns.includes("session_date") && columns.includes("date")) {
       await db.query(
-        `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, session_date, date, topic)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [session.id, session.courseId, session.semesterId || null, session.teacherId, sessionDateOnly, session.date, session.topic]
+        `INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, date, topic)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [session.id, session.courseId, session.teacherId, sessionDateOnly, session.date, session.topic]
       );
     } else if (columns.includes("session_date")) {
       await db.query(
-        "INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, session_date, topic) VALUES ($1,$2,$3,$4,$5,$6)",
-        [session.id, session.courseId, session.semesterId || null, session.teacherId, sessionDateOnly, session.topic]
+        "INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, topic) VALUES ($1,$2,$3,$4,$5)",
+        [session.id, session.courseId, session.teacherId, sessionDateOnly, session.topic]
       );
     } else {
       await db.query(
-        "INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, date, topic) VALUES ($1,$2,$3,$4,$5,$6)",
-        [session.id, session.courseId, session.semesterId || null, session.teacherId, session.date, session.topic]
+        "INSERT INTO attendance_sessions (id, course_id, teacher_id, date, topic) VALUES ($1,$2,$3,$4,$5)",
+        [session.id, session.courseId, session.teacherId, session.date, session.topic]
       );
     }
     if (columns.includes("section_id") && session.sectionId) {
@@ -114,7 +114,6 @@ export const attendanceRepository = {
       id: row.id,
       courseId: row.course_id,
       sectionId: row.section_id || undefined,
-      semesterId: row.semester_id,
       teacherId: row.teacher_id,
       date: row.date || row.session_date,
       topic: row.topic,

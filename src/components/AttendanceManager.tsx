@@ -7,17 +7,15 @@ import {
   X, 
   ShieldAlert, 
   Activity, 
-  AlertTriangle, 
   BookOpen,
   PlusCircle,
   FolderSync
 } from "lucide-react";
-import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord, AcademicWarning } from "../types";
+import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord } from "../types";
 import { AppStore } from "../store";
 import { api } from "../api";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../utils";
 import SessionMaterialsEditor from "./SessionMaterialsEditor";
-import { normalizeWarningType, warningTypesMatch } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
 interface SearchableSelectOption {
@@ -254,12 +252,6 @@ export default function AttendanceManager({
     ? allCourses.filter(c => c.teacherId === currentUser.id)
     : allCourses;
   const enrollments = store.enrollments || [];
-  const systemSemesters = store.semesters || [];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const activeSemester = systemSemesters.find(s => s.isCurrent) ||
-    systemSemesters.find(s => s.startDate && s.endDate && todayStr >= String(s.startDate).slice(0, 10) && todayStr <= String(s.endDate).slice(0, 10)) ||
-    systemSemesters[0];
-  const curSemesterId = activeSemester ? activeSemester.id : "sem_spring25";
 
   const courseSections = (store.courseSections || []).filter((s: any) => s.courseId === selectedCourseId && s.status !== "cancelled");
   // Sessions for chosen course/section
@@ -274,7 +266,7 @@ export default function AttendanceManager({
     : [];
   const courseStudents = courseEnrollments.map(enroll => {
     const usr = store.users.find(u => u.id === enroll.studentId) || { name: "Sinh viên", id: enroll.studentId };
-    const pProfile = (store.studentProfiles || []).find(p => p.userId === enroll.studentId);
+    const pProfile = ((store as any).studentProfiles || []).find((p: any) => p.userId === enroll.studentId);
     return {
       userId: usr.id,
       name: usr.name,
@@ -335,7 +327,6 @@ export default function AttendanceManager({
         const result = await api.generateAttendanceLink({
           courseId: selectedCourseId,
           sectionId: selectedSectionId,
-          semesterId: curSemesterId,
           topic: newSessionTopic.trim()
         });
         setNewSessionDate("");
@@ -351,7 +342,6 @@ export default function AttendanceManager({
         const result = await api.saveAttendance({
           courseId: selectedCourseId,
           sectionId: selectedSectionId,
-          semesterId: curSemesterId,
           date: combinedDate,
           topic: newSessionTopic.trim(),
           records: courseEnrollments.map(enroll => ({ studentId: enroll.studentId, status: "present" }))
@@ -422,71 +412,6 @@ export default function AttendanceManager({
       onRefreshData();
     } catch (err: any) {
       triggerToast(err.message || "Không thể cập nhật điểm danh.");
-    }
-  };
-
-  // Auto Scan compliance & create warnings
-  const handleScanAttendanceWarnings = () => {
-    if (!selectedCourseId) {
-      triggerToast("Chọn môn học để khảo sát cảnh báo.");
-      return;
-    }
-
-    const pastSessions = sessions.filter(s => new Date(s.date).getTime() <= Date.now());
-    const sessionsCount = pastSessions.length;
-    if (sessionsCount === 0) {
-      triggerToast("Lớp học phần này chưa đến lịch học hoặc chưa có buổi điểm danh nào diễn ra.");
-      return;
-    }
-
-    const pendingWarnings: Array<{ studentId: string; message: string }> = [];
-
-    courseEnrollments.forEach(enroll => {
-      const studentId = enroll.studentId;
-      const records = store.attendanceRecords.filter(r =>
-        r.studentId === studentId && 
-        pastSessions.some(s => s.id === r.sessionId)
-      );
-
-      const presentRecords = records.filter(r => r.status === "present" || r.status === "late" || r.status === "excused").length;
-      const rate = Math.round((presentRecords / sessionsCount) * 100);
-
-      if (rate < 80) {
-        const courseObj = courses.find(c => c.id === selectedCourseId);
-        const nameText = courseObj ? courseObj.title : selectedCourseId;
-        const sectionObj = (store.courseSections || []).find(s => s.id === selectedSectionId);
-        const sectionCode = sectionObj ? sectionObj.sectionCode : "";
-        const sectionCodeText = sectionCode ? ` lớp ${sectionCode}` : "";
-        const exists = store.academicWarnings.some(w =>
-          w.studentId === studentId &&
-          warningTypesMatch(w.type, "low_attendance") &&
-          !w.isResolved &&
-          w.message.includes(nameText) &&
-          (sectionCode ? w.message.includes(sectionCode) : true)
-        );
-
-        if (!exists) {
-          pendingWarnings.push({
-            studentId,
-            message: `Tỷ lệ chuyên cần${sectionCodeText} (${nameText}) xuống thấp báo động dưới 80% (Thực đạt ${rate}% vắng ${sessionsCount - presentRecords} buổi).`
-          });
-        }
-      }
-    });
-
-    if (pendingWarnings.length > 0) {
-      Promise.all(
-        pendingWarnings.map((warning) =>
-          api.createWarning({ studentId: warning.studentId, type: "low_attendance", message: warning.message, courseId: selectedCourseId })
-        )
-      )
-        .then(() => {
-          onRefreshData();
-          triggerToast(`Đã rà soát và phát học cảnh báo đỏ cho ${pendingWarnings.length} sinh viên nghỉ học quá hạn.`);
-        })
-        .catch((err: Error) => triggerToast(err.message || "Không thể tạo cảnh báo chuyên cần."));
-    } else {
-      triggerToast("Mọi học sinh tại lớp học phần này đều đảm bảo chuyên cần (Tỷ lệ >= 80%).");
     }
   };
 
@@ -1143,15 +1068,6 @@ export default function AttendanceManager({
               <div className="text-center py-12 px-4 border border-dashed border-white/10 rounded-2xl bg-black/20 text-white/40 text-xs font-sans">
                 Vui lòng chọn lớp học phần để hiển thị thống kê chuyên cần học viên.
               </div>
-            )}
-
-            {courseStudents.length > 0 && (
-              <button
-                onClick={handleScanAttendanceWarnings}
-                className="w-full py-2.5 bg-red-600/10 text-red-400 border border-red-500/20 hover:bg-red-600/15 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer mt-4"
-              >
-                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-500 animate-bounce" /> Phát cảnh báo răn đe chuyên cần
-              </button>
             )}
           </div>
 
