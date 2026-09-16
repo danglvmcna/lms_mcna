@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { 
   ShoppingBag, 
   Search, 
@@ -12,9 +12,11 @@ import {
   Check, 
   X,
   ExternalLink,
-  ChevronRight,
   Phone,
-  Mail
+  Mail,
+  ChevronLeft,
+  ChevronRight,
+  Users
 } from "lucide-react";
 import { api } from "../../api";
 import { Enrollment, User, Course, CourseSection, Transaction } from "../../types";
@@ -35,6 +37,8 @@ export default function AdminOrdersManager({
 }: AdminOrdersManagerProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [courseFilter, setCourseFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [selectedEnrollmentForPlacement, setSelectedEnrollmentForPlacement] = useState<any | null>(null);
   const [chosenSectionId, setChosenSectionId] = useState<string>("");
@@ -45,6 +49,19 @@ export default function AdminOrdersManager({
   const sections: CourseSection[] = store.courseSections || [];
   const transactions: Transaction[] = store.transactions || [];
   const registrations = store.courseRegistrations || [];
+  const pageSize = 8;
+
+  const sectionOccupancy = useMemo(() => {
+    const occupancy = new Map<string, number>();
+    registrations.forEach((registration: any) => {
+      if (registration.status !== "registered") return;
+      occupancy.set(registration.sectionId, (occupancy.get(registration.sectionId) || 0) + 1);
+    });
+    return occupancy;
+  }, [registrations]);
+
+  const getSectionOccupancy = (sectionId: string) => sectionOccupancy.get(sectionId) || 0;
+  const isSectionFull = (section: CourseSection) => getSectionOccupancy(section.id) >= section.maxStudents;
 
   // Enriched orders
   const orders = useMemo(() => {
@@ -75,6 +92,7 @@ export default function AdminOrdersManager({
     const q = search.trim().toLowerCase();
     return orders.filter(order => {
       if (statusFilter !== "all" && order.status !== statusFilter) return false;
+      if (courseFilter !== "all" && order.courseId !== courseFilter) return false;
       if (!q) return true;
       return (
         order.student?.name?.toLowerCase().includes(q) ||
@@ -85,7 +103,15 @@ export default function AdminOrdersManager({
         order.transaction?.id?.toLowerCase().includes(q)
       );
     });
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, courseFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, courseFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paginatedOrders = filteredOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // Counters
   const pendingPaymentCount = useMemo(() => orders.filter(o => o.status === "pending_payment").length, [orders]);
@@ -98,15 +124,16 @@ export default function AdminOrdersManager({
   }, [orders]);
 
   const handleQuickActivate = async (order: any) => {
-    const availableSections = sections.filter(s => s.courseId === order.courseId && s.status === "open");
-    const preselected = order.requestedSectionId || availableSections[0]?.id || "";
+    const availableSections = sections.filter(s => s.courseId === order.courseId && s.status === "open" && !isSectionFull(s));
+    const requestedSectionIsAvailable = availableSections.some(section => section.id === order.requestedSectionId);
+    const preselected = requestedSectionIsAvailable ? order.requestedSectionId : availableSections[0]?.id || "";
 
-    if (!preselected && availableSections.length === 0) {
-      triggerToast("Khóa học này hiện chưa có lớp nào mở. Vui lòng tạo lớp học trước khi kích hoạt.");
+    if (availableSections.length === 0) {
+      triggerToast("Khóa học này chưa có lớp mở còn chỗ. Vui lòng mở thêm lớp trước khi kích hoạt.");
       return;
     }
 
-    if (availableSections.length > 1 && !order.requestedSectionId) {
+    if (availableSections.length > 1 && !requestedSectionIsAvailable) {
       setSelectedEnrollmentForPlacement(order);
       setChosenSectionId(availableSections[0].id);
       return;
@@ -126,6 +153,11 @@ export default function AdminOrdersManager({
 
   const handleConfirmPlacementModal = async () => {
     if (!selectedEnrollmentForPlacement || !chosenSectionId) return;
+    const chosenSection = sections.find(section => section.id === chosenSectionId);
+    if (!chosenSection || isSectionFull(chosenSection)) {
+      triggerToast("Lớp đã đủ sĩ số. Vui lòng chọn lớp khác còn chỗ.");
+      return;
+    }
     setActivatingId(selectedEnrollmentForPlacement.id);
     try {
       await api.activateEnrollment(selectedEnrollmentForPlacement.id, { sectionId: chosenSectionId });
@@ -180,7 +212,7 @@ export default function AdminOrdersManager({
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
         <div className="relative flex-1">
           <Search className="h-4 w-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -203,6 +235,31 @@ export default function AdminOrdersManager({
             <option value="active">Đã kích hoạt ({activeCount})</option>
           </select>
         </div>
+        <select
+          value={courseFilter}
+          onChange={e => setCourseFilter(e.target.value)}
+          className="bg-slate-900 border border-white/10 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-400 min-w-48"
+          aria-label="Lọc đơn theo khóa học"
+        >
+          <option value="all">Tất cả khóa học</option>
+          {courses
+            .filter(course => orders.some(order => order.courseId === course.id))
+            .sort((a, b) => a.title.localeCompare(b.title, "vi"))
+            .map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
+        </select>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 text-[11px] text-white/45">
+        <span>Hiển thị {filteredOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredOrders.length)} / {filteredOrders.length} đơn</span>
+        {(search || statusFilter !== "all" || courseFilter !== "all") && (
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}
+            className="font-semibold text-indigo-300 hover:text-indigo-200 cursor-pointer"
+          >
+            Xóa bộ lọc
+          </button>
+        )}
       </div>
 
       {/* Orders Table */}
@@ -227,7 +284,7 @@ export default function AdminOrdersManager({
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map(order => {
+                paginatedOrders.map(order => {
                   const isPending = order.status === "pending_payment" || order.status === "pending";
                   const isActive = order.status === "active";
                   const activeSection = order.currentSection || order.requestedSection;
@@ -324,6 +381,30 @@ export default function AdminOrdersManager({
         </div>
       </div>
 
+      {pageCount > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+          <p className="text-[11px] text-white/45">Trang {safePage} / {pageCount}</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(current => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Trước
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(current => Math.min(pageCount, current + 1))}
+              disabled={safePage === pageCount}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+            >
+              Sau <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Select Section Modal if multiple sections available */}
       {selectedEnrollmentForPlacement && (
         <ModalPortal>
@@ -346,21 +427,44 @@ export default function AdminOrdersManager({
                 <p>Khóa học: <strong className="text-white">{selectedEnrollmentForPlacement.course?.title}</strong></p>
               </div>
 
-              <div className="space-y-1.5 text-xs">
-                <label className="text-white/70 block font-semibold">Chọn lớp khai giảng:</label>
-                <select
-                  value={chosenSectionId}
-                  onChange={e => setChosenSectionId(e.target.value)}
-                  className="w-full bg-slate-800 border border-white/15 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-400 text-xs"
-                >
+              <div className="space-y-2 text-xs">
+                <label className="text-white/70 block font-semibold">Chọn lớp còn chỗ:</label>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {sections
                     .filter(s => s.courseId === selectedEnrollmentForPlacement.courseId && s.status === "open")
-                    .map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.sectionCode} {s.openingDate ? `(KG: ${s.openingDate})` : ""} - Sĩ số: {s.maxStudents}
-                      </option>
-                    ))}
-                </select>
+                    .map(s => {
+                      const enrolledCount = getSectionOccupancy(s.id);
+                      const seatsLeft = Math.max(0, s.maxStudents - enrolledCount);
+                      const isFull = seatsLeft === 0;
+                      const fillPercentage = Math.min(100, Math.round((enrolledCount / Math.max(1, s.maxStudents)) * 100));
+                      const selected = chosenSectionId === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          disabled={isFull}
+                          onClick={() => setChosenSectionId(s.id)}
+                          className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-indigo-400 bg-indigo-500/10 ring-2 ring-indigo-500/10" : "border-white/10 bg-white/5 hover:border-white/20"} ${isFull ? "opacity-55 cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-mono font-bold text-white">{s.sectionCode}</p>
+                              <p className="mt-1 text-[10px] text-white/45">
+                                {s.openingDate ? `Khai giảng ${new Date(s.openingDate).toLocaleDateString("vi-VN")}` : "Chưa chốt ngày khai giảng"}
+                              </p>
+                            </div>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${isFull ? "bg-rose-500/10 text-rose-300" : "bg-emerald-500/10 text-emerald-300"}`}>
+                              <Users className="h-3 w-3" /> {enrolledCount}/{s.maxStudents}
+                            </span>
+                          </div>
+                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                            <div className={`h-full rounded-full ${isFull ? "bg-rose-500" : fillPercentage >= 80 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${fillPercentage}%` }} />
+                          </div>
+                          <p className="mt-1.5 text-[10px] text-white/45">{isFull ? "Lớp đã đủ sĩ số" : `Còn ${seatsLeft} chỗ trống`}</p>
+                        </button>
+                      );
+                    })}
+                </div>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 text-xs">
@@ -372,7 +476,7 @@ export default function AdminOrdersManager({
                 </button>
                 <button
                   onClick={handleConfirmPlacementModal}
-                  disabled={activatingId !== null}
+                  disabled={activatingId !== null || !chosenSectionId || Boolean(sections.find(section => section.id === chosenSectionId && isSectionFull(section)))}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5"
                 >
                   <Check className="h-4 w-4" />

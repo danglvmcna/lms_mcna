@@ -23,6 +23,10 @@ html {
   scroll-behavior: smooth;
 }
 
+.mcna-on-dark {
+  color: #ffffff !important;
+}
+
 /* --- Premium Light Mode Overrides Layer --- */
 
 body, html {

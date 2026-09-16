@@ -593,6 +593,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 const totalLessonsCount = store.lessons.filter(l => l.courseId === course.id).length;
                 const completedProgress = store.lessonProgress.filter(p => p.enrollmentId === enroll.id && p.completed).length;
                 const percentage = totalLessonsCount ? Math.round((completedProgress / totalLessonsCount) * 100) : 0;
+                const workspaceReady = hasWorkspaceAccess(enroll, section);
+                const nextSession = (store.attendanceSessions || [])
+                  .filter((session: any) => session.courseId === course.id && (!section || session.sectionId === section.id) && session.date && new Date(session.date).getTime() >= Date.now())
+                  .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 
                 return (
                   <div key={enroll.id} className="bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 hover:border-white/20 rounded-2xl flex flex-col justify-between transition-all duration-300 shadow-xl group overflow-hidden">
@@ -659,6 +663,31 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         </div>
                       )}
 
+                      {workspaceReady && section && (nextSession || section.meetingUrl) && (
+                        <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 p-3.5 space-y-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-cyan-300">Buổi học tiếp theo</span>
+                              <p className="mt-1 text-xs font-bold text-white line-clamp-1">{nextSession?.topic || nextSession?.content || "Lớp học trực tuyến MCNA"}</p>
+                              <p className="mt-0.5 text-[10px] text-white/55">
+                                {nextSession?.date ? new Date(nextSession.date).toLocaleString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "Thời gian theo lịch lớp đã công bố"}
+                              </p>
+                            </div>
+                            <Calendar className="h-5 w-5 text-cyan-400 shrink-0" />
+                          </div>
+                          {section.meetingUrl && (
+                            <a
+                              href={section.meetingUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-500"
+                            >
+                              <Video className="h-3.5 w-3.5" /> Vào phòng Zoom / Google Meet <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+
                       {enroll.status === "pending_payment" && (
                         <div className="bg-amber-500/5 border border-amber-500/10 p-3.5 rounded-xl text-[11px] text-amber-300/80 leading-relaxed font-sans shadow-inner">
                           Giao dịch học phí đang chờ bên xử lý thanh toán xác nhận. Bạn sẽ nhận được thông báo ngay khi trạng thái được cập nhật.
@@ -685,7 +714,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                             Hướng dẫn thanh toán
                           </button>
                         </>
-                      ) : (enroll.status === "pending" || !hasWorkspaceAccess(enroll, section)) ? (
+                      ) : (enroll.status === "pending" || !workspaceReady) ? (
                         <>
                           <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-violet-300/80">Chờ xếp lớp</span>
                           <span className="text-[10px] text-white/40">Chờ xác nhận xếp lớp bởi admin</span>

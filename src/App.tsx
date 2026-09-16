@@ -414,7 +414,7 @@ function AppShell() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative ${!currentUser ? "pb-12 overflow-hidden" : ""}`}>
+    <div className={`min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative ${!currentUser ? "pb-12 overflow-hidden" : ""}`}>
       {/* Dynamic Ambient Blur Spheres */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-purple-600/5 rounded-full blur-[140px] pointer-events-none" />

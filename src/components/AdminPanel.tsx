@@ -535,7 +535,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         </div>
 
         {/* Right Main viewport area container */}
-        <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 min-w-0">
+        <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-4 sm:p-6 min-w-0">
           
           {/* ORDERS & ENROLLMENTS GROUP */}
           {activeSubTab === "orders" && (
