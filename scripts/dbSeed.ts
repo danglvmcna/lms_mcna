@@ -12,9 +12,14 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required to seed Supabase/Postgres.");
 }
 
+const isLocalDb = Boolean(
+  process.env.DATABASE_URL.includes("localhost") || 
+  process.env.DATABASE_URL.includes("127.0.0.1")
+);
+
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
+  ssl: isLocalDb ? undefined : { rejectUnauthorized: false }
 });
 
 // A fresh database gets the three base accounts and the real MCNA catalogue.
@@ -53,6 +58,30 @@ async function insertBatch(
 
 async function clearSeededData(client: pg.PoolClient) {
   console.log("[Seeding] Truncating existing mock data to ensure clean seed...");
+  const legacyTables = [
+    "advisor_notes",
+    "advisor_assignments",
+    "scholarship_applications",
+    "grade_appeals",
+    "leave_requests",
+    "graduation_applications",
+    "parent_links",
+    "academic_warnings",
+    "grades",
+    "tuition_fees",
+    "student_profiles"
+  ];
+  for (const t of legacyTables) {
+    try {
+      await client.query(`DELETE FROM ${t}`);
+    } catch {
+      // ignore if table doesn't exist
+    }
+  }
+  try {
+    await client.query("UPDATE departments SET head_teacher_id = NULL");
+    await client.query("UPDATE users SET linked_student_id = NULL");
+  } catch {}
   await client.query("DELETE FROM notifications");
   await client.query("DELETE FROM audit_logs");
   await client.query("DELETE FROM payment_webhook_events");
