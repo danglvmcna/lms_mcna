@@ -845,9 +845,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             </div>
 
             {activeWorkspaceTab === "study" ? (
-              <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-5 items-start">
+              <div className="min-w-0">
               {/* Sidebar: grouped study sessions */}
-              <div className="bg-transparent border-b lg:border-b-0 lg:border-r border-slate-200 pb-4 lg:pb-0 lg:pr-4 space-y-3 h-fit lg:sticky lg:top-20">
+              <div className="hidden">
                 <div className="flex items-center justify-between px-1 pb-2 border-b border-slate-200">
                   <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Chương trình học</span>
                   <span className="text-[10px] font-semibold text-slate-400">{courseSessions.length} buổi</span>
@@ -1142,7 +1142,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               </div>
 
               {/* Main Workspace Content Inspector */}
-              <div className="space-y-5 min-w-0">
+              <div className="space-y-5 min-w-0 w-full">
                 
                 {/* Condition 1: View Assignment detail & submission console */}
                 {activeAssignmentId ? (() => {
