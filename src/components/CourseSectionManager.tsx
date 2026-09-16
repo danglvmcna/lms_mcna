@@ -545,20 +545,44 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 const courseSectionsList = (store.courseSections || []).filter((s: any) => s.courseId === c.id);
 
                 return (
-                  <div key={c.id} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition duration-150">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="px-2 py-0.5 bg-indigo-600/20 text-indigo-300 font-bold rounded text-[9px] uppercase tracking-wider">
-                          {c.category}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                          c.status === "published" ? "bg-emerald-500/20 text-emerald-400" :
-                          c.status === "pending" ? "bg-amber-500/20 text-amber-400" :
-                          "bg-white/10 text-white/55"
-                        }`}>
-                          {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
-                        </span>
-                      </div>
+                  <div key={c.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-white/20 transition duration-150 group">
+                    <div>
+                      {c.thumbnail ? (
+                        <div className="h-32 w-full overflow-hidden bg-slate-900 border-b border-white/5 relative">
+                          <img
+                            src={c.thumbnail}
+                            alt={c.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = "none";
+                            }}
+                          />
+                          <div className="absolute top-2.5 right-2.5">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md shadow-sm ${
+                              c.status === "published" ? "bg-emerald-500/80 text-white border border-emerald-400/40" :
+                              c.status === "pending" ? "bg-amber-500/80 text-white border border-amber-400/40" :
+                              "bg-slate-900/80 text-white/70 border border-white/10"
+                            }`}>
+                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="p-5 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className="px-2 py-0.5 bg-indigo-600/20 text-indigo-300 font-bold rounded text-[9px] uppercase tracking-wider">
+                            {c.category}
+                          </span>
+                          {!c.thumbnail && (
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              c.status === "published" ? "bg-emerald-500/20 text-emerald-400" :
+                              c.status === "pending" ? "bg-amber-500/20 text-amber-400" :
+                              "bg-white/10 text-white/55"
+                            }`}>
+                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
+                            </span>
+                          )}
+                        </div>
 
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-white leading-snug line-clamp-1">{c.title}</h4>
@@ -569,8 +593,9 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         <div>Số buổi học: <span className="text-white font-mono font-medium">{c.numberOfLessons || 10}</span></div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4 text-xs">
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4 text-xs">
                       <span className="text-white/40">{courseSectionsList.length} lớp học phần</span>
                       <div className="flex gap-2">
                         <button

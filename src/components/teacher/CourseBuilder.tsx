@@ -454,16 +454,31 @@ export default function CourseBuilder(props: ComponentProps) {
               {filteredCourses.map((course: any) => {
                 const enrolledCount = store.enrollments.filter((e: any) => e.courseId === course.id).length;
                 return (
-                  <div key={course.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition duration-150 flex flex-col justify-between">
+                  <div key={course.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition duration-150 flex flex-col justify-between group">
                     <div>
-                      <div className="h-28 bg-indigo-50/50 flex items-center justify-center relative border-b border-slate-100">
-                        <BookOpen className="h-8 w-8 text-indigo-500" />
+                      <div className="h-36 w-full bg-gradient-to-br from-indigo-950/60 via-slate-800 to-slate-900 flex items-center justify-center relative border-b border-white/10 overflow-hidden">
+                        {course.thumbnail ? (
+                          <img
+                            src={course.thumbnail}
+                            alt={course.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = "none";
+                              const parent = e.currentTarget.parentElement;
+                              const fallback = parent?.querySelector(".thumb-fallback");
+                              if (fallback) (fallback as HTMLElement).style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        <div className={`thumb-fallback w-full h-full items-center justify-center ${course.thumbnail ? "hidden" : "flex"}`}>
+                          <BookOpen className="h-8 w-8 text-indigo-400/60" />
+                        </div>
                         <div className="absolute top-3 right-3">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider uppercase ${
-                            course.status === "published" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
-                            course.status === "pending" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
-                            course.status === "rejected" ? "bg-red-500/20 text-red-400 border border-red-500/30" :
-                            "bg-white/10 text-white/60 border border-white/5"
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${
+                            course.status === "published" ? "bg-emerald-500/80 text-white border border-emerald-400/40" :
+                            course.status === "pending" ? "bg-amber-500/80 text-white border border-amber-400/40" :
+                            course.status === "rejected" ? "bg-red-500/80 text-white border border-red-400/40" :
+                            "bg-slate-900/80 text-white/70 border border-white/10"
                           }`}>
                             {course.status === "published" ? "ĐANG MỞ" :
                              course.status === "pending" ? "CHỜ XUẤT BẢN" :
@@ -526,19 +541,24 @@ export default function CourseBuilder(props: ComponentProps) {
         {activeSubTab === "courses" && selectedCourseId && activeCourse && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedCourseId(null)}
-                  className="p-1 px-2 bg-white/5 hover:bg-white/10 text-xs text-white/70 rounded-lg cursor-pointer"
+                  className="p-1 px-2.5 bg-white/5 hover:bg-white/10 text-xs text-white/70 rounded-lg cursor-pointer"
                 >
-                  Quay lại danh sách
+                  ← Quay lại
                 </button>
-                <h4 className="text-base font-display font-semibold text-white truncate max-w-sm md:max-w-md">Khóa học: {activeCourse.title}</h4>
-                <span className="text-xs text-white/40">Trạng thái: <strong className="text-indigo-200 uppercase">{
-                  activeCourse.status === "published" ? "Đang mở" :
-                  activeCourse.status === "pending" ? "Chờ xuất bản" :
-                  activeCourse.status === "rejected" ? "Bị trả về chỉnh sửa" : "Bản nháp"
-                }</strong></span>
+                {activeCourse.thumbnail && (
+                  <img src={activeCourse.thumbnail} alt="" className="h-9 w-14 object-cover rounded-lg border border-white/10 shrink-0" />
+                )}
+                <div>
+                  <h4 className="text-base font-display font-semibold text-white truncate max-w-sm md:max-w-md">Khóa học: {activeCourse.title}</h4>
+                  <span className="text-xs text-white/40">Trạng thái: <strong className="text-indigo-200 uppercase">{
+                    activeCourse.status === "published" ? "Đang mở" :
+                    activeCourse.status === "pending" ? "Chờ xuất bản" :
+                    activeCourse.status === "rejected" ? "Bị trả về chỉnh sửa" : "Bản nháp"
+                  }</strong></span>
+                </div>
               </div>
 
             </div>
