@@ -14,16 +14,16 @@ const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER || "noreply@mcna.vn"}>`;
 
-function getSmtpUser(): string {
+export function getSmtpUser(): string {
   return (process.env.SMTP_USER || "").trim();
 }
 
-function getSmtpPass(): string {
+export function getSmtpPass(): string {
   // Strip whitespace in case user pastes 16-character Gmail App Password with spaces
   return (process.env.SMTP_PASS || "").trim().replace(/\s+/g, "");
 }
 
-function getSmtpFrom(): string {
+export function getSmtpFrom(): string {
   const user = getSmtpUser();
   return process.env.SMTP_FROM || `"LMS MCNA" <${user || "noreply@mcna.vn"}>`;
 }
@@ -48,7 +48,7 @@ function hasSmtpOauth2Config(): boolean {
 /**
  * Initialize nodemailer transporter using standard SMTP or Service Account OAuth2 flow
  */
-function getTransporter(): nodemailer.Transporter {
+export function getTransporter(): nodemailer.Transporter {
   if (activeTransporter) return activeTransporter;
 
   const user = getSmtpUser();
@@ -58,15 +58,26 @@ function getTransporter(): nodemailer.Transporter {
 
   if (user && pass) {
     console.log(`[EmailWorker] Initializing standard SMTP transport for: ${user}`);
-    activeTransporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: {
-        user,
-        pass,
-      },
-    });
+    const isGmail = host === "smtp.gmail.com" || user.endsWith("@gmail.com");
+    activeTransporter = nodemailer.createTransport(
+      isGmail
+        ? {
+            service: "gmail",
+            auth: {
+              user,
+              pass,
+            },
+          }
+        : {
+            host,
+            port,
+            secure: port === 465,
+            auth: {
+              user,
+              pass,
+            },
+          }
+    );
     return activeTransporter;
   }
 
