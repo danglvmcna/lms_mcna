@@ -26,7 +26,15 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const err = new Error(payload.error || `Request failed: ${response.status}`) as any;
+    let errorMessage = payload.error;
+    if (!errorMessage) {
+      if (response.status === 404) {
+        errorMessage = "Không tìm thấy tài nguyên hoặc API chưa sẵn sàng (HTTP 404). Vui lòng kiểm tra lại địa chỉ hoặc đảm bảo đang truy cập qua http://localhost:3000.";
+      } else {
+        errorMessage = `Lỗi kết nối máy chủ (HTTP ${response.status})`;
+      }
+    }
+    const err = new Error(errorMessage) as any;
     err.payload = payload;
     throw err;
   }

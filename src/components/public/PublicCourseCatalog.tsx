@@ -38,12 +38,16 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
   const [detail, setDetail] = useState<PublicCourseDetail | null>(null);
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
 
+  const [retryTrigger, setRetryTrigger] = useState(0);
+
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     api.getPublicCourses()
       .then(setCourses)
       .catch((err: any) => setError(err.message || "Không tải được danh sách khóa học."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [retryTrigger]);
 
   useEffect(() => {
     syncCourseParam(selectedCourseId);
@@ -342,7 +346,22 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs flex items-center justify-between gap-3">
             <span>{error}</span>
-            <button type="button" onClick={() => setError(null)} className="font-bold cursor-pointer">Đóng</button>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setRetryTrigger(prev => prev + 1)}
+                className="font-bold underline hover:text-white cursor-pointer"
+              >
+                Thử lại
+              </button>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="font-bold cursor-pointer text-white/60 hover:text-white"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         )}
         {selectedCourseId ? renderCourseDetail() : renderCourseList()}
