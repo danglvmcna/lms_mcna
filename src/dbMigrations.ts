@@ -9,6 +9,7 @@ export type MigrationResult = {
 
 export function getMigrationFiles() {
   const migrationsDir = path.join(process.cwd(), "migrations", "postgres");
+  if (!fs.existsSync(migrationsDir)) return [];
   return fs
     .readdirSync(migrationsDir)
     .filter(file => file.endsWith(".sql"))
