@@ -5,6 +5,9 @@ import { generateId } from "../ids";
 import { coursesRepository } from "../repositories/courses";
 import { enrollmentsRepository } from "../repositories/enrollments";
 import { financeRepository } from "../repositories/finance";
+
+// Classes are not credit-bearing in the LMS; keep a single value for the legacy column.
+const DEFAULT_REGISTRATION_CREDITS = 3;
 import { sectionsRepository } from "../repositories/sections";
 
 export type ServiceError = { error: string; status: number };
@@ -92,15 +95,11 @@ export async function requestEnrollment(input: RequestEnrollmentInput): Promise<
 
     let registrationId: string | undefined;
     if (section && !isPaid) {
-      const creditsRow = (await client.query(
-        "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
-        [course.id]
-      )).rows[0];
       registrationId = generateId("reg");
       await client.query(
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
          VALUES ($1, $2, $3, 'waitlisted', $4, $5, false)`,
-        [registrationId, input.studentId, section.id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+        [registrationId, input.studentId, section.id, new Date().toISOString(), DEFAULT_REGISTRATION_CREDITS]
       );
     }
 
@@ -184,15 +183,11 @@ export async function placeEnrollment(
     )).rows[0];
 
     if (!existingRegistration) {
-      const creditsRow = (await client.query(
-        "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
-        [enrollment.course_id]
-      )).rows[0];
       registration = (await client.query(
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
          VALUES ($1, $2, $3, 'registered', $4, $5, false)
          RETURNING *`,
-        [generateId("reg"), enrollment.student_id, sectionId, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+        [generateId("reg"), enrollment.student_id, sectionId, new Date().toISOString(), DEFAULT_REGISTRATION_CREDITS]
       )).rows[0];
     } else {
       registration = (await client.query(

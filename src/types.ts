@@ -13,7 +13,7 @@ export interface User {
   isActive: boolean;
   phone?: string;
   createdAt: string;
-  linkedStudentId?: string; // parent account links to student
+  linkedStudentId?: string;
   schoolEmail?: string;
   emailProvisioned?: boolean;
   emailProvisionedAt?: string;
@@ -191,25 +191,6 @@ export interface Transaction {
 }
 
 
-export interface Department {
-  id: string;
-  name: string;
-  code: string;
-  headTeacherId: string;
-  description: string;
-}
-
-export interface Program {
-  id: string;
-  departmentId: string;
-  name: string;
-  code: string;
-  type: "certificate" | "diploma" | "degree";
-  totalCredits: number;
-  description: string;
-}
-
-
 export interface AttendanceSession {
   id: string;
   courseId: string;
@@ -246,18 +227,6 @@ export interface AttendanceRecord {
   studentId: string;
   status: "present" | "absent" | "late" | "excused";
   note?: string;
-}
-
-
-
-export interface AdvisorNote {
-  id: string;
-  advisorId: string;
-  studentId: string;
-  content: string;
-  type: "academic" | "behavioral" | "financial";
-  shareWithParent?: boolean;
-  createdAt: string;
 }
 
 export interface CourseSection {
@@ -363,12 +332,9 @@ export interface LMSDataStore {
   forumPosts: ForumPost[];
   auditLogs: AuditLog[];
   transactions: Transaction[];
-  departments: Department[];
-  programs: Program[];
   attendanceSessions: AttendanceSession[];
   sessionMaterials?: SessionMaterial[];
   attendanceRecords: AttendanceRecord[];
-  advisorNotes: AdvisorNote[];
   courseSections?: CourseSection[];
   courseRegistrations?: CourseRegistration[];
   systemEvents?: SystemEvent[];

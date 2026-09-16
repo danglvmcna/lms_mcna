@@ -41,7 +41,7 @@ import CourseCatalog from "./student/CourseCatalog";
 import MyLearningWorkspace from "./student/MyLearningWorkspace";
 import QuizConsole from "./student/QuizConsole";
 import AssignmentSubmit from "./student/AssignmentSubmit";
-import StudentAcademics from "./student/StudentAcademics";
+import StudentOrders from "./student/StudentOrders";
 import { generateId, escapeHTML } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
@@ -58,59 +58,15 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
   const { store, isLoading, isError, refetch } = useApiStore();
 
 
-  // Safeguard StudentProfile backfill so it never crashes
-  const studentProfiles = (store as any).studentProfiles || [];
-  let myProfile = studentProfiles.find((p: any) => p.userId === currentUser.id);
-  if (!myProfile) {
-    myProfile = {
-      id: "profile_" + currentUser.id,
-      userId: currentUser.id,
-      studentCode: "SV2025" + currentUser.id.slice(-4),
-      programId: "prog_se",
-      departmentId: "dept_cs",
-      academicYear: 1,
-      enrollmentDate: new Date().toISOString().slice(0, 10),
-      expectedGraduation: "2029-06-30",
-      status: "active",
-      gpa: 0.0,
-      totalCreditsEarned: 0,
-      phone: "",
-      dateOfBirth: "",
-      gender: "Nam",
-      address: "",
-      guardianName: "",
-      guardianPhone: ""
-    };
-  }
-
-  // Profile forms editable fields states
-  const [editPhone, setEditPhone] = useState(myProfile.phone || "");
-  const [editBirth, setEditBirth] = useState(myProfile.dateOfBirth || "");
-  const [editGender, setEditGender] = useState(myProfile.gender || "Nam");
-  const [editAddress, setEditAddress] = useState(myProfile.address || "");
-  const [editParent, setEditParent] = useState(myProfile.guardianName || "");
-  const [editParentPhone, setEditParentPhone] = useState(myProfile.guardianPhone || "");
-  const [showProfileEditForm, setShowProfileEditForm] = useState(false);
-
-  // Active Transcript Print view overlay
-  const [showPrintTranscript, setShowPrintTranscript] = useState(false);
-
   // Local navigation states
   const [activeSubTab, setActiveSubTab] = useState<
-    | "catalog" 
-    | "learning" 
-    | "student_tuition"
-    | "quizzes" 
-    | "assignments" 
-    | "certificates" 
+    | "catalog"
+    | "learning"
+    | "orders"
+    | "quizzes"
+    | "assignments"
+    | "certificates"
     | "notifications"
-    | "profile"
-    | "academics_record"
-    | "student_attendance"
-    | "student_transcript"
-    | "parent_view"
-    | "student_guide"
-    | "student_timetable"
   >("catalog");
 
   // Auto-refresh store data whenever the notifications tab is opened
@@ -229,7 +185,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
 
   // Compute active variables
-  const semesters = (store as any).semesters || [];
   const publishedCourses = store.courses.filter(c => {
     if (c.status !== "published") return false;
     const sections = (store.courseSections || []).filter(
@@ -327,8 +282,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         }
       })
       .catch((err: any) => triggerToast(err.message || "Không thể đăng ký khóa học."));
-    return;
-    
+  };
+
+  const unusedLegacyEnrollFlow = (courseId: string, price: number, courseObj: Course, storeData: LMSDataStore) => {
     if (price > 0) {
       // Paid courses still wait for class placement; payment review is tracked by the transaction.
       const newEnroll: Enrollment = {
@@ -584,25 +540,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     quizFinishedState,
     handleSelectQuizAnswer,
     handleAutoSubmitQuiz,
-    showProfileEditForm,
-    setShowProfileEditForm,
-    myProfile,
-    editPhone,
-    setEditPhone,
-    editBirth,
-    setEditBirth,
-    editGender,
-    setEditGender,
-    editAddress,
-    setEditAddress,
-    editParent,
-    setEditParent,
-    editParentPhone,
-    setEditParentPhone,
     onRefreshData,
     triggerToast,
-    showPrintTranscript,
-    setShowPrintTranscript,
     paymentGuideTx,
     setPaymentGuideTx,
     myNotifications,
@@ -721,7 +660,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <span className="text-white/40">— đang xem: <strong className="text-indigo-300">{{
                 catalog: "Khám phá Khóa học",
                 learning: "Lớp học của tôi",
-                student_tuition: "Đơn hàng & Học phí",
+                orders: "Đơn hàng & Thanh toán",
                 assignments: "Bài tập & Đồ án",
                 certificates: "Chứng nhận của tôi",
                 notifications: "Hộp thư thông báo",
@@ -760,15 +699,15 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <span>Lớp học của tôi</span>
             </button>
             <button
-              onClick={() => { setActiveSubTab("student_tuition"); setShowSidebar(false); }}
+              onClick={() => { setActiveSubTab("orders"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
-                activeSubTab === "student_tuition" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
+                activeSubTab === "orders"
+                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
-              <CreditCard className={`h-4.5 w-4.5 ${activeSubTab === "student_tuition" ? "text-indigo-300" : "text-white/40"}`} />
-              <span>Đơn hàng & Học phí</span>
+              <CreditCard className={`h-4.5 w-4.5 ${activeSubTab === "orders" ? "text-indigo-300" : "text-white/40"}`} />
+              <span>Đơn hàng & Thanh toán</span>
             </button>
           </div>
         </div>
@@ -851,8 +790,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
           />
         )}
 
-        {/* Tab SIS 1: My Profile Section */}
-        <StudentAcademics {...studentPanelProps} />
+        <StudentOrders {...studentPanelProps} />
         <QuizConsole {...studentPanelProps} />
 
         </div>

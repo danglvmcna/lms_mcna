@@ -4,11 +4,7 @@ import { generateId } from "./ids";
 export type EventType =
   | "grade.saved"
   | "attendance.session.saved"
-  | "tuition.overdue"
   | "registration.dropped"
-  | "scholarship.approved"
-  | "leave.approved"
-  | "program.completed"
   | "user.created";
 
 type Handler<T = any> = (payload: T, pool: Pool) => Promise<void>;
@@ -48,4 +44,3 @@ class EventBus {
 }
 
 export const eventBus = new EventBus();
-

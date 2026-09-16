@@ -64,8 +64,6 @@ export default function AssignmentSubmit(props: ComponentProps) {
     setEditParentPhone,
     onRefreshData,
     triggerToast,
-    showPrintTranscript,
-    setShowPrintTranscript,
     paymentGuideTx,
     setPaymentGuideTx,
     myNotifications,

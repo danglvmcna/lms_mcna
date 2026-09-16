@@ -108,7 +108,6 @@ const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
 
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
@@ -235,115 +234,12 @@ function asyncHandler(handler: AsyncRoute) {
   };
 }
 
-type StudentProfileDefaults = {
-  programId?: string;
-  departmentId?: string;
-  phone?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  address?: string;
-  guardianName?: string;
-  guardianPhone?: string;
-  className?: string;
-};
-
 type UserCreateInput = {
   email: string;
   name: string;
   role: User["role"];
   phone?: string;
-  linkedStudentId?: string;
-  programId?: string;
-  departmentId?: string;
-  className?: string;
 };
-
-async function resolveStudentProgramDefaults(db: Queryable, programId?: string, departmentId?: string) {
-  if (programId) {
-    const row = (await db.query(
-      `SELECT p.id AS program_id, p.department_id
-       FROM programs p
-       WHERE p.id = $1 AND ($2::text IS NULL OR p.department_id = $2)
-       LIMIT 1`,
-      [programId, departmentId || null]
-    )).rows[0];
-    if (row) {
-      return { programId: row.program_id as string, departmentId: row.department_id as string };
-    }
-  }
-
-  if (departmentId) {
-    const row = (await db.query(
-      `SELECT p.id AS program_id, p.department_id
-       FROM programs p
-       WHERE p.department_id = $1
-       ORDER BY p.id
-       LIMIT 1`,
-      [departmentId]
-    )).rows[0];
-    if (row) {
-      return { programId: row.program_id as string, departmentId: row.department_id as string };
-    }
-  }
-
-  const row = (await db.query(
-    `SELECT p.id AS program_id, p.department_id
-     FROM programs p
-     ORDER BY p.id
-     LIMIT 1`
-  )).rows[0];
-  if (!row) {
-    const err = new Error("No academic program is configured for student profile creation.");
-    (err as any).status = 400;
-    throw err;
-  }
-  return { programId: row.program_id as string, departmentId: row.department_id as string };
-}
-
-async function generateStudentCode(db: Queryable) {
-  const prefix = `SV${new Date().getFullYear()}`;
-  const latest = (await db.query(
-    "SELECT student_code FROM student_profiles WHERE student_code LIKE $1 AND student_code ~ $2 ORDER BY student_code DESC LIMIT 1",
-    [`${prefix}%`, `^${prefix}[0-9]+$`]
-  )).rows[0]?.student_code as string | undefined;
-  const suffix = latest?.startsWith(prefix) && /^\d+$/.test(latest.slice(prefix.length))
-    ? Number(latest.slice(prefix.length))
-    : 0;
-  return `${prefix}${String(suffix + 1).padStart(4, "0")}`;
-}
-
-async function ensureStudentProfile(db: Queryable, userId: string, defaults: StudentProfileDefaults = {}) {
-  const exists = (await db.query("SELECT id FROM student_profiles WHERE user_id = $1", [userId])).rowCount;
-  if (exists) return false;
-
-  const { programId, departmentId } = await resolveStudentProgramDefaults(db, defaults.programId, defaults.departmentId);
-  const enrollmentDate = new Date().toISOString().slice(0, 10);
-  const expectedGraduation = new Date(new Date().setFullYear(new Date().getFullYear() + 4)).toISOString().slice(0, 10);
-  await db.query(
-    `INSERT INTO student_profiles (
-       id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
-       expected_graduation, status, gpa, total_credits_earned, phone, date_of_birth, gender,
-       address, guardian_name, guardian_phone, class_name
-     ) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, 'active', 0.0, 0, $8, $9, $10, $11, $12, $13, $14)`,
-    [
-      generateId("profile"),
-      userId,
-      await generateStudentCode(db),
-      programId,
-      departmentId,
-      enrollmentDate,
-      expectedGraduation,
-      defaults.phone || null,
-      defaults.dateOfBirth || null,
-      defaults.gender || null,
-      defaults.address || null,
-      defaults.guardianName || null,
-      defaults.guardianPhone || null,
-      defaults.className || null
-    ]
-  );
-  return true;
-}
 
 async function createUserAccount(db: Queryable, input: UserCreateInput, password: string) {
   const credential = hashPassword(password);
@@ -356,19 +252,9 @@ async function createUserAccount(db: Queryable, input: UserCreateInput, password
     role: input.role,
     isActive: true,
     phone: input.phone,
-    linkedStudentId: input.linkedStudentId,
     createdAt: new Date().toISOString()
   };
-  const created = await usersRepository.create(db, user);
-  if (created.role === "student") {
-    await ensureStudentProfile(db, created.id, {
-      programId: input.programId,
-      departmentId: input.departmentId,
-      phone: input.phone,
-      className: input.className
-    });
-  }
-  return created;
+  return usersRepository.create(db, user);
 }
 
 function generateTemporaryPassword() {
@@ -412,7 +298,6 @@ async function createStudentWithTemporaryPassword(
     try {
       await cleanup.query("BEGIN");
       await cleanup.query("DELETE FROM audit_logs WHERE user_id = $1", [user.id]);
-      await cleanup.query("DELETE FROM student_profiles WHERE user_id = $1", [user.id]);
       await cleanup.query("DELETE FROM users WHERE id = $1", [user.id]);
       await cleanup.query("COMMIT");
     } catch (cleanupError) {
@@ -1050,7 +935,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       await client.query("BEGIN");
 
       // Legacy snapshots are not trusted for identities or student records.
-      // users and student_profiles are written only through scoped API routes.
+      // User records are written only through scoped API routes, never from a client snapshot.
 
     // Fetch existing courses to skip identical updates
     const dbCoursesRes = await client.query("SELECT id, status, rejection_reason FROM courses");
@@ -1067,98 +952,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
           `UPDATE courses SET status = $1, rejection_reason = $2 WHERE id = $3`,
           [course.status, course.rejectionReason || null, course.id]
         );
-      }
-    }
-
-    // Sync structural tables (departments, programs)
-    if (store.programs !== undefined) {
-      const clientIds = (store.programs || []).map(x => x.id);
-      if (clientIds.length > 0) {
-        await client.query(`DELETE FROM programs WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
-      } else {
-        await client.query(`DELETE FROM programs`);
-      }
-    }
-    if (store.departments !== undefined) {
-      const clientIds = (store.departments || []).map(x => x.id);
-      if (clientIds.length > 0) {
-        await client.query(`DELETE FROM departments WHERE id NOT IN (${clientIds.map((_, i) => `$${i + 1}`).join(", ")})`, clientIds);
-      } else {
-        await client.query(`DELETE FROM departments`);
-      }
-    }
-
-    if (store.departments !== undefined) {
-      const dbRes = await client.query("SELECT id, name, code, head_teacher_id, description FROM departments");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientDepts = store.departments || [];
-      for (const dept of clientDepts) {
-        const dbVal = dbMap.get(dept.id);
-        const isDirty = !dbVal ||
-          dbVal.name !== dept.name ||
-          dbVal.code !== dept.code ||
-          dbVal.head_teacher_id !== (dept.headTeacherId || null) ||
-          dbVal.description !== (dept.description || null);
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO departments (id, name, code, head_teacher_id, description)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO UPDATE SET
-               name = EXCLUDED.name,
-               code = EXCLUDED.code,
-               head_teacher_id = EXCLUDED.head_teacher_id,
-               description = EXCLUDED.description`,
-            [
-              dept.id,
-              dept.name,
-              dept.code,
-              dept.headTeacherId || null,
-              dept.description || null
-            ]
-          );
-        }
-      }
-    }
-
-    if (store.programs !== undefined) {
-      const dbRes = await client.query("SELECT id, department_id, name, code, type, total_credits, description FROM programs");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientProgs = store.programs || [];
-      for (const prog of clientProgs) {
-        const dbVal = dbMap.get(prog.id);
-        const isDirty = !dbVal ||
-          dbVal.department_id !== prog.departmentId ||
-          dbVal.name !== prog.name ||
-          dbVal.code !== prog.code ||
-          dbVal.type !== (prog.type || "degree") ||
-          Number(dbVal.total_credits) !== (Number(prog.totalCredits) || 0) ||
-          dbVal.description !== (prog.description || null);
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO programs (id, department_id, name, code, type, total_credits, description)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (id) DO UPDATE SET
-               department_id = EXCLUDED.department_id,
-               name = EXCLUDED.name,
-               code = EXCLUDED.code,
-               type = EXCLUDED.type,
-               total_credits = EXCLUDED.total_credits,
-               description = EXCLUDED.description`,
-            [
-              prog.id,
-              prog.departmentId,
-              prog.name,
-              prog.code,
-              prog.type || "degree",
-              Number(prog.totalCredits) || 0,
-              prog.description || null
-            ]
-          );
-        }
       }
     }
 
@@ -1187,43 +980,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
                is_read = EXCLUDED.is_read,
                created_at = EXCLUDED.created_at`,
             [note.id, note.userId, note.type, note.message, Boolean(note.isRead), note.createdAt]
-          );
-        }
-      }
-    }
-
-    if (store.advisorNotes !== undefined) {
-      const dbRes = await client.query("SELECT id, advisor_id, student_id, content, type, created_at FROM advisor_notes");
-      const dbMap = new Map<string, any>(dbRes.rows.map(r => [r.id, r]));
-
-      const clientNotesAdvisor = store.advisorNotes || [];
-      for (const n of clientNotesAdvisor) {
-        const dbVal = dbMap.get(n.id);
-        const isDirty = !dbVal ||
-          dbVal.advisor_id !== (n.advisorId || null) ||
-          dbVal.student_id !== n.studentId ||
-          dbVal.content !== n.content ||
-          dbVal.type !== n.type ||
-          dbVal.created_at !== n.createdAt;
-
-        if (isDirty) {
-          await client.query(
-            `INSERT INTO advisor_notes (id, advisor_id, student_id, content, type, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (id) DO UPDATE SET
-               advisor_id = EXCLUDED.advisor_id,
-               student_id = EXCLUDED.student_id,
-               content = EXCLUDED.content,
-               type = EXCLUDED.type,
-               created_at = EXCLUDED.created_at`,
-            [
-              n.id,
-              n.advisorId || null,
-              n.studentId,
-              n.content,
-              n.type,
-              n.createdAt
-            ]
           );
         }
       }
@@ -1474,8 +1230,7 @@ function dashboardFromStore(store: any, user: User) {
       ...scoped,
       dashboard: {
         enrolledCourses: scoped.enrollments.length,
-        completedLessons: scoped.lessonProgress.filter((item: any) => item.completed).length,
-        unpaidFees: scoped.tuitionFees.filter((fee: any) => fee.status !== "paid").length
+        completedLessons: scoped.lessonProgress.filter((item: any) => item.completed).length
       }
     };
   }
@@ -1494,9 +1249,6 @@ async function initializeDatabase() {
   startScheduler();
 }
 
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } }) : null;
-
 // Force-logout: clears session cookie without requiring auth or CSRF.
 // Must be registered BEFORE requireCsrf middleware so unauthenticated tabs
 // (new tab, incognito, different user) can clear a stale session cookie.
@@ -1512,31 +1264,6 @@ app.post("/api/auth/force-logout", asyncHandler(async (req, res) => {
 }));
 
 app.use("/api", requireCsrf);
-
-app.post("/api/analyze", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
-  const { code } = req.body;
-  if (!code) return res.status(400).json({ error: "Code content is required." });
-  if (!ai) return res.status(503).json({ error: "Gemini API Key is not configured in the workspace secrets. Please configure GEMINI_API_KEY in Settings." });
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
-    contents: `Analyze this web/backend application entrypoint file, specifically looking at its structure, routing, models (if applicable), and configuration, and generate a structured JSON feedback. Here is the code:\n\n${code}`,
-    config: {
-      systemInstruction: "You are an expert full-stack engineer specialized in web frameworks, microservices, and porting applications across Python (Flask) and Node.js/Express.js.",
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          explanation: { type: Type.STRING },
-          configs: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, defaultValue: { type: Type.STRING }, envVar: { type: Type.STRING }, description: { type: Type.STRING } }, required: ["name", "defaultValue", "envVar", "description"] } },
-          nodePort: { type: Type.STRING },
-          tips: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["explanation", "configs", "nodePort", "tips"]
-      }
-    }
-  });
-  res.json(JSON.parse(response.text?.trim() ?? "{}"));
-}));
 
 app.get("/health", asyncHandler(async (_req, res) => {
   await pool.query("SELECT 1");
@@ -1695,41 +1422,6 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
 
   await audit(req, "change_password", req.user!.id, "User updated their account password.");
   res.json({ ok: true, message: "Đổi mật khẩu thành công!" });
-}));
-
-app.patch("/api/student/profile", requireAuth, requireRole(["student"]), validateBody(schemas.updateProfile), asyncHandler(async (req, res) => {
-  const { phone, dateOfBirth, gender, address, guardianName, guardianPhone } = req.body;
-  const exists = (await pool.query("SELECT id FROM student_profiles WHERE user_id = $1", [req.user!.id])).rowCount;
-
-  if (!exists) {
-    await ensureStudentProfile(pool, req.user!.id, {
-      phone,
-      dateOfBirth,
-      gender,
-      address,
-      guardianName,
-      guardianPhone
-    });
-  } else {
-    await pool.query(
-      `UPDATE student_profiles
-       SET phone = $1,
-           date_of_birth = $2,
-           gender = $3,
-           address = $4,
-           guardian_name = $5,
-           guardian_phone = $6
-       WHERE user_id = $7`,
-      [phone || null, dateOfBirth || null, gender || null, address || null, guardianName || null, guardianPhone || null, req.user!.id]
-    );
-  }
-
-  if (phone) {
-    await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [phone, req.user!.id]);
-  }
-
-  await audit(req, "update_profile", req.user!.id, "Student updated their personal profile.");
-  res.json({ ok: true, message: "Cập nhật hồ sơ lý lịch thành công!" });
 }));
 
 app.get("/api/store", requireAuth, asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user!))));
@@ -2182,7 +1874,6 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin", "su
     await client.query("DELETE FROM enrollments WHERE course_id = $1", [courseId]);
 
     // Xóa liên kết chương trình học/khung ngành
-    await client.query("DELETE FROM program_courses WHERE course_id = $1", [courseId]);
 
     // Cuối cùng xóa khóa học
     await client.query("DELETE FROM courses WHERE id = $1", [courseId]);
@@ -2350,18 +2041,13 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       let enrollmentId = p.enrollmentId;
       let sectionId = p.sectionId;
 
-      if (p.studentCode || p.email) {
+      if (p.email) {
         const studentRow = (await client.query(
-          `SELECT u.id 
-           FROM users u
-           LEFT JOIN student_profiles sp ON u.id = sp.user_id
-           WHERE ($1::text IS NULL OR sp.student_code = $1)
-             AND ($2::text IS NULL OR u.email = $2)
-           LIMIT 1`,
-          [p.studentCode || null, p.email || null]
+          "SELECT id FROM users WHERE email = $1 LIMIT 1",
+          [p.email]
         )).rows[0];
         if (!studentRow) {
-          errors.push({ index, error: `Không tìm thấy học viên với mã: ${p.studentCode || ''}, email: ${p.email || ''}` });
+          errors.push({ index, error: `Không tìm thấy học viên với email: ${p.email}` });
           continue;
         }
         studentId = studentRow.id;
@@ -2463,20 +2149,15 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
          JOIN course_sections cs ON cs.id = cr.section_id
          WHERE cr.student_id = $1
            AND cs.course_id = $2
-           AND cr.semester_id = $3
            AND cr.status IN ('registered', 'waitlisted')`,
-        [studentId, section.course_id, section.semester_id]
+        [studentId, section.course_id]
       )).rows[0];
 
       if (!existingRegistration) {
-        const creditsRow = (await client.query(
-          "SELECT COALESCE(MAX(credits), 3) AS credits FROM program_courses WHERE course_id = $1",
-          [section.course_id]
-        )).rows[0];
         await client.query(
-          `INSERT INTO course_registrations (id, student_id, section_id, semester_id, status, registered_at, credits, is_retake)
-           VALUES ($1, $2, $3, $4, 'registered', $5, $6, false)`,
-          [generateId("reg"), studentId, sectionId, section.semester_id, new Date().toISOString(), Number(creditsRow?.credits || 3)]
+          `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
+           VALUES ($1, $2, $3, 'registered', $4, $5, false)`,
+          [generateId("reg"), studentId, sectionId, new Date().toISOString(), 3]
         );
       } else {
         await client.query(
@@ -3127,10 +2808,6 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyn
 
   await pool.query("UPDATE users SET role = $1 WHERE id = $2", [role, req.params.id]);
 
-  if (role === "student") {
-    await ensureStudentProfile(pool, req.params.id);
-  }
-
   await audit(req, "update_user_role", req.params.id, `role=${role}`);
   invalidateStoreCache();
 
@@ -3715,7 +3392,6 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     id: generateId("ats"),
     courseId: req.body.courseId,
     sectionId: req.body.sectionId,
-    semesterId: req.body.semesterId || "sem_spring25",
     teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
     date: req.body.date,
     topic: req.body.topic
@@ -3772,7 +3448,7 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
 }));
 
 app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.generateAttendanceLink), asyncHandler(async (req, res) => {
-  const { courseId, sectionId, semesterId, topic } = req.body;
+  const { courseId, sectionId, topic } = req.body;
   const course = await coursesRepository.findById(pool, courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) {
@@ -3790,7 +3466,6 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
     id: generateId("ats"),
     courseId,
     sectionId,
-    semesterId: semesterId || "sem_spring25",
     teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
     date: new Date().toISOString().slice(0, 10),
     topic,
@@ -3806,15 +3481,15 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
 
   if (columns.includes("session_date") && columns.includes("date")) {
     await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, session_date, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [session.id, session.courseId, session.semesterId, session.teacherId, sessionDateOnly, session.date, session.topic, session.code, session.expiresAt]
+      `INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, date, topic, code, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [session.id, session.courseId, session.teacherId, sessionDateOnly, session.date, session.topic, session.code, session.expiresAt]
     );
   } else {
     await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [session.id, session.courseId, session.semesterId, session.teacherId, session.date, session.topic, session.code, session.expiresAt]
+      `INSERT INTO attendance_sessions (id, course_id, teacher_id, date, topic, code, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [session.id, session.courseId, session.teacherId, session.date, session.topic, session.code, session.expiresAt]
     );
   }
   if (columns.includes("section_id") && sectionId) {

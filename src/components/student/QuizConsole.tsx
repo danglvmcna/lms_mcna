@@ -64,8 +64,6 @@ export default function QuizConsole(props: ComponentProps) {
     setEditParentPhone,
     onRefreshData,
     triggerToast,
-    showPrintTranscript,
-    setShowPrintTranscript,
     paymentGuideTx,
     setPaymentGuideTx,
     myNotifications,

@@ -19,12 +19,9 @@ const createEmptyStore = (): LMSDataStore => ({
   forumPosts: [],
   auditLogs: [],
   transactions: [],
-  departments: [],
-  programs: [],
   attendanceSessions: [],
   sessionMaterials: [],
   attendanceRecords: [],
-  advisorNotes: [],
   courseSections: [],
   courseRegistrations: [],
   systemEvents: [],
@@ -72,18 +69,6 @@ export function useCourses() {
 
 export function useEnrollments() {
   return useQuery({ queryKey: ["enrollments"], queryFn: api.getEnrollments, staleTime: 20_000 });
-}
-
-export function useWarnings() {
-  return useQuery({ queryKey: ["warnings"], queryFn: api.getWarnings, staleTime: 20_000 });
-}
-
-export function useTuition() {
-  return useQuery({
-    queryKey: ["dashboard", "finance"],
-    queryFn: api.getFinanceDashboard,
-    staleTime: 20_000
-  });
 }
 
 export function useGradebook() {

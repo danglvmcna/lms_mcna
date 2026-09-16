@@ -77,8 +77,6 @@ export default function CourseCatalog(props: ComponentProps) {
     setEditParentPhone,
     onRefreshData,
     triggerToast,
-    showPrintTranscript,
-    setShowPrintTranscript,
     paymentGuideTx,
     setPaymentGuideTx,
     myNotifications,

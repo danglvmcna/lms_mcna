@@ -2,85 +2,22 @@ import { getInitialStore } from "../store";
 import { backfillMegaDemoData } from "../mockSeeds";
 import { Queryable } from "./db";
 import { usersRepository } from "./repositories/users";
-import { hashPassword } from "../authHash";
 import { generateId } from "./ids";
 import { generateUsername } from "./emailProvisioning/googleWorkspaceClient";
-
-async function cleanupParentSeedData(db: Queryable) {
-  await db.query("SELECT 1");
-}
 
 function getBackfilledSeedStore() {
   const store = getInitialStore();
   backfillMegaDemoData(store);
-  (store as any).studentProfiles = ((store as any).studentProfiles || []).map((profile: any) => ({
-    ...profile,
-    guardianName: undefined,
-    guardianPhone: undefined,
-    guardianEmail: undefined
-  }));
   return store;
 }
 
 export async function seedCoreLearningData(db: Queryable) {
   const store = getBackfilledSeedStore();
-  await cleanupParentSeedData(db);
   const initialCourseCount = Number((await db.query("SELECT COUNT(*) AS count FROM courses")).rows[0].count);
-  const initialProfileCount = Number((await db.query("SELECT COUNT(*) AS count FROM student_profiles")).rows[0].count);
-  const needsMegaBackfill = initialCourseCount < 40 || initialProfileCount < 300;
+  const needsMegaBackfill = initialCourseCount < 40;
 
-  // 1. Seed Academic Years & Semesters (if present in seed store)
-  for (const y of ((store as any).academicYears || [])) {
-    await db.query(
-      `INSERT INTO academic_years (id, name, start_date, end_date, is_current)
-       VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (id) DO UPDATE SET
-         name = EXCLUDED.name,
-         start_date = EXCLUDED.start_date,
-         end_date = EXCLUDED.end_date,
-         is_current = EXCLUDED.is_current`,
-      [y.id, y.name, y.startDate, y.endDate, y.isCurrent]
-    );
-  }
-
-  for (const s of ((store as any).semesters || [])) {
-    await db.query(
-      `INSERT INTO semesters (id, academic_year_id, name, type, start_date, end_date, registration_open, registration_close, is_current)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       ON CONFLICT (id) DO UPDATE SET
-         academic_year_id = EXCLUDED.academic_year_id,
-         name = EXCLUDED.name,
-         type = EXCLUDED.type,
-         start_date = EXCLUDED.start_date,
-         end_date = EXCLUDED.end_date,
-         registration_open = EXCLUDED.registration_open,
-         registration_close = EXCLUDED.registration_close,
-         is_current = EXCLUDED.is_current`,
-      [s.id, s.academicYearId, s.name, s.type, s.startDate, s.endDate, s.registrationOpen, s.registrationClose, Boolean(s.isCurrent)]
-    );
-  }
-
-  // 2. Seed Departments & Programs
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM departments")).rows[0].count) === 0) {
-    for (const d of store.departments) {
-      await db.query(
-        "INSERT INTO departments (id, name, code, head_teacher_id, description) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING",
-        [d.id, d.name, d.code, d.headTeacherId || null, d.description || null]
-      );
-    }
-  }
-
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM programs")).rows[0].count) === 0) {
-    for (const p of store.programs) {
-      await db.query(
-        "INSERT INTO programs (id, department_id, name, code, type, total_credits, description) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
-        [p.id, p.departmentId, p.name, p.code, p.type, p.totalCredits, p.description || null]
-      );
-    }
-  }
-
-  // 3. Seed Courses & Lessons
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM courses")).rows[0].count) === 0) {
+  // 1. Courses & lessons
+  if (initialCourseCount === 0 || needsMegaBackfill) {
     for (const c of store.courses) {
       await db.query(
         `INSERT INTO courses (id, title, description, teacher_id, status, category, thumbnail, price, level, tags_json, rejection_reason, created_at)
@@ -88,26 +25,6 @@ export async function seedCoreLearningData(db: Queryable) {
         [c.id, c.title, c.description, c.teacherId, c.status, c.category, c.thumbnail || null, c.price || 0, c.level || null, JSON.stringify(c.tags || []), c.rejectionReason || null, c.createdAt]
       );
     }
-  }
-  if (needsMegaBackfill) {
-    for (const c of store.courses) {
-      await db.query(
-        `INSERT INTO courses (id, title, description, teacher_id, status, category, thumbnail, price, level, tags_json, rejection_reason, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (id) DO NOTHING`,
-        [c.id, c.title, c.description, c.teacherId, c.status, c.category, c.thumbnail || null, c.price || 0, c.level || null, JSON.stringify(c.tags || []), c.rejectionReason || null, c.createdAt]
-      );
-    }
-  }
-
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM lessons")).rows[0].count) === 0) {
-    for (const l of store.lessons) {
-      await db.query(
-        "INSERT INTO lessons (id, course_id, title, content, video_url, lesson_order, duration) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
-        [l.id, l.courseId, l.title, l.content, l.videoUrl || null, l.order, l.duration]
-      );
-    }
-  }
-  if (needsMegaBackfill) {
     for (const l of store.lessons) {
       await db.query(
         "INSERT INTO lessons (id, course_id, title, content, video_url, lesson_order, duration) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
@@ -116,52 +33,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  // 4. Seed Program Courses Curriculum
-  // 4. Seed Program Courses Curriculum (if any)
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM program_courses")).rows[0].count) === 0) {
-    for (const pc of ((store as any).programCourses || [])) {
-      await db.query(
-        "INSERT INTO program_courses (id, program_id, course_id, credits, is_required, semester) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
-        [pc.id, pc.programId, pc.courseId, pc.credits, pc.isRequired, pc.semester]
-      );
-    }
-  }
-
-  // 5. Seed Student Profiles & Enrollments
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM student_profiles")).rows[0].count) === 0) {
-    for (const p of ((store as any).studentProfiles || [])) {
-      await db.query(
-        `INSERT INTO student_profiles (
-          id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
-          expected_graduation, status, gpa, total_credits_earned, address, phone, date_of_birth,
-          gender, guardian_name, guardian_phone, guardian_email, notes
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (id) DO NOTHING`,
-        [
-          p.id, p.userId, p.studentCode, p.programId, p.departmentId, p.academicYear, p.enrollmentDate,
-          p.expectedGraduation, p.status, p.gpa, p.totalCreditsEarned, p.address || null, p.phone || null,
-          p.dateOfBirth || null, p.gender || null, p.guardianName || null, p.guardianPhone || null,
-          p.guardianEmail || null, p.notes || null
-        ]
-      );
-    }
-  }
-  if (needsMegaBackfill) {
-    for (const p of ((store as any).studentProfiles || [])) {
-      await db.query(
-        `INSERT INTO student_profiles (
-          id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
-          expected_graduation, status, gpa, total_credits_earned, address, phone, date_of_birth,
-          gender, guardian_name, guardian_phone, guardian_email, notes
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (id) DO NOTHING`,
-        [
-          p.id, p.userId, p.studentCode, p.programId, p.departmentId, p.academicYear, p.enrollmentDate,
-          p.expectedGraduation, p.status, p.gpa, p.totalCreditsEarned, p.address || null, p.phone || null,
-          p.dateOfBirth || null, p.gender || null, null, null, null, p.notes || null
-        ]
-      );
-    }
-  }
-
+  // 2. Enrollments
   if (Number((await db.query("SELECT COUNT(*) AS count FROM enrollments")).rows[0].count) === 0) {
     for (const e of store.enrollments) {
       await db.query(
@@ -171,20 +43,20 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  // Seed section data
+  // 3. Classes and their weekly schedule
   if (Number((await db.query("SELECT COUNT(*) AS count FROM course_sections")).rows[0].count) === 0) {
     for (const section of store.courseSections || []) {
       await db.query(
-        `INSERT INTO course_sections (id, course_id, semester_id, teacher_id, section_code, max_students, schedule, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+        `INSERT INTO course_sections (id, course_id, teacher_id, section_code, max_students, schedule, schedule_json, status)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
          ON CONFLICT (id) DO NOTHING`,
         [
           section.id,
           section.courseId,
-          (section as any).semesterId || null,
           section.teacherId,
           section.sectionCode,
           section.maxStudents,
+          JSON.stringify(section.schedule || []),
           JSON.stringify(section.schedule || []),
           section.status
         ]
@@ -213,55 +85,35 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  for (const period of ((store as any).registrationPeriods || [])) {
-    await db.query(
-      `INSERT INTO registration_periods (id, semester_id, name, start_date, end_date, allowed_years, is_open)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (id) DO UPDATE SET
-         end_date = EXCLUDED.end_date,
-         is_open = EXCLUDED.is_open,
-         allowed_years = EXCLUDED.allowed_years`,
-      [
-        period.id,
-        period.semesterId,
-        period.name,
-        period.startDate,
-        period.endDate,
-        period.allowedYears || [1, 2, 3, 4],
-        period.isOpen
-      ]
-    );
-  }
-
+  // 4. Class placements
   if (Number((await db.query("SELECT COUNT(*) AS count FROM course_registrations")).rows[0].count) === 0) {
     for (const registration of store.courseRegistrations || []) {
       await db.query(
         `INSERT INTO course_registrations (
-          id, student_id, section_id, semester_id, status, registered_at, dropped_at,
+          id, student_id, section_id, status, registered_at, dropped_at,
           grade, letter_grade, grade_point, credits, is_retake, exam_ban, grade_posted_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         ON CONFLICT (id) DO NOTHING`,
         [
           registration.id,
           registration.studentId,
           registration.sectionId,
-          (registration as any).semesterId || null,
           registration.status,
           registration.registeredAt,
           registration.droppedAt || null,
           registration.grade || null,
           registration.letterGrade || null,
           registration.gradePoint ?? null,
-          (registration as any).credits || 0,
-          Boolean((registration as any).isRetake),
-          Boolean((registration as any).examBan),
+          registration.credits || 0,
+          Boolean(registration.isRetake),
+          Boolean(registration.examBan),
           registration.gradePostedAt || null
         ]
       );
     }
   }
 
-  // 6. Seed Lesson Progress
+  // 5. Lesson progress
   if (Number((await db.query("SELECT COUNT(*) AS count FROM lesson_progress")).rows[0].count) === 0) {
     for (const p of store.lessonProgress) {
       await db.query(
@@ -271,22 +123,8 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  // 7. Seed Quizzes, Questions & Assignments
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM quizzes")).rows[0].count) === 0) {
-    for (const q of store.quizzes) {
-      await db.query(
-        "INSERT INTO quizzes (id, course_id, lesson_id, title, passing_score, time_limit, max_attempts) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
-        [q.id, q.courseId, q.lessonId || null, q.title, q.passingScore, q.timeLimit, q.maxAttempts]
-      );
-    }
-    for (const q of store.questions) {
-      await db.query(
-        "INSERT INTO questions (id, quiz_id, text, type, options_json, correct_answer) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
-        [q.id, q.quizId, q.text, q.type, JSON.stringify(q.options || []), q.correctAnswer]
-      );
-    }
-  }
-  if (needsMegaBackfill) {
+  // 6. Quizzes, questions & assignments
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM quizzes")).rows[0].count) === 0 || needsMegaBackfill) {
     for (const q of store.quizzes) {
       await db.query(
         "INSERT INTO quizzes (id, course_id, lesson_id, title, passing_score, time_limit, max_attempts) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
@@ -301,7 +139,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM assignments")).rows[0].count) === 0) {
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM assignments")).rows[0].count) === 0 || needsMegaBackfill) {
     for (const a of store.assignments) {
       await db.query(
         "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, lesson_id, type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING",
@@ -312,54 +150,18 @@ export async function seedCoreLearningData(db: Queryable) {
       await db.query(
         "INSERT INTO submissions (id, assignment_id, student_id, content, score, feedback, submitted_at, graded_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING",
         [s.id, s.assignmentId, s.studentId, s.content, s.score ?? null, s.feedback || null, s.submittedAt, s.gradedAt || null]
-      );
-    }
-  }
-  if (needsMegaBackfill) {
-    for (const a of store.assignments) {
-      await db.query(
-        "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, lesson_id, type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING",
-        [a.id, a.courseId, a.title, a.description, a.deadline, a.maxScore, a.lessonId || null, a.type || null]
-      );
+      ).catch(() => undefined);
     }
   }
 
-  // 8. Seed Tuition Fees
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM tuition_fees")).rows[0].count) === 0) {
-    for (const f of ((store as any).tuitionFees || [])) {
-      await db.query(
-        "INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount, paid_at, receipt_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING",
-        [f.id, f.studentId, f.semesterId || null, f.amount, f.dueDate, f.status, f.paidAmount, f.paidAt || null, f.receiptCode || null]
-      );
-    }
-  }
-
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM scholarships")).rows[0].count) === 0) {
-    for (const scholarship of ((store as any).scholarships || [])) {
-      await db.query(
-        `INSERT INTO scholarships (id, name, type, amount, discount_percent, semester_id, conditions)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          scholarship.id,
-          scholarship.name,
-          scholarship.type,
-          scholarship.amount ?? null,
-          scholarship.discountPercent ?? null,
-          scholarship.semesterId || null,
-          scholarship.conditions || null
-        ]
-      );
-    }
-  }
-
+  // 7. Sessions, materials and attendance
   if (Number((await db.query("SELECT COUNT(*) AS count FROM attendance_sessions")).rows[0].count) === 0) {
     for (const session of store.attendanceSessions || []) {
       await db.query(
-        `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, date, topic)
+        `INSERT INTO attendance_sessions (id, course_id, section_id, teacher_id, date, topic)
          VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (id) DO NOTHING`,
-        [session.id, session.courseId, (session as any).semesterId || null, session.teacherId, session.date, session.topic]
+        [session.id, session.courseId, session.sectionId || null, session.teacherId, session.date, session.topic]
       );
     }
   }
@@ -369,7 +171,7 @@ export async function seedCoreLearningData(db: Queryable) {
     if (firstSession) {
       await db.query(
         `INSERT INTO session_materials (id, session_id, section_id, course_id, type, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_at)
-         VALUES 
+         VALUES
          ($1, $2, $3, $4, 'youtube', 'Bài giảng giới thiệu môn học (Video mẫu)', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', NULL, NULL, NULL, NULL, 0, NOW()),
          ($5, $2, $3, $4, 'link', 'Tài liệu hướng dẫn trực tuyến (Link tài liệu)', 'https://docs.mcna.edu.vn', NULL, NULL, NULL, NULL, 1, NOW())
          ON CONFLICT (id) DO NOTHING`,
@@ -389,37 +191,7 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM advisor_assignments")).rows[0].count) === 0) {
-    for (const assignment of ((store as any).advisorAssignments || [])) {
-      await db.query(
-        `INSERT INTO advisor_assignments (id, advisor_id, student_id, semester_id, assigned_at)
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (id) DO NOTHING`,
-        [assignment.id, assignment.advisorId, assignment.studentId, assignment.semesterId || null, assignment.assignedAt]
-      );
-    }
-  }
-
-  // 9. Seed Academic Warnings & Advisor Notes
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM academic_warnings")).rows[0].count) === 0) {
-    for (const w of ((store as any).academicWarnings || [])) {
-      await db.query(
-        "INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
-        [w.id, w.studentId, w.type, w.message, w.isResolved, w.createdAt]
-      );
-    }
-  }
-
-  if (Number((await db.query("SELECT COUNT(*) AS count FROM advisor_notes")).rows[0].count) === 0) {
-    for (const n of store.advisorNotes || []) {
-      await db.query(
-        "INSERT INTO advisor_notes (id, advisor_id, student_id, content, type, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
-        [n.id, n.advisorId, n.studentId, n.content, n.type, n.createdAt]
-      );
-    }
-  }
-
-  // 10. Seed Transactions
+  // 8. Payment transactions
   if (Number((await db.query("SELECT COUNT(*) AS count FROM transactions")).rows[0].count) === 0) {
     for (const t of store.transactions || []) {
       await db.query(
@@ -432,15 +204,13 @@ export async function seedCoreLearningData(db: Queryable) {
 }
 
 export async function seedAuthUsers(db: Queryable) {
-  await cleanupParentSeedData(db);
-
   const studentCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")).rows[0].count);
   const teacherCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'")).rows[0].count);
   if (studentCount < 300 || teacherCount < 20) {
     await usersRepository.seed(db, getBackfilledSeedStore().users);
   }
 
-  // Backfill school email for all student users in DB during seeding to satisfy new requirements
+  // Learners created by an admin get a school mailbox; backfill the ones still missing it.
   console.log("[Seeding] Backfilling school emails for seeded students...");
   const unprovisionedStudents = (await db.query(
     "SELECT id, name FROM users WHERE role = 'student' AND (school_email IS NULL OR email_provisioned = false)"

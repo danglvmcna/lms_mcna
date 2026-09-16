@@ -21,15 +21,8 @@ const schedulesCanOverlap = (targetSlot: any, existingSlot: any): boolean => {
   return Boolean(targetDay && existingDay && targetDay === existingDay);
 };
 
-async function resolveSectionCredits(db: Queryable, sectionId: string, courseId: string): Promise<number> {
-  const row = (await db.query(
-    `SELECT COALESCE(MAX(pc.credits), 3) AS credits
-     FROM program_courses pc
-     WHERE pc.course_id = $1`,
-    [courseId]
-  )).rows[0];
-  return Number(row?.credits || 3);
-}
+// Classes are not credit-bearing in the LMS; keep a single value for the legacy column.
+const DEFAULT_REGISTRATION_CREDITS = 3;
 
 export const courseRegistrationsRepository = {
   async register(db: Queryable, studentId: string, sectionId: string) {
@@ -67,18 +60,6 @@ export const courseRegistrationsRepository = {
         await client.query("ROLLBACK");
         return { error: "Student is already registered or waitlisted for this section.", status: 409 };
       }
-
-      const profile = (await client.query("SELECT fee_hold, academic_year FROM student_profiles WHERE user_id = $1", [studentId])).rows[0];
-      if (!profile) {
-        await client.query("ROLLBACK");
-        return { error: "Student profile not found.", status: 404 };
-      }
-      if (profile.fee_hold) {
-        await client.query("ROLLBACK");
-        return { error: "Clear outstanding fees before registering for courses.", status: 403 };
-      }
-
-
 
       // Check schedule conflict using the shared parseSchedule helper
       const targetSchedule = parseSchedule(section);
@@ -126,7 +107,7 @@ export const courseRegistrationsRepository = {
         [sectionId]
       )).rows[0].count);
       const status = count >= Number(section.max_students) ? "waitlisted" : "registered";
-      const credits = await resolveSectionCredits(client, sectionId, section.course_id);
+      const credits = DEFAULT_REGISTRATION_CREDITS;
 
       const row = (await client.query(
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)

@@ -265,12 +265,11 @@ export default function AttendanceManager({
         .map((r: any) => ({ courseId: selectedCourseId, studentId: r.studentId, status: "active" }))
     : [];
   const courseStudents = courseEnrollments.map(enroll => {
-    const usr = store.users.find(u => u.id === enroll.studentId) || { name: "Sinh viên", id: enroll.studentId };
-    const pProfile = ((store as any).studentProfiles || []).find((p: any) => p.userId === enroll.studentId);
+    const usr = store.users.find(u => u.id === enroll.studentId) || { name: "Học viên", id: enroll.studentId, email: "" };
     return {
       userId: usr.id,
       name: usr.name,
-      studentCode: pProfile ? pProfile.studentCode : "SV-UNLINK"
+      studentCode: (usr as any).email || usr.id
     };
   }).filter(st => {
     return !studentSearch ||
@@ -1516,21 +1515,7 @@ export default function AttendanceManager({
                         </td>
                         <td className="py-3 px-3 text-center">
                           {percentage < 80 ? (
-                            <button
-                              onClick={() => {
-                                api.createWarning({
-                                  studentId: st.userId,
-                                  type: "low_attendance",
-                                  message: `Cảnh báo chuyên cần thấp cho học viên ${st.name} (Tỉ lệ hiện tại: ${percentage}%).`,
-                                  courseId: selectedCourseId
-                                })
-                                .then(() => triggerToast(`Đã gửi cảnh báo chuyên cần thấp cho ${st.name}!`))
-                                .catch(err => triggerToast(err.message || "Không thể gửi cảnh báo."));
-                              }}
-                              className="px-2 py-1 bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white rounded-lg text-[10px] font-bold border border-red-500/20 hover:border-red-500 transition cursor-pointer"
-                            >
-                              Gửi cảnh báo ⚠️
-                            </button>
+                            <span className="text-[10px] text-rose-400 font-bold">⚠️ Dưới chuẩn</span>
                           ) : (
                             <span className="text-[10px] text-emerald-400 font-bold">🟢 Đạt chuẩn</span>
                           )}

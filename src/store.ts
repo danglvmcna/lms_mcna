@@ -1,7 +1,7 @@
 import { 
   LMSDataStore, User, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, 
   Assignment, Submission, Certificate, Notification, ForumPost, AuditLog, 
-  Department, Program, AttendanceSession, AttendanceRecord, 
+  AttendanceSession, AttendanceRecord, 
   CourseSection, CourseRegistration, 
   SystemEvent 
 } from "./types";
@@ -17,10 +17,6 @@ const credential = (password: string, salt: string) => hashPassword(password, sa
 const ADMIN_CREDENTIAL = credential("admine16", "seed_admin");
 const TEACHER_CREDENTIAL = credential("teachere16", "seed_teacher");
 const STUDENT_CREDENTIAL = credential("studente16", "seed_student");
-const FINANCE_CREDENTIAL = credential("finance16", "seed_finance");
-const LETAN_CREDENTIAL = credential("letane16", "seed_letan");
-const ACADEMIC_CREDENTIAL = credential("academice16", "seed_academic");
-const ADVISOR_CREDENTIAL = credential("advisor16", "seed_advisor");
 
 function normalizeLegacyRoles(store: LMSDataStore): void {
   store.users = store.users.map(user => {
@@ -49,9 +45,6 @@ export function getInitialStore(): LMSDataStore {
   const adminId = "user_admin";
   const teacherId = "user_teacher";
   const studentId = "user_student";
-  const financeId = "user_finance";
-  const letanId = "user_le_tan";
-  const academicId = "user_academic";
 
   const course1Id = "course_fsweb";
   const course2Id = "course_python";
@@ -94,46 +87,6 @@ export function getInitialStore(): LMSDataStore {
         isActive: true,
         createdAt: new Date("2026-01-03T10:00:00Z").toISOString()
       },
-      {
-        id: financeId,
-        email: "finance@mcna.local",
-        passwordHash: FINANCE_CREDENTIAL.hash,
-        passwordSalt: FINANCE_CREDENTIAL.salt,
-        name: "Nguyễn Văn Thanh Toán",
-        role: "admin",
-        isActive: true,
-        createdAt: new Date("2026-01-04T11:00:00Z").toISOString()
-      },
-      {
-        id: letanId,
-        email: "le_tan@mcna.local",
-        passwordHash: LETAN_CREDENTIAL.hash,
-        passwordSalt: LETAN_CREDENTIAL.salt,
-        name: "Lê Thị Lễ Tân",
-        role: "admin",
-        isActive: true,
-        createdAt: new Date("2026-01-05T12:00:00Z").toISOString()
-      },
-      {
-        id: academicId,
-        email: "academic@mcna.local",
-        passwordHash: ACADEMIC_CREDENTIAL.hash,
-        passwordSalt: ACADEMIC_CREDENTIAL.salt,
-        name: "Trần Văn Học Vụ",
-        role: "admin",
-        isActive: true,
-        createdAt: new Date("2026-01-06T13:00:00Z").toISOString()
-      },
-      {
-        id: "user_advisor",
-        email: "advisor@mcna.local",
-        passwordHash: ADVISOR_CREDENTIAL.hash,
-        passwordSalt: ADVISOR_CREDENTIAL.salt,
-        name: "Phạm Cố Vấn (Cố vấn Học tập)",
-        role: "teacher",
-        isActive: true,
-        createdAt: new Date("2026-01-08T15:00:00Z").toISOString()
-      }
     ],
     courses: [
       {
@@ -378,44 +331,12 @@ export function getInitialStore(): LMSDataStore {
         createdAt: new Date("2026-05-25T08:10:00Z").toISOString()
       },
       {
-        id: "note_welcome_academic",
-        userId: academicId,
-        type: "success",
-        message: "Chào mừng cán bộ học vụ. Hệ thống quản trị học học phần SIS-LMS đã sẵn sàng hoạt động để theo dõi điểm danh, lịch học, kết quả học tập và cảnh báo học thuật.",
-        isRead: false,
-        createdAt: new Date("2026-05-25T08:15:00Z").toISOString()
-      },
-      {
-        id: "note_welcome_finance",
-        userId: financeId,
-        type: "success",
-        message: "Chào mừng nhân viên vận hành thanh toán. Hồ sơ học phí, biểu phí học phần và trạng thái giao dịch trực tuyến của sinh viên đã sẵn sàng.",
-        isRead: false,
-        createdAt: new Date("2026-05-25T08:20:00Z").toISOString()
-      },
-      {
-        id: "note_welcome_letan",
-        userId: letanId,
-        type: "success",
-        message: "Chào mừng bộ phận lễ tân. Cổng thông tin hỗ trợ sinh viên nhanh, reset mật khẩu khẩn cấp và tra cứu lý lịch học vụ đã trực tuyến.",
-        isRead: false,
-        createdAt: new Date("2026-05-25T08:25:00Z").toISOString()
-      },
-      {
         id: "note_welcome_teacher",
         userId: teacherId,
         type: "info",
         message: "Chào mừng giảng viên Linus Torvalds. Lớp học phần, giáo án bài học, ngân hàng câu hỏi đề thi trắc nghiệm (Quizzes) và chấm bài tập đã sẵn sàng.",
         isRead: false,
         createdAt: new Date("2026-05-25T08:30:00Z").toISOString()
-      },
-      {
-        id: "note_welcome_advisor",
-        userId: "user_advisor",
-        type: "info",
-        message: "Chào mừng Cố vấn học tập. Danh sách sinh viên được phân công cố vấn, sổ nhật ký tư vấn và phê duyệt lộ trình đăng ký lớp tháng mới đã sẵn sàng.",
-        isRead: false,
-        createdAt: new Date("2026-05-25T08:35:00Z").toISOString()
       }
     ],
     forumPosts: [
@@ -457,7 +378,7 @@ export function getInitialStore(): LMSDataStore {
         paymentMethod: "Chuyển khoản ngân hàng",
         createdAt: new Date("2026-05-10T11:00:00Z").toISOString(),
         processedAt: new Date("2026-05-10T14:00:00Z").toISOString(),
-        processedBy: financeId,
+        processedBy: adminId,
         notes: "Giao dịch chuyển khoản hợp lệ, đã được xác nhận"
       },
       {
@@ -470,43 +391,6 @@ export function getInitialStore(): LMSDataStore {
         createdAt: new Date("2026-05-25T08:00:00Z").toISOString()
       }
     ],
-    departments: [
-      {
-        id: "dept_cs",
-        name: "Computer Science",
-        code: "CS",
-        headTeacherId: teacherId,
-        description: "Khoa Khoa học Máy tính"
-      },
-      {
-        id: "dept_ba",
-        name: "Business Administration",
-        code: "BA",
-        headTeacherId: teacherId,
-        description: "Khoa Quản trị Kinh doanh"
-      }
-    ],
-    programs: [
-      {
-        id: "prog_se",
-        departmentId: "dept_cs",
-        name: "Software Engineering",
-        code: "SE",
-        type: "degree",
-        totalCredits: 120,
-        description: "Nhánh đào tạo Kỹ sư Phần mềm ứng dụng chuyên sâu."
-      },
-      {
-        id: "prog_bm",
-        departmentId: "dept_ba",
-        name: "Business Management",
-        code: "BM",
-        type: "degree",
-        totalCredits: 120,
-        description: "Đào tạo kỹ năng quản trị, khởi nghiệp và điều hành doanh nghiệp."
-      }
-    ],
-
     attendanceSessions: [
       {
         id: "session_cs1",
@@ -534,16 +418,6 @@ export function getInitialStore(): LMSDataStore {
       { id: "ar_1", sessionId: "session_cs1", studentId: "user_student", status: "present" },
       { id: "ar_2", sessionId: "session_cs2", studentId: "user_student", status: "absent" },
       { id: "ar_3", sessionId: "session_cs3", studentId: "user_student", status: "absent" }
-    ],
-    advisorNotes: [
-      {
-        id: "note_1",
-        advisorId: "user_advisor",
-        studentId: "user_student",
-        content: "Cần cải thiện tỉ lệ chuyên cần lớp Full-Stack để tránh bị cấm thi cuối khóa.",
-        type: "academic",
-        createdAt: "2026-05-20T11:00:00Z"
-      }
     ],
     courseSections: [
       {
@@ -620,11 +494,8 @@ export class AppStore {
           normalizeLegacyRoles(this.storeInstance);
 
           // Ensure all system-level collection tables are initialized
-          if (!this.storeInstance.departments) this.storeInstance.departments = initial.departments;
-          if (!this.storeInstance.programs) this.storeInstance.programs = initial.programs;
           if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
           if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
-          if (!this.storeInstance.advisorNotes) this.storeInstance.advisorNotes = initial.advisorNotes || [];
           if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
           if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
           if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];

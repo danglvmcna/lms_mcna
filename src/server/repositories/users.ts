@@ -13,10 +13,7 @@ export const usersRepository = {
   async normalizeSystemUsers(db: Queryable) {
     const systemUsers = [
       ["admin@mcna.local", "Arthur Pendragon", "admin"],
-      ["finance@mcna.local", "Nguyễn Văn Thanh Toán", "admin"],
-      ["le_tan@mcna.local", "Lê Thị Lễ Tân", "admin"],
-      ["academic@mcna.local", "Trần Văn Học Vụ", "admin"],
-      ["advisor@mcna.local", "Phạm Cố Vấn (Cố vấn Học tập)", "teacher"]
+      ["teacher@mcna.local", "Prof. Linus Torvalds", "teacher"]
     ];
 
     for (const [email, name, role] of systemUsers) {

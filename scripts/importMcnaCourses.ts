@@ -10,10 +10,9 @@ dotenv.config();
 // courses with their session syllabus as lessons, and the published opening classes with generated sessions.
 // Safe to re-run: records use fixed ids, existing classes are left untouched and admin-set prices are kept.
 //
-// Usage: npm run import:mcna -- [--hide-other-courses] [--teacher-email=teacher@mcna.local] [--semester=<id>]
+// Usage: npm run import:mcna -- [--hide-other-courses] [--teacher-email=teacher@mcna.local]
 //   --hide-other-courses  move every other published course (e.g. demo data) back to draft
 //   --teacher-email       teacher account assigned to new courses and classes
-//   --semester            semester for new classes (default: the current semester)
 
 type CatalogSession = { title: string; content?: string };
 type CatalogCourse = {

@@ -10,8 +10,6 @@
     "db:migrate": "tsx scripts/dbMigrate.ts",
     "db:drift": "tsx scripts/dbDriftCheck.ts",
     "db:seed": "tsx scripts/dbSeed.ts",
-    "test:e2e": "tsx scripts/e2eAcademicFlow.ts",
-    "test:regression": "tsx scripts/e2eRegressionFlow.ts",
     "test:signup-crm": "tsx scripts/e2eSignupCrmFlow.ts",
     "mock:crm": "tsx scripts/mockCrmServer.ts",
     "import:mcna": "tsx scripts/importMcnaCourses.ts",

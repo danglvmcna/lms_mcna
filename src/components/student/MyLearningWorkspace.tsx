@@ -65,8 +65,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     setEditParentPhone,
     onRefreshData,
     triggerToast,
-    showPrintTranscript,
-    setShowPrintTranscript,
     paymentGuideTx,
     setPaymentGuideTx,
     myNotifications,

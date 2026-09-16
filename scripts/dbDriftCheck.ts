@@ -8,10 +8,14 @@ if (!process.env.DATABASE_URL) {
 }
 
 const expected: Record<string, string[]> = {
-  users: ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "linked_student_id", "created_at", "must_change_password", "signup_source", "crm_contact_id"],
+  users: ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "created_at", "must_change_password", "signup_source", "crm_contact_id"],
   courses: ["id", "title", "description", "teacher_id", "status", "category", "thumbnail", "price", "level", "tags_json", "rejection_reason", "created_at"],
   lessons: ["id", "course_id", "title", "content", "video_url", "lesson_order", "duration"],
   enrollments: ["id", "course_id", "student_id", "status", "enrolled_at", "completed_at", "requested_section_id", "crm_deal_id"],
+  course_sections: ["id", "course_id", "teacher_id", "section_code", "max_students", "status", "opening_date", "number_of_sessions", "meeting_url", "group_chat_url"],
+  course_registrations: ["id", "student_id", "section_id", "status", "registered_at", "dropped_at", "credits"],
+  attendance_sessions: ["id", "course_id", "section_id", "teacher_id", "date", "topic"],
+  attendance_records: ["id", "session_id", "student_id", "status", "note"],
   session_materials: ["id", "session_id", "section_id", "course_id", "type", "title", "url", "storage_path", "file_name", "mime_type", "size_bytes", "sort_order", "created_by", "created_at"],
   crm_outbox: ["id", "event_type", "payload", "status", "attempts", "next_attempt_at", "last_error", "created_at", "sent_at"],
   crm_inbound_events: ["event_id", "type", "payload_sha256", "status", "response", "error", "received_at", "processed_at"],
@@ -21,10 +25,8 @@ const expected: Record<string, string[]> = {
   quiz_attempts: ["id", "quiz_id", "student_id", "answers_json", "score", "passed", "started_at", "submitted_at"],
   assignments: ["id", "course_id", "title", "description", "deadline", "max_score"],
   submissions: ["id", "assignment_id", "student_id", "content", "score", "feedback", "submitted_at", "graded_at"],
-  tuition_fees: ["id", "student_id", "semester_id", "amount", "due_date", "status", "paid_amount", "paid_at", "receipt_code"],
-  academic_warnings: ["id", "student_id", "type", "message", "is_resolved", "created_at"],
+  transactions: ["id", "student_id", "course_id", "amount", "status", "payment_method", "created_at", "processed_at", "processed_by", "notes"],
   audit_logs: ["id", "user_id", "action", "target", "detail", "created_at"],
-  advisor_notes: ["id", "advisor_id", "student_id", "content", "type", "created_at"],
   schema_migrations: ["version", "name", "applied_at"]
 };
 
@@ -39,9 +41,7 @@ const requiredIndexes = [
   "idx_enrollments_student_id",
   "idx_quiz_attempts_student_id",
   "idx_submissions_student_id",
-  "idx_tuition_fees_student_id",
   "idx_audit_logs_user_id",
-  "idx_advisor_notes_student_id",
   "ux_enrollments_student_course",
   "ux_lesson_progress_enrollment_lesson",
   "idx_session_materials_session_id",
@@ -63,10 +63,7 @@ const requiredForeignKeys = [
   "assignments_course_id_fkey",
   "submissions_assignment_id_fkey",
   "submissions_student_id_fkey",
-  "tuition_fees_student_id_fkey",
-  "academic_warnings_student_id_fkey",
   "audit_logs_user_id_fkey",
-  "advisor_notes_student_id_fkey",
   "session_materials_session_id_fkey",
   "enrollments_requested_section_id_fkey"
 ];

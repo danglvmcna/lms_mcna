@@ -26,22 +26,14 @@ export const schemas = {
     password: z.string().min(8),
     name: z.string().trim().min(1),
     role: z.enum(["admin", "teacher", "student"]),
-    phone: z.string().trim().optional(),
-    linkedStudentId: z.string().trim().optional(),
-    programId: z.string().trim().optional(),
-    departmentId: z.string().trim().optional(),
-    className: z.string().trim().optional()
+    phone: z.string().trim().optional()
   }),
   bulkCreateUsers: z.object({
     users: z.array(z.object({
       email: z.email().trim().toLowerCase(),
       name: z.string().trim().min(1),
       role: z.enum(["admin", "teacher", "student"]),
-      phone: z.string().trim().optional(),
-      linkedStudentId: z.string().trim().optional(),
-      programId: z.string().trim().optional(),
-      departmentId: z.string().trim().optional(),
-      className: z.string().trim().optional()
+      phone: z.string().trim().optional()
     })).min(1).max(5000),
     defaultPassword: z.string().min(8).optional()
   }),
@@ -163,14 +155,6 @@ export const schemas = {
     score: z.coerce.number().min(0),
     feedback: z.string().trim().default("")
   }),
-  payTuition: z.object({
-    feeId: z.string().trim().min(1),
-    paidAmount: z.coerce.number().positive()
-  }),
-  confirmTransfer: z.object({
-    feeId: z.string().trim().min(1),
-    amount: z.coerce.number().positive()
-  }),
   reviewTransaction: z.object({
     status: z.enum(["approved", "rejected"]),
     notes: z.string().trim().optional()
@@ -192,55 +176,8 @@ export const schemas = {
     status: z.enum(["present", "absent", "late", "excused"]),
     note: z.string().trim().optional()
   }),
-  createWarning: z.object({
-    studentId: z.string().trim().min(1),
-    type: z.enum(["low_gpa", "low_attendance", "unpaid_fee", "exam_ban", "overdue_assignment"]),
-    message: z.string().trim().min(1)
-  }),
-  addAdvisorNote: z.object({
-    studentId: z.string().trim().min(1),
-    content: z.string().trim().min(1),
-    type: z.enum(["academic", "behavioral", "financial"])
-  }),
-  advisorNote: z.object({
-    studentId: z.string().min(1),
-    type: z.enum(["academic", "behavioral", "financial"]),
-    content: z.string().min(1).max(2000),
-    shareWithParent: z.boolean().default(false)
-  }),
-
   courseRegistration: z.object({
     sectionId: z.string().min(1)
-  }),
-  gradeAppeal: z.object({
-    courseRegistrationId: z.string().min(1),
-    reason: z.string().min(1).max(2000)
-  }),
-  gradeAppealReview: z.object({
-    revisedGrade: z.string().optional()
-  }),
-  gradeAppealResolve: z.object({
-    status: z.enum(["approved", "rejected"]),
-    resolutionNote: z.string().optional()
-  }),
-
-  reviewNote: z.object({
-    reviewNote: z.string().optional()
-  }),
-
-  graduationApplicationReview: z.object({
-    note: z.string().optional()
-  }),
-  updateProfile: z.object({
-    phone: z.string().trim().optional(),
-    dateOfBirth: z.string().trim().optional(),
-    gender: z.string().trim().optional(),
-    address: z.string().trim().optional(),
-    guardianName: z.string().trim().optional(),
-    guardianPhone: z.string().trim().optional()
-  }),
-  updateStudentNotes: z.object({
-    notes: z.string().min(1)
   }),
   sectionScheduleSlot: z.object({
     dayOfWeek: z.string().trim().min(1),

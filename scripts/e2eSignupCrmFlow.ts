@@ -84,7 +84,7 @@ async function main() {
   const stamp = Date.now();
   expectStatus("health", await call("/health"), 200);
 
-  const academic = await login("academic@mcna.local", "academice16");
+  const academic = await login("admin@mcna.local", "admine16");
   const teacher = await login("teacher@mcna.local", "teachere16");
 
   console.log("1. Admin opens a paid course with a 3-session class");
@@ -106,13 +106,9 @@ async function main() {
     expectStatus("publish course", await call(`/api/courses/${course.id}/publish`, { method: "POST", session: academic }), 200);
   }
 
-  const adminStore = expectStatus("admin store", await call("/api/store", { session: academic }), 200);
-  const semester = adminStore.semesters.find((item: any) => item.isCurrent) || adminStore.semesters[0];
-  assert(semester, "no semester available");
   const openingDate = new Date().toISOString().slice(0, 10);
   const sectionPayload = {
     courseId: course.id,
-    semesterId: semester.id,
     teacherId: teacher.user.id,
     sectionCode: `E2E-${stamp}`,
     maxStudents: 5,

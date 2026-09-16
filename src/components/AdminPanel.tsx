@@ -68,17 +68,9 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [activeSubTab, setActiveSubTab] = useState<
     | "orders"
     | "course_section_mgmt"
+    | "approval"
     | "users"
     | "audit"
-    | "students" 
-    | "attendance" 
-    | "tuition" 
-    | "warnings" 
-    | "approval" 
-    | "admin_guide"
-    | "admin_timetable"
-    | "teacher_timetable"
-    | "class_placement"
     | "notifications"
   >("orders");
 
@@ -87,7 +79,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["orders", "course_section_mgmt", "users", "audit", "attendance", "class_placement", "tuition", "admin_guide"];
+    const allowed = ["orders", "course_section_mgmt", "approval", "users", "audit", "notifications"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("orders");
     }
@@ -379,18 +371,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     let valA: any = a[sortField as keyof User];
     let valB: any = b[sortField as keyof User];
 
-    if (sortField === "studentCode" || sortField === "gpa") {
-      const profileA = (store as any).studentProfiles?.find((p: any) => p.userId === a.id);
-      const profileB = (store as any).studentProfiles?.find((p: any) => p.userId === b.id);
-      if (sortField === "studentCode") {
-        valA = profileA?.studentCode || "";
-        valB = profileB?.studentCode || "";
-      } else {
-        valA = profileA?.gpa ?? 0;
-        valB = profileB?.gpa ?? 0;
-      }
-    }
-
     if (valA === undefined || valA === null) return 1;
     if (valB === undefined || valB === null) return -1;
 
@@ -436,7 +416,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-transparent">
         <div>
           <span className="text-xs font-mono font-semibold tracking-widest text-[#2563eb] bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 uppercase">
-            CỔNG THÔNG TIN QUẢN TRỊ VIÊN & PHÒNG ĐÀO TẠO (SIS-LMS)
+            CỔNG THÔNG TIN QUẢN TRỊ VIÊN MCNA
           </span>
           <h2 className="text-xl font-display font-bold text-white mt-2">Cổng Điều hành & Hồ sơ Học vụ</h2>
           <p className="text-xs text-white/50">Phân quyền giám sát cấu trúc tháng niên khóa, chuyên cần học sinh và trạng thái thanh toán học phí.</p>
@@ -514,6 +494,19 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 }`}
               >
                 <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Khóa học & Lớp học</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("approval"); setRegistryLookupStudentId(null); }}
+                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
+                  activeSubTab === "approval" ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20" : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Duyệt khóa học</span>
+                {pendingCourses.length > 0 && (
+                  <span className="bg-amber-400 text-indigo-950 font-bold text-[10px] px-1.5 py-0.5 rounded-full font-mono">
+                    {pendingCourses.length}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -706,8 +699,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                           Email cá nhân {sortField === "email" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                         </th>
                         {userDirTab === "student" && (
-                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("studentCode")}>
-                            Hồ sơ học vụ {sortField === "studentCode" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("phone")}>
+                            Số điện thoại {sortField === "phone" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                           </th>
                         )}
                         <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("role")}>
@@ -721,15 +714,14 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {paginatedUsers.map(usr => {
-                        const profile = (store as any).studentProfiles?.find((p: any) => p.userId === usr.id);
                         return (
                           <tr key={usr.id} className="hover:bg-white/2 transition">
                             <td className="py-3 px-3 font-semibold text-white">{usr.name}</td>
                             <td className="py-3 px-3 font-mono text-white/60">{usr.email}</td>
                             {userDirTab === "student" && (
                               <td className="py-3 px-3 text-white/70">
-                                <div className="font-mono text-indigo-300">{profile?.studentCode || "Chưa có mã"}</div>
-                                <div className="text-[10px] text-white/40">{profile?.phone ? `SĐT: ${profile.phone}` : "Chưa có SĐT"} · GPA {profile?.gpa ?? 0}</div>
+                                <div className="font-mono text-indigo-300">{usr.phone || "Chưa có SĐT"}</div>
+                                <div className="text-[10px] text-white/40">{usr.schoolEmail || "Chưa cấp email trường"}</div>
                               </td>
                             )}
                             <td className="py-3 px-3">

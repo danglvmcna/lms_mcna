@@ -1498,47 +1498,32 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                          <th className="py-2.5 px-3">Mã SV</th>
                           <th className="py-2.5 px-3">Họ và Tên</th>
                           <th className="py-2.5 px-3">Email</th>
-                          <th className="py-2.5 px-3">Lớp sinh hoạt</th>
-                          <th className="py-2.5 px-3">Cảnh báo học vụ</th>
+                          <th className="py-2.5 px-3">Số điện thoại</th>
+                          <th className="py-2.5 px-3">Trạng thái</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {sectionRegs.map((reg: any) => {
                           const studentUser = (store.users || []).find((u: any) => u.id === reg.studentId);
-                          const profile = (store.studentProfiles || []).find((p: any) => p.studentId === reg.studentId);
-                          const studentWarnings = (store.academicWarnings || []).filter(
-                            (w: any) => w.studentId === reg.studentId && !w.isResolved
-                          );
-
                           if (!studentUser) return null;
 
                           return (
                             <tr key={reg.id} className="hover:bg-white/2 transition">
-                              <td className="py-3 px-3 font-mono font-bold text-indigo-300">
-                                {profile?.studentCode || "Chưa cấp"}
-                              </td>
                               <td className="py-3 px-3 font-semibold text-white">
                                 {studentUser.name}
                               </td>
                               <td className="py-3 px-3 font-mono text-white/60">
                                 {studentUser.email}
                               </td>
-                              <td className="py-3 px-3">
-                                <span className="inline-block px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 font-mono text-[9px] rounded border border-indigo-500/20">
-                                  {profile?.className || "Tự do"}
-                                </span>
+                              <td className="py-3 px-3 font-mono text-white/60">
+                                {studentUser.phone || "—"}
                               </td>
                               <td className="py-3 px-3">
-                                {studentWarnings.length > 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-bold rounded-full">
-                                    ⚠️ Có {studentWarnings.length} cảnh báo
-                                  </span>
-                                ) : (
-                                  <span className="text-emerald-400">Bình thường</span>
-                                )}
+                                <span className="inline-block px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 font-mono text-[9px] rounded border border-indigo-500/20">
+                                  {reg.status === "registered" ? "Đang học" : reg.status}
+                                </span>
                               </td>
                             </tr>
                           );
