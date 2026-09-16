@@ -1435,7 +1435,16 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
   res.json({ ok: true, message: "Đổi mật khẩu thành công!" });
 }));
 
-app.get("/api/store", requireAuth, asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user!))));
+app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
+  try {
+    const snapshot = await storeSnapshotFromDb(pool);
+    const limited = limitStoreForRole(snapshot, req.user!);
+    res.json(limited);
+  } catch (err: any) {
+    console.error("[/api/store error]", err);
+    res.status(500).json({ error: err.message || "Internal server error", stack: err.stack });
+  }
+}));
 
 app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
   const store = await storeSnapshotFromDb(pool);

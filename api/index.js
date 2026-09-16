@@ -6989,7 +6989,16 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
   await audit(req, "change_password", req.user.id, "User updated their account password.");
   res.json({ ok: true, message: "\u0110\u1ED5i m\u1EADt kh\u1EA9u th\xE0nh c\xF4ng!" });
 }));
-app.get("/api/store", requireAuth, asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user))));
+app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
+  try {
+    const snapshot = await storeSnapshotFromDb(pool);
+    const limited = limitStoreForRole(snapshot, req.user);
+    res.json(limited);
+  } catch (err) {
+    console.error("[/api/store error]", err);
+    res.status(500).json({ error: err.message || "Internal server error", stack: err.stack });
+  }
+}));
 app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
   const store = await storeSnapshotFromDb(pool);
   res.json({ ...dashboardFromStore(store, req.user), auditLogs: await auditRepository.listRecent(pool, 100) });
