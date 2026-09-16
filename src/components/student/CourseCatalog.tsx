@@ -84,6 +84,10 @@ export default function CourseCatalog(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
+  const catalogCategories = Array.from(
+    new Set((store.courses || []).filter((course: any) => course.status === "published").map((course: any) => course.category).filter(Boolean))
+  ).sort((a: string, b: string) => a.localeCompare(b, "vi"));
+
   return (
     <>
         {/* Tab 1: Course list catalogs grid and search */}
@@ -114,9 +118,9 @@ export default function CourseCatalog(props: ComponentProps) {
                   className="p-2 py-1.5 text-xs bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
                 >
                   <option value="all" className="bg-slate-900">Tất cả Danh mục</option>
-                  <option value="Web Development" className="bg-slate-900">Lập trình Web</option>
-                  <option value="Data Science" className="bg-slate-900">Khoa học Dữ liệu</option>
-                  <option value="Software Engineering" className="bg-slate-900">Kỹ nghệ Phần mềm</option>
+                  {catalogCategories.map((item: string) => (
+                    <option key={item} value={item} className="bg-slate-900">{item}</option>
+                  ))}
                 </select>
 
                 <label className="flex items-center gap-2 px-3 py-2 text-xs bg-black/25 text-white/80 border border-white/10 rounded-xl cursor-pointer hover:bg-white/5 select-none">
@@ -138,28 +142,45 @@ export default function CourseCatalog(props: ComponentProps) {
                 .map(course => {
                 const lessonsCount = store.lessons.filter(l => l.courseId === course.id).length;
                 const isEnrolled = myEnrolledCourseIds.includes(course.id);
+                const teacher = store.users.find((user: any) => user.id === course.teacherId);
+                const openSections = (store.courseSections || []).filter((section: any) => section.courseId === course.id && section.status === "open");
+                const upcomingOpening = openSections
+                  .filter((section: any) => section.openingDate)
+                  .sort((a: any, b: any) => new Date(a.openingDate).getTime() - new Date(b.openingDate).getTime())[0];
+                const sessionCount = course.numberOfLessons || openSections.find((section: any) => section.numberOfSessions)?.numberOfSessions || lessonsCount;
 
                 return (
-                  <div key={course.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition duration-150 flex flex-col justify-between">
+                  <div key={course.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-indigo-400/50 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-950/10 transition-all duration-300 flex flex-col justify-between group">
                     <div>
-                      <div className="h-28 bg-gradient-to-br from-indigo-600/40 to-slate-800 flex items-center justify-center relative border-b border-slate-100 overflow-hidden">
+                      <div className="h-40 bg-gradient-to-br from-indigo-600/40 to-slate-800 flex items-center justify-center relative border-b border-slate-100 overflow-hidden">
                         {course.thumbnail ? (
-                          <img src={course.thumbnail} alt="" className="w-full h-full object-cover" />
+                          <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         ) : (
                           <BookOpen className="h-8 w-8 text-indigo-500" />
                         )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                          <span className="rounded-full border border-indigo-400/30 bg-indigo-600 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
+                            {course.category}
+                          </span>
+                          {course.level && (
+                            <span className="rounded-full border border-white/20 bg-white/85 px-2.5 py-1 text-[9px] font-bold text-slate-800 backdrop-blur-md">{course.level}</span>
+                          )}
+                        </div>
                         {isEnrolled && (
                           <div className="absolute top-3 right-3 bg-indigo-600 text-white font-sans font-bold text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full">
                             Đã đăng ký
                           </div>
                         )}
+                        {!isEnrolled && (
+                          <div className={`absolute bottom-3 left-3 rounded-full px-2.5 py-1 text-[9px] font-bold ${openSections.length > 0 ? "bg-emerald-500 text-white" : "bg-amber-400 text-slate-950"}`}>
+                            {openSections.length > 0 ? `${openSections.length} lớp đang mở` : "Sắp khai giảng"}
+                          </div>
+                        )}
                       </div>
 
-                      <div className="p-5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-indigo-300">
-                            {course.category}
-                          </span>
+                      <div className="p-5 space-y-3">
+                        <div className="flex items-center justify-end">
                           {course.price !== undefined && (
                             <div className="text-right">
                               {course.originalPrice && course.originalPrice > course.price ? (
@@ -173,12 +194,17 @@ export default function CourseCatalog(props: ComponentProps) {
                             </div>
                           )}
                         </div>
-                        <h5 className="font-display font-bold text-white text-sm line-clamp-1">{course.title}</h5>
-                        <p className="text-xs text-white/60 line-clamp-3 leading-relaxed">{course.description}</p>
+                        <h5 className="font-display font-bold text-white text-base leading-snug line-clamp-2 group-hover:text-indigo-200 transition-colors">{course.title}</h5>
+                        <p className="text-xs text-white/60 line-clamp-2 leading-relaxed">{course.description}</p>
+                        <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-white/55">
+                          <span className="flex items-center gap-1.5 min-w-0"><User className="h-3.5 w-3.5 text-cyan-400 shrink-0" /><span className="truncate">{teacher?.name || "MCNA"}</span></span>
+                          <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-indigo-400 shrink-0" />{sessionCount} buổi</span>
+                          <span className="col-span-2 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-amber-400 shrink-0" />{upcomingOpening?.openingDate ? `Khai giảng ${new Date(upcomingOpening.openingDate).toLocaleDateString("vi-VN")}` : "Lịch khai giảng đang cập nhật"}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="p-5 pt-0 border-t border-white/5 mt-3 flex items-center justify-between text-xs">
+                    <div className="p-5 pt-3 border-t border-white/5 mt-1 flex items-center justify-between text-xs">
                       <span className="text-white/40 font-mono text-[11px]">{lessonsCount} bài học</span>
                       <button
                         onClick={() => setViewingCourseId(course.id)}
@@ -620,13 +646,23 @@ export default function CourseCatalog(props: ComponentProps) {
                 <p className="text-[10px] text-amber-300/80 text-center leading-relaxed">
                   Sau khi bạn chuyển khoản, bộ phận Học vụ MCNA sẽ duyệt đơn và kích hoạt lớp học cho bạn ngay.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setPaymentGuideTx(null)}
-                  className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition cursor-pointer text-center text-xs"
-                >
-                  Đóng hướng dẫn
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href="https://zalo.me/0939866825"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition text-center text-xs"
+                  >
+                    <Phone className="h-3.5 w-3.5" /> Hỗ trợ duyệt nhanh
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentGuideTx(null)}
+                    className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition cursor-pointer text-center text-xs"
+                  >
+                    Đóng hướng dẫn
+                  </button>
+                </div>
               </div>
             </div>
           </div>

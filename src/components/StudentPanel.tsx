@@ -636,7 +636,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
       )}
 
       {/* Header section spacing */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={`${learningCourseId ? "hidden" : "flex"} flex-col md:flex-row md:items-center justify-between gap-4`}>
         <div>
           <span className="text-xs font-mono font-semibold tracking-widest text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 uppercase">
             Cổng Học Tập Học Viên
@@ -647,9 +647,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
       </div>
 
       {/* Side-by-side dashboard layout: sidebar navigation on the left, workspace canvas on the right */}
-      <div className="flex flex-col lg:flex-row gap-4 md:gap-8 items-start">
+      <div className={`flex flex-col lg:flex-row items-start ${learningCourseId ? "gap-0" : "gap-4 md:gap-8"}`}>
         {/* Mobile: sidebar toggle bar */}
-        <div className="lg:hidden w-full">
+        <div className={`${learningCourseId ? "hidden" : "lg:hidden"} w-full`}>
           <button
             onClick={() => setShowSidebar(s => !s)}
             className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white/70 hover:text-white hover:bg-white/8 transition cursor-pointer"
@@ -671,7 +671,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         </div>
 
         {/* Left Navigation Sidebar */}
-        <div className={`w-full lg:w-64 xl:w-72 flex flex-col gap-4 shrink-0 ${showSidebar ? "block" : "hidden"} lg:flex lg:flex-col`}>
+        <div className={learningCourseId ? "hidden" : `w-full lg:w-64 xl:w-72 flex-col gap-4 shrink-0 ${showSidebar ? "flex" : "hidden"} lg:flex`}>
           <div className="bg-white/3 border border-white/10 rounded-3xl p-3 flex flex-col gap-1 w-full text-xs">
             <span className="text-[10px] text-white/40 uppercase tracking-widest px-3 py-2 font-bold font-mono border-b border-white/5 mb-1.5">
               HỌC VIỆN MCNA
@@ -713,7 +713,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         </div>
 
         {/* Right Canvas workspace content bodies */}
-        <div ref={contentRef} className="relative flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 min-w-0 scroll-mt-4">
+        <div ref={contentRef} className={`relative flex-1 w-full min-w-0 scroll-mt-4 ${learningCourseId ? "" : "bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6"}`}>
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />
