@@ -30,22 +30,6 @@ BEGIN
   END IF;
 END $$;
 
--- Ensure the current demo/default registration period used by the UI is open
--- on already-seeded databases, not only on fresh seed.
-INSERT INTO registration_periods (id, semester_id, name, start_date, end_date, allowed_years, is_open)
-VALUES (
-  'rp_spring25',
-  'sem_spring25',
-  'Đăng ký học kỳ Mùa Xuân 2025',
-  '2024-12-01',
-  '2026-12-31',
-  '{1,2,3,4}',
-  true
-)
-ON CONFLICT (id) DO UPDATE SET
-  semester_id = EXCLUDED.semester_id,
-  name = EXCLUDED.name,
-  start_date = EXCLUDED.start_date,
-  end_date = EXCLUDED.end_date,
-  allowed_years = EXCLUDED.allowed_years,
-  is_open = EXCLUDED.is_open;
+-- The demo registration period that used to be inserted here was removed with the SIS features:
+-- it referenced semester 'sem_spring25', which does not exist on a fresh database, so the insert
+-- failed every clean install. Databases that already ran this migration keep their existing rows.

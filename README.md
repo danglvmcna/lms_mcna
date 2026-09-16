@@ -85,8 +85,17 @@ DISABLE_RATE_LIMIT=true
 #### Khởi tạo cơ sở dữ liệu
 ```bash
 npm run db:migrate    # áp dụng migrations
-npm run db:seed       # nạp dữ liệu mẫu (tùy chọn - server cũng tự seed khi khởi động)
+npm run db:seed       # nạp dữ liệu (tùy chọn - server cũng tự seed khi khởi động)
 npm run db:drift      # đối soát schema
+```
+
+Database mới được nạp 3 tài khoản gốc và **catalog thật của mcna.vn** (`src/server/data/mcnaCatalog.json`: 14 khóa học, lịch khai giảng và syllabus từng buổi). Giá trong file chỉ là giá tạm vì web không công bố học phí — sửa lại trong giao diện, lệnh import không ghi đè giá admin đã đặt.
+
+Cần dữ liệu demo để thử tải (20 giảng viên, 40 khóa học, 300 học viên) thì đặt `SEED_DEMO_DATA=true` trong `.env` trước khi seed.
+
+Khi file catalog thay đổi, nạp lại bằng:
+```bash
+npm run import:mcna -- --hide-other-courses
 ```
 
 #### Chạy thử

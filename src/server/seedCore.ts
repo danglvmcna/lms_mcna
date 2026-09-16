@@ -4,15 +4,30 @@ import { Queryable } from "./db";
 import { usersRepository } from "./repositories/users";
 import { generateId } from "./ids";
 import { generateUsername } from "./emailProvisioning/googleWorkspaceClient";
+import { importMcnaCatalog } from "./services/catalogImport";
 
-function getBackfilledSeedStore() {
+// A fresh database is seeded with the three base accounts and the real MCNA catalogue.
+// Set SEED_DEMO_DATA=true to also generate the demo directory (20 teachers, 40 courses, 300 learners).
+const seedDemoData = () => process.env.SEED_DEMO_DATA === "true";
+
+function getSeedStore() {
   const store = getInitialStore();
-  backfillMegaDemoData(store);
+  if (seedDemoData()) backfillMegaDemoData(store);
   return store;
 }
 
 export async function seedCoreLearningData(db: Queryable) {
-  const store = getBackfilledSeedStore();
+  if (!seedDemoData()) {
+    const catalogCount = Number((await db.query("SELECT COUNT(*) AS count FROM courses WHERE id LIKE 'course_mcna_%'")).rows[0].count);
+    if (catalogCount === 0) {
+      console.log("[Seeding] Importing the MCNA catalogue...");
+      const summary = await importMcnaCatalog(db, { log: message => console.log(message) });
+      console.log(`[Seeding] Catalogue ready: ${summary.coursesCreated} khóa học, ${summary.lessons} bài học, ${summary.classesCreated} lớp.`);
+    }
+    return;
+  }
+
+  const store = getSeedStore();
   const initialCourseCount = Number((await db.query("SELECT COUNT(*) AS count FROM courses")).rows[0].count);
   const needsMegaBackfill = initialCourseCount < 40;
 
@@ -204,18 +219,26 @@ export async function seedCoreLearningData(db: Queryable) {
 }
 
 export async function seedAuthUsers(db: Queryable) {
-  const studentCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")).rows[0].count);
-  const teacherCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'")).rows[0].count);
-  if (studentCount < 300 || teacherCount < 20) {
-    await usersRepository.seed(db, getBackfilledSeedStore().users);
+  if (!seedDemoData()) {
+    // Base accounts only: admin, teacher and a sample learner.
+    if (Number((await db.query("SELECT COUNT(*) AS count FROM users")).rows[0].count) === 0) {
+      await usersRepository.seed(db, getInitialStore().users);
+    }
+  } else {
+    const studentCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")).rows[0].count);
+    const teacherCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'")).rows[0].count);
+    if (studentCount < 300 || teacherCount < 20) {
+      await usersRepository.seed(db, getSeedStore().users);
+    }
   }
 
   // Learners created by an admin get a school mailbox; backfill the ones still missing it.
-  console.log("[Seeding] Backfilling school emails for seeded students...");
   const unprovisionedStudents = (await db.query(
     "SELECT id, name FROM users WHERE role = 'student' AND (school_email IS NULL OR email_provisioned = false)"
   )).rows;
+  if (unprovisionedStudents.length === 0) return;
 
+  console.log("[Seeding] Backfilling school emails for seeded students...");
   for (const student of unprovisionedStudents) {
     const baseUsername = generateUsername(student.name);
     let suffix = "";

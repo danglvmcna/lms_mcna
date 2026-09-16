@@ -7,7 +7,6 @@ import {
 } from "./types";
 import { generateId } from "./utils";
 import { hashPassword } from "./authHash";
-import { backfillMegaDemoData } from "./mockSeeds";
 
 const STORAGE_KEY = "e16_lms_data";
 
@@ -525,18 +524,14 @@ export class AppStore {
               this.storeInstance.transactions = initial.transactions;
             }
           }
-          
-          backfillMegaDemoData(this.storeInstance);
         } catch (e) {
           console.error("Failed to parse datastore. Seeding clean database.");
           this.storeInstance = getInitialStore();
           normalizeLegacyRoles(this.storeInstance);
-          backfillMegaDemoData(this.storeInstance);
         }
       } else {
         this.storeInstance = getInitialStore();
         normalizeLegacyRoles(this.storeInstance);
-        backfillMegaDemoData(this.storeInstance);
       }
     }
     return this.storeInstance!;
