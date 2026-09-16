@@ -153,6 +153,7 @@ import {
   requestEnrollment,
   ServiceError
 } from "./src/server/services/enrollmentService";
+import { processSepayWebhook } from "./src/server/services/sepayService";
 import { enqueueCrmEvent, enqueueEnrollmentEvent } from "./src/server/crm/crmOutbox";
 import { verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
@@ -557,7 +558,16 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
   if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
   // CRM server-to-server calls authenticate with an API key and an HMAC signature instead of cookies.
   if (req.path.startsWith("/integrations/crm/")) return next();
-  if (req.path === "/payments/webhook" || req.path === "/webhooks/payment" || req.path === "/api/payments/webhook" || req.path === "/api/webhooks/payment") return next();
+  if (
+    req.path === "/payments/webhook" ||
+    req.path === "/webhooks/payment" ||
+    req.path === "/api/payments/webhook" ||
+    req.path === "/api/webhooks/payment" ||
+    req.path === "/api/payments/sepay/webhook" ||
+    req.path === "/api/webhooks/sepay" ||
+    req.path === "/payments/sepay/webhook" ||
+    req.path === "/webhooks/sepay"
+  ) return next();
   const cookieToken = extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
@@ -3164,6 +3174,27 @@ const paymentWebhookHandler = asyncHandler(async (req, res) => {
 
 app.post("/api/payments/webhook", paymentWebhookHandler);
 app.post("/api/webhooks/payment", paymentWebhookHandler);
+
+const sepayWebhookHandler = asyncHandler(async (req, res) => {
+  const expectedApiKey = process.env.SEPAY_API_KEY?.trim();
+  if (expectedApiKey) {
+    const authHeader = req.header("Authorization") || "";
+    const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, "").trim();
+    if (!token || token !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
+    }
+  }
+
+  const rawPayload = (req as any).rawBody || JSON.stringify(req.body);
+  const result = await processSepayWebhook(req.body, rawPayload, () => {
+    invalidateStoreCache();
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/payments/sepay/webhook", sepayWebhookHandler);
+app.post("/api/webhooks/sepay", sepayWebhookHandler);
 
 async function validateAttendanceSectionAccess(courseId: string, sectionId: string | undefined, user: User): Promise<{ section?: any; status?: number; error?: string }> {
   if (!sectionId) return {};
