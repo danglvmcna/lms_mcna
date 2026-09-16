@@ -3692,15 +3692,24 @@ function getTransporter2() {
   const port = Number(process.env.SMTP_PORT) || 465;
   if (user && pass) {
     console.log(`[EmailWorker] Initializing standard SMTP transport for: ${user}`);
-    activeTransporter = nodemailer2.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: {
-        user,
-        pass
+    const isGmail = host === "smtp.gmail.com" || user.endsWith("@gmail.com");
+    activeTransporter = nodemailer2.createTransport(
+      isGmail ? {
+        service: "gmail",
+        auth: {
+          user,
+          pass
+        }
+      } : {
+        host,
+        port,
+        secure: port === 465,
+        auth: {
+          user,
+          pass
+        }
       }
-    });
+    );
     return activeTransporter;
   }
   if (hasSmtpOauth2Config()) {
@@ -6927,6 +6936,49 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
     ok: true,
     message: ACCOUNT_REQUEST_MESSAGE,
     ...!hasSmtp ? { devTemporaryPassword: result.temporaryPassword } : {}
+  });
+}));
+app.get("/api/debug/email-test", asyncHandler(async (req, res) => {
+  const to = req.query.to || "danglv.mcna.247@gmail.com";
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+  const hasConfig = hasSmtpConfig();
+  let verifyResult = null;
+  let sendResult = null;
+  let errorMsg = null;
+  if (hasConfig) {
+    try {
+      const transporter2 = getTransporter2();
+      verifyResult = await transporter2.verify();
+      const info = await transporter2.sendMail({
+        from: getSmtpFrom(),
+        to,
+        subject: "[LMS MCNA] Ki\u1EC3m tra g\u1EEDi mail h\u1EC7 th\u1ED1ng",
+        text: `Ch\xE0o b\u1EA1n, \u0111\xE2y l\xE0 email ki\u1EC3m tra k\u1EBFt n\u1ED1i t\u1EEB LMS MCNA g\u1EEDi t\u1EDBi ${to} l\xFAc ${(/* @__PURE__ */ new Date()).toISOString()}`,
+        html: `<div style="padding:20px;font-family:sans-serif;color:#1e293b;">
+          <h2>Ki\u1EC3m tra k\u1EBFt n\u1ED1i LMS MCNA</h2>
+          <p>Email n\xE0y x\xE1c nh\u1EADn h\u1EC7 th\u1ED1ng g\u1EEDi mail SMTP c\u1EE7a LMS MCNA \u0111\xE3 k\u1EBFt n\u1ED1i v\xE0 ph\xE1t th\u01B0 th\xE0nh c\xF4ng t\u1EDBi <strong>${to}</strong>.</p>
+          <p style="color:#64748b;font-size:12px;">Th\u1EDDi gian: ${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN")}</p>
+        </div>`
+      });
+      sendResult = {
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected,
+        response: info.response
+      };
+    } catch (err) {
+      errorMsg = err?.message || String(err);
+    }
+  }
+  res.json({
+    hasConfig,
+    smtpUserMasked: user ? `${user.slice(0, 3)}***@${user.split("@")[1] || ""}` : "empty",
+    smtpPassLength: pass.length,
+    smtpFrom: getSmtpFrom(),
+    verifyResult,
+    sendResult,
+    error: errorMsg
   });
 }));
 app.post("/api/auth/forgot-password", rateLimitForgotPassword, validateBody(schemas.forgotPassword), asyncHandler(async (req, res) => {
