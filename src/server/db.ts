@@ -3,7 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/lms_mcna";
+let dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/lms_mcna";
+
+// Auto-switch Supabase Pooler to Transaction Mode (port 6543) for Serverless reliability
+if (dbUrl.includes("pooler.supabase.com:5432")) {
+  dbUrl = dbUrl.replace(":5432", ":6543");
+  if (!dbUrl.includes("pgbouncer=true")) {
+    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
+  }
+}
 
 const isLocalDb = Boolean(
   dbUrl.includes("localhost") || 
@@ -12,7 +20,7 @@ const isLocalDb = Boolean(
 
 export const pool = new pg.Pool({
   connectionString: dbUrl,
-  max: Number(process.env.PG_POOL_MAX || 10),
+  max: process.env.VERCEL ? 3 : Number(process.env.PG_POOL_MAX || 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   ssl: isLocalDb ? undefined : { rejectUnauthorized: false }
