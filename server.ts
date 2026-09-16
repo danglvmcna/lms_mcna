@@ -1380,53 +1380,6 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
   });
 }));
 
-app.get("/api/debug/email-test", asyncHandler(async (req, res) => {
-  const to = (req.query.to as string) || "danglv.mcna.247@gmail.com";
-  const user = getSmtpUser();
-  const pass = getSmtpPass();
-  const hasConfig = hasSmtpConfig();
-
-  let verifyResult: any = null;
-  let sendResult: any = null;
-  let errorMsg: string | null = null;
-
-  if (hasConfig) {
-    try {
-      const transporter = getTransporter();
-      verifyResult = await transporter.verify();
-
-      const info = await transporter.sendMail({
-        from: getSmtpFrom(),
-        to,
-        subject: "[LMS MCNA] Kiểm tra gửi mail hệ thống",
-        text: `Chào bạn, đây là email kiểm tra kết nối từ LMS MCNA gửi tới ${to} lúc ${new Date().toISOString()}`,
-        html: `<div style="padding:20px;font-family:sans-serif;color:#1e293b;">
-          <h2>Kiểm tra kết nối LMS MCNA</h2>
-          <p>Email này xác nhận hệ thống gửi mail SMTP của LMS MCNA đã kết nối và phát thư thành công tới <strong>${to}</strong>.</p>
-          <p style="color:#64748b;font-size:12px;">Thời gian: ${new Date().toLocaleString("vi-VN")}</p>
-        </div>`
-      });
-      sendResult = {
-        messageId: info.messageId,
-        accepted: info.accepted,
-        rejected: info.rejected,
-        response: info.response,
-      };
-    } catch (err: any) {
-      errorMsg = err?.message || String(err);
-    }
-  }
-
-  res.json({
-    hasConfig,
-    smtpUserMasked: user ? `${user.slice(0, 3)}***@${user.split("@")[1] || ""}` : "empty",
-    smtpPassLength: pass.length,
-    smtpFrom: getSmtpFrom(),
-    verifyResult,
-    sendResult,
-    error: errorMsg
-  });
-}));
 
 app.post("/api/auth/forgot-password", rateLimitForgotPassword, validateBody(schemas.forgotPassword), asyncHandler(async (req, res) => {
   const row = await usersRepository.findAuthByEmail(pool, req.body.email) as DbUserRow | null;
