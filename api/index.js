@@ -3660,40 +3660,59 @@ var SMTP_PORT2 = Number(process.env.SMTP_PORT) || 465;
 var SMTP_USER2 = process.env.SMTP_USER || "";
 var SMTP_PASS2 = process.env.SMTP_PASS || "";
 var SMTP_FROM2 = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER2 || "noreply@mcna.vn"}>`;
+function getSmtpUser() {
+  return (process.env.SMTP_USER || "").trim();
+}
+function getSmtpPass() {
+  return (process.env.SMTP_PASS || "").trim().replace(/\s+/g, "");
+}
+function getSmtpFrom() {
+  const user = getSmtpUser();
+  return process.env.SMTP_FROM || `"LMS MCNA" <${user || "noreply@mcna.vn"}>`;
+}
 var activeTransporter = null;
 function hasSmtpConfig() {
-  if (SMTP_USER2 && SMTP_PASS2) return true;
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+  if (user && pass && !user.includes("your_email") && !pass.includes("your_app_password")) {
+    return true;
+  }
   return hasSmtpOauth2Config();
 }
 function hasSmtpOauth2Config() {
-  const isPlaceholder = SMTP_USER2.includes("your_email") || SMTP_USER2.includes("example.com");
+  const user = getSmtpUser();
+  const isPlaceholder = user.includes("your_email") || user.includes("example.com");
   return !isPlaceholder && hasGoogleCredentials() && !!process.env.SMTP_USER;
 }
 function getTransporter2() {
   if (activeTransporter) return activeTransporter;
-  if (SMTP_USER2 && SMTP_PASS2) {
-    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${SMTP_USER2}`);
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 465;
+  if (user && pass) {
+    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${user}`);
     activeTransporter = nodemailer2.createTransport({
-      host: SMTP_HOST2,
-      port: SMTP_PORT2,
-      secure: SMTP_PORT2 === 465,
+      host,
+      port,
+      secure: port === 465,
       auth: {
-        user: SMTP_USER2,
-        pass: SMTP_PASS2
+        user,
+        pass
       }
     });
     return activeTransporter;
   }
   if (hasSmtpOauth2Config()) {
     const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON2);
-    console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${SMTP_USER2}`);
+    console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${user}`);
     activeTransporter = nodemailer2.createTransport({
-      host: SMTP_HOST2,
-      port: SMTP_PORT2,
-      secure: SMTP_PORT2 === 465,
+      host,
+      port,
+      secure: port === 465,
       auth: {
         type: "OAuth2",
-        user: SMTP_USER2,
+        user,
         serviceClient: creds.client_id,
         privateKey: creds.private_key.replace(/\\n/g, "\n")
       }
@@ -3880,10 +3899,10 @@ async function sendWelcomeEmail(pool2, userId, params) {
     `
   );
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter2 = getTransporter2();
       await transporter2.sendMail({
-        from: SMTP_FROM2,
+        from: getSmtpFrom(),
         to: params.to,
         subject,
         html: htmlContent,
@@ -3941,10 +3960,10 @@ async function sendLmsNotification(pool2, userId, params) {
     `
   );
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter2 = getTransporter2();
       await transporter2.sendMail({
-        from: SMTP_FROM2,
+        from: getSmtpFrom(),
         to: params.to,
         subject: finalSubject,
         html: htmlContent,
@@ -3989,10 +4008,10 @@ async function sendPasswordResetLinkEmail(pool2, userId, params) {
     `
   );
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter2 = getTransporter2();
       await transporter2.sendMail({
-        from: SMTP_FROM2,
+        from: getSmtpFrom(),
         to: params.to,
         subject,
         html: htmlContent,
@@ -4022,8 +4041,8 @@ ${params.resetUrl}`
   }
 }
 async function deliverEmail(params) {
-  if (hasSmtpOauth2Config()) {
-    await getTransporter2().sendMail({ from: SMTP_FROM2, to: params.to, subject: params.subject, html: params.html, text: params.text });
+  if (hasSmtpConfig()) {
+    await getTransporter2().sendMail({ from: getSmtpFrom(), to: params.to, subject: params.subject, html: params.html, text: params.text });
     console.log(`[EmailWorker] "${params.subject}" dispatched to: ${params.to}`);
   } else {
     logEmailMock2(params.to, params.name, params.subject, params.html);
@@ -6889,7 +6908,6 @@ app.post("/api/auth/reset-password/complete", rateLimitResetPassword, validateBo
   res.json({ ok: true, message: "M\u1EADt kh\u1EA9u \u0111\xE3 \u0111\u01B0\u1EE3c \u0111\u1EB7t l\u1EA1i th\xE0nh c\xF4ng. B\u1EA1n c\xF3 th\u1EC3 \u0111\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u m\u1EDBi." });
 }));
 var ACCOUNT_REQUEST_MESSAGE = "N\u1EBFu email h\u1EE3p l\u1EC7, th\xF4ng tin \u0111\u0103ng nh\u1EADp \u0111\xE3 \u0111\u01B0\u1EE3c g\u1EEDi t\u1EDBi h\u1ED9p th\u01B0 c\u1EE7a b\u1EA1n. Vui l\xF2ng ki\u1EC3m tra c\u1EA3 th\u01B0 m\u1EE5c Spam.";
-var exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging";
 app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
   const existing = await usersRepository.findAuthByEmail(pool, req.body.email);
   if (existing) {
@@ -6904,10 +6922,11 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
   await auditRepository.log(pool, result.user.id, "self_register", "security", `Self sign-up with personal email ${result.user.email}.`);
+  const hasSmtp = hasSmtpConfig();
   res.status(202).json({
     ok: true,
     message: ACCOUNT_REQUEST_MESSAGE,
-    ...exposeDevSecrets() || !hasSmtpConfig() ? { devTemporaryPassword: result.temporaryPassword } : {}
+    ...!hasSmtp ? { devTemporaryPassword: result.temporaryPassword } : {}
   });
 }));
 app.post("/api/auth/forgot-password", rateLimitForgotPassword, validateBody(schemas.forgotPassword), asyncHandler(async (req, res) => {
@@ -9046,6 +9065,8 @@ if (!process.env.VERCEL) {
 var server_default = app;
 
 // src/server/serverlessHandler.ts
+process.env.NODE_ENV = process.env.NODE_ENV || "production";
+process.env.VERCEL = process.env.VERCEL || "1";
 void ensureDatabaseReady().catch((err) => {
   console.error("Vercel Serverless DB initialization error:", err);
 });

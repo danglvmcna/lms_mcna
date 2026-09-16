@@ -1352,7 +1352,7 @@ app.post("/api/auth/reset-password/complete", rateLimitResetPassword, validateBo
 
 const ACCOUNT_REQUEST_MESSAGE = "Nếu email hợp lệ, thông tin đăng nhập đã được gửi tới hộp thư của bạn. Vui lòng kiểm tra cả thư mục Spam.";
 // Outside production the temporary password is returned too, so E2E tests and local QA can log in without a mailbox.
-const exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging";
+const exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging" && !process.env.VERCEL;
 
 app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
   const existing = await usersRepository.findAuthByEmail(pool, req.body.email) as DbUserRow | null;
@@ -1372,10 +1372,11 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
 
   invalidateStoreCache();
   await auditRepository.log(pool, result.user.id, "self_register", "security", `Self sign-up with personal email ${result.user.email}.`);
+  const hasSmtp = hasSmtpConfig();
   res.status(202).json({
     ok: true,
     message: ACCOUNT_REQUEST_MESSAGE,
-    ...(exposeDevSecrets() || !hasSmtpConfig() ? { devTemporaryPassword: result.temporaryPassword } : {})
+    ...(!hasSmtp ? { devTemporaryPassword: result.temporaryPassword } : {})
   });
 }));
 

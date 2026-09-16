@@ -1,3 +1,6 @@
+process.env.NODE_ENV = process.env.NODE_ENV || "production";
+process.env.VERCEL = process.env.VERCEL || "1";
+
 import app, { ensureDatabaseReady } from "../../server";
 
 void ensureDatabaseReady().catch((err) => {

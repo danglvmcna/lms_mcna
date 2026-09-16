@@ -14,15 +14,34 @@ const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER || "noreply@mcna.vn"}>`;
 
+function getSmtpUser(): string {
+  return (process.env.SMTP_USER || "").trim();
+}
+
+function getSmtpPass(): string {
+  // Strip whitespace in case user pastes 16-character Gmail App Password with spaces
+  return (process.env.SMTP_PASS || "").trim().replace(/\s+/g, "");
+}
+
+function getSmtpFrom(): string {
+  const user = getSmtpUser();
+  return process.env.SMTP_FROM || `"LMS MCNA" <${user || "noreply@mcna.vn"}>`;
+}
+
 let activeTransporter: nodemailer.Transporter | null = null;
 
 export function hasSmtpConfig(): boolean {
-  if (SMTP_USER && SMTP_PASS) return true;
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+  if (user && pass && !user.includes("your_email") && !pass.includes("your_app_password")) {
+    return true;
+  }
   return hasSmtpOauth2Config();
 }
 
 function hasSmtpOauth2Config(): boolean {
-  const isPlaceholder = SMTP_USER.includes("your_email") || SMTP_USER.includes("example.com");
+  const user = getSmtpUser();
+  const isPlaceholder = user.includes("your_email") || user.includes("example.com");
   return !isPlaceholder && hasGoogleCredentials() && !!process.env.SMTP_USER;
 }
 
@@ -32,15 +51,20 @@ function hasSmtpOauth2Config(): boolean {
 function getTransporter(): nodemailer.Transporter {
   if (activeTransporter) return activeTransporter;
 
-  if (SMTP_USER && SMTP_PASS) {
-    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${SMTP_USER}`);
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 465;
+
+  if (user && pass) {
+    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${user}`);
     activeTransporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
+      host,
+      port,
+      secure: port === 465,
       auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
+        user,
+        pass,
       },
     });
     return activeTransporter;
@@ -48,15 +72,15 @@ function getTransporter(): nodemailer.Transporter {
 
   if (hasSmtpOauth2Config()) {
     const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON!);
-    console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${SMTP_USER}`);
+    console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${user}`);
 
     activeTransporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
+      host,
+      port,
+      secure: port === 465,
       auth: {
         type: "OAuth2",
-        user: SMTP_USER,
+        user,
         serviceClient: creds.client_id,
         privateKey: creds.private_key.replace(/\\n/g, "\n"),
       },
@@ -282,10 +306,10 @@ export async function sendWelcomeEmail(
   );
 
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from: SMTP_FROM,
+        from: getSmtpFrom(),
         to: params.to,
         subject,
         html: htmlContent,
@@ -354,10 +378,10 @@ export async function sendLmsNotification(
   );
 
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from: SMTP_FROM,
+        from: getSmtpFrom(),
         to: params.to,
         subject: finalSubject,
         html: htmlContent,
@@ -417,10 +441,10 @@ export async function sendPasswordResetLinkEmail(
   );
 
   const action = async () => {
-    if (hasSmtpOauth2Config()) {
+    if (hasSmtpConfig()) {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from: SMTP_FROM,
+        from: getSmtpFrom(),
         to: params.to,
         subject,
         html: htmlContent,
@@ -449,8 +473,8 @@ export async function sendPasswordResetLinkEmail(
 }
 
 async function deliverEmail(params: { to: string; name: string; subject: string; html: string; text: string }) {
-  if (hasSmtpOauth2Config()) {
-    await getTransporter().sendMail({ from: SMTP_FROM, to: params.to, subject: params.subject, html: params.html, text: params.text });
+  if (hasSmtpConfig()) {
+    await getTransporter().sendMail({ from: getSmtpFrom(), to: params.to, subject: params.subject, html: params.html, text: params.text });
     console.log(`[EmailWorker] "${params.subject}" dispatched to: ${params.to}`);
   } else {
     logEmailMock(params.to, params.name, params.subject, params.html);
