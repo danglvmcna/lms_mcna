@@ -79,6 +79,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const [courseLevel, setCourseLevel] = useState("Cơ bản");
   const [courseTags, setCourseTags] = useState("");
   const [courseLessonsCount, setCourseLessonsCount] = useState(10);
+  const [courseThumb, setCourseThumb] = useState("");
 
   // Section Form States
   const [sectionCourseId, setSectionCourseId] = useState("");
@@ -146,6 +147,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setCourseLevel("Cơ bản");
     setCourseTags("");
     setCourseLessonsCount(10);
+    setCourseThumb("");
     setShowCourseModal(true);
   };
 
@@ -160,6 +162,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setCourseLevel(course.level || "Cơ bản");
     setCourseTags(course.tags ? course.tags.join(", ") : "");
     setCourseLessonsCount(course.numberOfLessons || 10);
+    setCourseThumb(course.thumbnail || "");
     setShowCourseModal(true);
   };
 
@@ -276,7 +279,8 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       originalPrice: courseOriginalPrice !== "" ? Number(courseOriginalPrice) : undefined,
       level: courseLevel,
       tags: tagsArray,
-      numberOfLessons: Number(courseLessonsCount)
+      numberOfLessons: Number(courseLessonsCount),
+      thumbnail: courseThumb.trim() || undefined
     };
 
     try {
@@ -879,6 +883,29 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-white/70 font-sans">Ảnh Thumbnail (URL)</label>
+                    <input
+                      type="url"
+                      placeholder="https://mcna.vn/... hoặc đường dẫn ảnh"
+                      value={courseThumb}
+                      onChange={(e) => setCourseThumb(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                    />
+                    {courseThumb.trim() && (
+                      <div className="mt-2 h-24 w-40 rounded-xl overflow-hidden border border-white/10 relative bg-slate-950">
+                        <img
+                          src={courseThumb}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1">

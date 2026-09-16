@@ -412,6 +412,12 @@ export default function CourseCatalog(props: ComponentProps) {
 
                   {/* Right Column - General info & request form */}
                   <div className="space-y-5">
+                    {crs.thumbnail && (
+                      <div className="aspect-video w-full rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-slate-900">
+                        <img src={crs.thumbnail} alt={crs.title} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+
                     {/* Giảng viên phụ trách môn */}
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-5 h-fit space-y-4">
                       <span className="text-xs font-semibold text-white uppercase tracking-wider block border-b border-white/10 pb-2">Giảng viên phụ trách môn</span>

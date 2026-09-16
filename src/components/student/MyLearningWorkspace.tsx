@@ -756,12 +756,20 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   <span>Quay lại danh sách</span>
                 </button>
                 <div className="h-6 w-px bg-white/10 hidden sm:block shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-[11px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">LỚP HỌC TRỰC TUYẾN</span>
-                  <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 mt-0.5 min-w-0">
-                    <h4 className="text-xl font-display font-extrabold text-indigo-950 leading-tight break-words line-clamp-2 min-w-0">
-                      {currentLearningCourse.title}
-                    </h4>
+                <div className="min-w-0 flex-1 flex items-center gap-3.5">
+                  {currentLearningCourse.thumbnail && (
+                    <img
+                      src={currentLearningCourse.thumbnail}
+                      alt=""
+                      className="h-12 w-20 object-cover rounded-xl border border-indigo-200/40 shadow-sm shrink-0 hidden md:block"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[11px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">LỚP HỌC TRỰC TUYẾN</span>
+                    <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 mt-0.5 min-w-0">
+                      <h4 className="text-xl font-display font-extrabold text-indigo-950 leading-tight break-words line-clamp-2 min-w-0">
+                        {currentLearningCourse.title}
+                      </h4>
                     {(() => {
                       const section = (store.courseSections || []).find(s => s.id === activeLearningSectionId);
                       if (!section) return null;
@@ -797,7 +805,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           )}
                         </div>
                       );
-                    })()}
+                    })()}</div>
                   </div>
                 </div>
               </div>

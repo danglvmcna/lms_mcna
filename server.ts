@@ -3806,8 +3806,27 @@ app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "m
   res.json({ ok: true, mode: "postgres-synchronized" });
 }));
 
+let initDbPromise: Promise<void> | null = null;
+export async function ensureDatabaseReady() {
+  if (!initDbPromise) {
+    initDbPromise = initializeDatabase();
+  }
+  return initDbPromise;
+}
+
+// Express error handler
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  if (res.headersSent) return;
+  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+    res.status(413).json({ error: "Dung lượng tệp phải nhỏ hơn 10 GB." });
+    return;
+  }
+  res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error." : err.message || "Internal server error." });
+});
+
 async function setupServer() {
-  await initializeDatabase();
+  await ensureDatabaseReady();
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
@@ -3816,21 +3835,16 @@ async function setupServer() {
     app.use(express.static(distPath));
     app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(err);
-    if (res.headersSent) return;
-    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: "Dung lượng tệp phải nhỏ hơn 10 GB." });
-      return;
-    }
-    res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error." : err.message || "Internal server error." });
-  });
   const HOST = process.env.HOST || "0.0.0.0";
   const server = app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
   server.requestTimeout = Number(process.env.REQUEST_TIMEOUT_MS || 0);
 }
 
-setupServer().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  setupServer().catch((err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  });
+}
+
+export default app;

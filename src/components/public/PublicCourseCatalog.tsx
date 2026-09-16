@@ -213,7 +213,12 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             )}
           </section>
 
-          <aside className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 h-fit text-sm">
+          <aside className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 h-fit text-sm overflow-hidden">
+            {course.thumbnail && (
+              <div className="aspect-video -mx-5 -mt-5 mb-4 overflow-hidden border-b border-white/10 bg-slate-950">
+                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               <span className="text-white/50">Học phí</span>
               <div className="text-right">

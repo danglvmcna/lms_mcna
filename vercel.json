@@ -1,0 +1,17 @@
+﻿{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!assets|uploads|mcna-logo|favicon).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
