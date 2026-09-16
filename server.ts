@@ -107,7 +107,6 @@ const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
 };
 
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
@@ -3827,7 +3826,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 async function setupServer() {
   await ensureDatabaseReady();
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
