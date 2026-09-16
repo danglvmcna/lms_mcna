@@ -163,7 +163,7 @@ import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePo
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
-import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail } from "./src/server/emailProvisioning/emailWorker";
+import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail, hasSmtpConfig } from "./src/server/emailProvisioning/emailWorker";
 
 dotenv.config();
 
@@ -1375,7 +1375,7 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
   res.status(202).json({
     ok: true,
     message: ACCOUNT_REQUEST_MESSAGE,
-    ...(exposeDevSecrets() ? { devTemporaryPassword: result.temporaryPassword } : {})
+    ...(exposeDevSecrets() || !hasSmtpConfig() ? { devTemporaryPassword: result.temporaryPassword } : {})
   });
 }));
 

@@ -1289,7 +1289,7 @@ import express from "express";
 import path5 from "path";
 import multer from "multer";
 import fs5 from "fs";
-import os from "os";
+import os2 from "os";
 import crypto4 from "crypto";
 import dotenv2 from "dotenv";
 
@@ -3637,6 +3637,7 @@ Vui l\xF2ng \u0111\u0103ng nh\u1EADp h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\
 import nodemailer2 from "nodemailer";
 import fs3 from "fs";
 import path3 from "path";
+import os from "os";
 
 // src/server/repositories/audit.ts
 var auditRepository = {
@@ -3656,15 +3657,33 @@ var GOOGLE_SERVICE_ACCOUNT_JSON2 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 var SCHOOL_EMAIL_DOMAIN2 = process.env.SCHOOL_EMAIL_DOMAIN || "mcna.edu.vn";
 var SMTP_HOST2 = process.env.SMTP_HOST || "smtp.gmail.com";
 var SMTP_PORT2 = Number(process.env.SMTP_PORT) || 465;
-var SMTP_USER2 = process.env.SMTP_USER || `noreply@${SCHOOL_EMAIL_DOMAIN2}`;
-var SMTP_FROM2 = process.env.SMTP_FROM || `"LMS E16-MCNA" <${SMTP_USER2}>`;
+var SMTP_USER2 = process.env.SMTP_USER || "";
+var SMTP_PASS2 = process.env.SMTP_PASS || "";
+var SMTP_FROM2 = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER2 || "noreply@mcna.vn"}>`;
 var activeTransporter = null;
+function hasSmtpConfig() {
+  if (SMTP_USER2 && SMTP_PASS2) return true;
+  return hasSmtpOauth2Config();
+}
 function hasSmtpOauth2Config() {
   const isPlaceholder = SMTP_USER2.includes("your_email") || SMTP_USER2.includes("example.com");
   return !isPlaceholder && hasGoogleCredentials() && !!process.env.SMTP_USER;
 }
 function getTransporter2() {
   if (activeTransporter) return activeTransporter;
+  if (SMTP_USER2 && SMTP_PASS2) {
+    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${SMTP_USER2}`);
+    activeTransporter = nodemailer2.createTransport({
+      host: SMTP_HOST2,
+      port: SMTP_PORT2,
+      secure: SMTP_PORT2 === 465,
+      auth: {
+        user: SMTP_USER2,
+        pass: SMTP_PASS2
+      }
+    });
+    return activeTransporter;
+  }
   if (hasSmtpOauth2Config()) {
     const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON2);
     console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${SMTP_USER2}`);
@@ -3681,15 +3700,17 @@ function getTransporter2() {
     });
     return activeTransporter;
   }
-  throw new Error("SMTP OAuth2 credentials are not configured. Falling back to local file logging.");
+  throw new Error("SMTP credentials are not configured. Falling back to mock logging.");
 }
 function logEmailMock2(to, name, subject, htmlContent) {
-  const scratchDir = path3.join(process.cwd(), "scratch");
-  if (!fs3.existsSync(scratchDir)) {
-    fs3.mkdirSync(scratchDir, { recursive: true });
-  }
-  const logFile = path3.join(scratchDir, "emails.log");
-  const logEntry = `
+  try {
+    const baseDir = process.env.VERCEL ? os.tmpdir() : process.cwd();
+    const scratchDir = path3.join(baseDir, "scratch");
+    if (!fs3.existsSync(scratchDir)) {
+      fs3.mkdirSync(scratchDir, { recursive: true });
+    }
+    const logFile = path3.join(scratchDir, "emails.log");
+    const logEntry = `
 ========================================
 [EMAIL MOCK DISPATCHED]
 Timestamp: ${(/* @__PURE__ */ new Date()).toISOString()}
@@ -3700,8 +3721,10 @@ ${htmlContent}
 ========================================
 
 `;
-  fs3.appendFileSync(logFile, logEntry, "utf8");
-  console.log(`[Email Mock] Sent to ${to}. Logged in scratch/emails.log`);
+    fs3.appendFileSync(logFile, logEntry, "utf8");
+  } catch {
+  }
+  console.log(`[Email Mock] Dispatched to ${to}: ${subject}`);
 }
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -5793,7 +5816,7 @@ try {
   }
 } catch (error) {
   console.warn(`Could not create ${uploadDir}, falling back to OS temp dir for uploads.`);
-  uploadDir = path5.join(os.tmpdir(), "lms_uploads");
+  uploadDir = path5.join(os2.tmpdir(), "lms_uploads");
   if (!fs5.existsSync(uploadDir)) {
     fs5.mkdirSync(uploadDir, { recursive: true });
   }
@@ -6884,7 +6907,7 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
   res.status(202).json({
     ok: true,
     message: ACCOUNT_REQUEST_MESSAGE,
-    ...exposeDevSecrets() ? { devTemporaryPassword: result.temporaryPassword } : {}
+    ...exposeDevSecrets() || !hasSmtpConfig() ? { devTemporaryPassword: result.temporaryPassword } : {}
   });
 }));
 app.post("/api/auth/forgot-password", rateLimitForgotPassword, validateBody(schemas.forgotPassword), asyncHandler(async (req, res) => {
@@ -9022,7 +9045,7 @@ if (!process.env.VERCEL) {
 }
 var server_default = app;
 
-// api/index.ts
+// src/server/serverlessHandler.ts
 void ensureDatabaseReady().catch((err) => {
   console.error("Vercel Serverless DB initialization error:", err);
 });

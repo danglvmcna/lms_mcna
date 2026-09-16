@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { Pool } from "pg";
 import { auditRepository } from "../repositories/audit";
 import { hasGoogleCredentials } from "./googleWorkspaceClient";
@@ -9,10 +10,16 @@ const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 const SCHOOL_EMAIL_DOMAIN = process.env.SCHOOL_EMAIL_DOMAIN || "mcna.edu.vn";
 const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 465;
-const SMTP_USER = process.env.SMTP_USER || `noreply@${SCHOOL_EMAIL_DOMAIN}`;
-const SMTP_FROM = process.env.SMTP_FROM || `"LMS E16-MCNA" <${SMTP_USER}>`;
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const SMTP_FROM = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER || "noreply@mcna.vn"}>`;
 
 let activeTransporter: nodemailer.Transporter | null = null;
+
+export function hasSmtpConfig(): boolean {
+  if (SMTP_USER && SMTP_PASS) return true;
+  return hasSmtpOauth2Config();
+}
 
 function hasSmtpOauth2Config(): boolean {
   const isPlaceholder = SMTP_USER.includes("your_email") || SMTP_USER.includes("example.com");
@@ -20,10 +27,24 @@ function hasSmtpOauth2Config(): boolean {
 }
 
 /**
- * Initialize nodemailer transporter using Service Account OAuth2 flow
+ * Initialize nodemailer transporter using standard SMTP or Service Account OAuth2 flow
  */
 function getTransporter(): nodemailer.Transporter {
   if (activeTransporter) return activeTransporter;
+
+  if (SMTP_USER && SMTP_PASS) {
+    console.log(`[EmailWorker] Initializing standard SMTP transport for: ${SMTP_USER}`);
+    activeTransporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+    });
+    return activeTransporter;
+  }
 
   if (hasSmtpOauth2Config()) {
     const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON!);
@@ -43,19 +64,21 @@ function getTransporter(): nodemailer.Transporter {
     return activeTransporter!;
   }
 
-  throw new Error("SMTP OAuth2 credentials are not configured. Falling back to local file logging.");
+  throw new Error("SMTP credentials are not configured. Falling back to mock logging.");
 }
 
 /**
- * Log email mock output locally to scratch/emails.log in the workspace
+ * Log email mock output locally or to console
  */
 function logEmailMock(to: string, name: string, subject: string, htmlContent: string) {
-  const scratchDir = path.join(process.cwd(), "scratch");
-  if (!fs.existsSync(scratchDir)) {
-    fs.mkdirSync(scratchDir, { recursive: true });
-  }
-  const logFile = path.join(scratchDir, "emails.log");
-  const logEntry = `
+  try {
+    const baseDir = process.env.VERCEL ? os.tmpdir() : process.cwd();
+    const scratchDir = path.join(baseDir, "scratch");
+    if (!fs.existsSync(scratchDir)) {
+      fs.mkdirSync(scratchDir, { recursive: true });
+    }
+    const logFile = path.join(scratchDir, "emails.log");
+    const logEntry = `
 ========================================
 [EMAIL MOCK DISPATCHED]
 Timestamp: ${new Date().toISOString()}
@@ -65,8 +88,11 @@ Subject: ${subject}
 ${htmlContent}
 ========================================
 \n`;
-  fs.appendFileSync(logFile, logEntry, "utf8");
-  console.log(`[Email Mock] Sent to ${to}. Logged in scratch/emails.log`);
+    fs.appendFileSync(logFile, logEntry, "utf8");
+  } catch {
+    // Non-fatal if filesystem is read-only
+  }
+  console.log(`[Email Mock] Dispatched to ${to}: ${subject}`);
 }
 
 function escapeHtml(value: string): string {
