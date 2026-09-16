@@ -1245,6 +1245,10 @@ function dashboardFromStore(store: any, user: User) {
 }
 
 async function initializeDatabase() {
+  registerEventHandlers();
+  if (process.env.VERCEL) {
+    return;
+  }
   await runMigrations(pool);
   await usersRepository.normalizeLegacyRoles(pool);
   await seedAuthUsers(pool);
@@ -1252,7 +1256,6 @@ async function initializeDatabase() {
   await usersRepository.normalizeSystemUsers(pool);
   if (process.env.NODE_ENV === "production") await ensureScheduledSessionsForAllSections(pool);
   invalidateStoreCache();
-  registerEventHandlers();
   startScheduler();
 }
 
