@@ -151,9 +151,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
   const courseSessions = learningCourseId ? getCourseSessions() : [];
   const activePresentationSession = courseSessions.find((session) => {
+    if (activePresentationSessionNumber && session.number === activePresentationSessionNumber) return true;
     if (activeLessonId && session.lessons.some((lesson: any) => lesson.id === activeLessonId)) return true;
     if (activeAssignmentId && session.assignments.some((assignment: any) => assignment.id === activeAssignmentId)) return true;
-    if (activePresentationSessionNumber && session.number === activePresentationSessionNumber) return true;
     return false;
   }) || null;
   // Recording links (Zoom cloud, Drive, YouTube) are web pages, not media files, so they get their own button instead of the <video> stage.
@@ -204,6 +204,337 @@ export default function MyLearningWorkspace(props: ComponentProps) {
       </div>
     </div>
   );
+
+  const renderFolderView = (session: any) => {
+    if (!session) return null;
+    const itemCount = (session.materials?.length || 0) + (session.lessons?.length || 0) + (session.assignments?.length || 0);
+
+    return (
+      <div className="space-y-6">
+        {/* Folder Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-xs text-white/60 bg-white/[0.03] border border-white/5 p-3 rounded-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePresentationSessionNumber(null);
+              setActiveLessonId(null);
+              setActiveAssignmentId(null);
+            }}
+            className="hover:text-white flex items-center gap-1.5 font-medium transition cursor-pointer"
+          >
+            <Folder className="h-4 w-4 text-amber-300" /> Thư mục lớp học
+          </button>
+          <span>/</span>
+          <span className="text-white font-bold flex items-center gap-1.5 truncate">
+            <FolderOpen className="h-4 w-4 text-amber-300" /> {session.title}{session.topic ? `: ${session.topic}` : ""}
+          </span>
+        </div>
+
+        {/* Main Folder Banner Card */}
+        <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full filter blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-white/5 pb-5">
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-300 shrink-0 shadow-lg shadow-amber-500/5">
+                <FolderOpen className="h-7 w-7" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-amber-300 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    THƯ MỤC BUỔI HỌC
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                    {itemCount} mục
+                  </span>
+                </div>
+                <h3 className="text-xl md:text-2xl font-display font-extrabold text-white leading-tight">
+                  {session.title}{session.topic ? ` - ${session.topic}` : ""}
+                </h3>
+              </div>
+            </div>
+
+            {session.date && (
+              <span className="shrink-0 text-xs font-mono font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1.5 rounded-xl">
+                ⏰ {new Date(session.date).toLocaleString("vi-VN")}
+              </span>
+            )}
+          </div>
+
+          {/* Folder Description */}
+          {session.content && (
+            <div className="bg-black/20 p-4 md:p-5 rounded-2xl border border-white/5 text-xs md:text-sm text-white/80 leading-relaxed font-sans whitespace-pre-line shadow-inner">
+              <LinkedText text={session.content} />
+            </div>
+          )}
+
+          {/* Video Recording Link */}
+          {session.recordingUrl && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-xs font-semibold text-emerald-300">
+                <Video className="h-5 w-5 text-emerald-400 shrink-0" />
+                <span>Video Recording buổi học đã có sẵn để xem lại.</span>
+              </div>
+              <a
+                href={session.recordingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shrink-0"
+              >
+                Xem Video Recording ↗
+              </a>
+            </div>
+          )}
+
+          {/* Direct Video Player */}
+          {session.videoUrl && (
+            <div className="space-y-2">
+              <span className="text-xs font-mono font-bold text-indigo-400 uppercase tracking-widest block">
+                VIDEO BÀI GIẢNG TRỰC TIẾP
+              </span>
+              {renderVideoStage(session.videoUrl, session.topic || session.title)}
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 1: MATERIALS & SLIDES */}
+        <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <FileText className="h-4.5 w-4.5 text-indigo-400" />
+              Tài liệu & Slide bài giảng ({session.materials.length})
+            </h4>
+            <span className="text-[10px] text-white/40 font-mono">Bấm Xem trực tiếp PDF hoặc Tải về máy</span>
+          </div>
+
+          {session.materials.length > 0 ? (
+            <SessionMaterialsList materials={session.materials} />
+          ) : (
+            <div className="text-center py-8 bg-black/10 border border-dashed border-white/5 rounded-2xl text-xs text-white/40">
+              Thư mục này hiện chưa có file tài liệu hoặc slide đính kèm.
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 2: THEORY LESSONS */}
+        {session.lessons.length > 0 && (
+          <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <BookOpen className="h-4.5 w-4.5 text-indigo-400" />
+                Bài học lý thuyết ({session.lessons.length})
+              </h4>
+              <span className="text-[10px] text-white/40 font-mono">Bấm vào bài học để đọc nội dung</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {session.lessons.map((les: any, idx: number) => {
+                const progress = store.lessonProgress.find(
+                  (p: any) => p.enrollmentId === activeLearningEnrollment?.id && p.lessonId === les.id
+                );
+                const isCompleted = progress?.completed ?? false;
+
+                return (
+                  <div
+                    key={les.id}
+                    onClick={() => {
+                      setActivePresentationSessionNumber(session.number);
+                      setActiveLessonId(les.id);
+                      setActiveAssignmentId(null);
+                    }}
+                    className="p-4 rounded-2xl bg-black/20 hover:bg-white/[0.06] border border-white/10 hover:border-indigo-500/40 flex items-start justify-between gap-3 transition-all duration-200 cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activeLearningEnrollment) {
+                            handleToggleLessonComplete(activeLearningEnrollment.id, les.id);
+                          }
+                        }}
+                        className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all duration-200 shrink-0 cursor-pointer mt-0.5 ${
+                          isCompleted
+                            ? "bg-emerald-500 border-emerald-500 text-slate-900"
+                            : "border-white/20 hover:border-white/40 bg-white/5"
+                        }`}
+                      >
+                        {isCompleted && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                      </button>
+                      <div className="space-y-1 min-w-0">
+                        <span className="text-[9px] font-mono text-indigo-300 font-bold uppercase block">Bài {idx + 1}</span>
+                        <h5 className="font-bold text-white text-xs group-hover:text-indigo-200 transition-colors leading-snug line-clamp-2">
+                          {les.title}
+                        </h5>
+                        <span className="text-[10px] text-white/40 font-mono block">Thời lượng: {les.duration}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition shrink-0 mt-1" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 3: ASSIGNMENTS */}
+        {session.assignments.length > 0 && (
+          <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <FileText className="h-4.5 w-4.5 text-indigo-400" />
+                Bài tập tự luận ({session.assignments.length})
+              </h4>
+              <span className="text-[10px] text-white/40 font-mono">Bấm vào bài tập để xem đề và nộp bài</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {session.assignments.map((assign: any) => {
+                const sub = store.submissions.find((s: any) => s.assignmentId === assign.id && s.studentId === currentUser.id);
+                let statusBg = "bg-white/5 text-white/40 border-white/10";
+                let statusText = "Chưa nộp";
+                if (sub) {
+                  if (typeof sub.score === "number") {
+                    statusBg = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+                    statusText = `Đã chấm (${sub.score}/${assign.maxScore} đ)`;
+                  } else {
+                    statusBg = "bg-amber-500/20 text-amber-300 border-amber-500/30";
+                    statusText = "Chờ chấm";
+                  }
+                }
+
+                return (
+                  <div
+                    key={assign.id}
+                    onClick={() => {
+                      setActivePresentationSessionNumber(session.number);
+                      setActiveAssignmentId(assign.id);
+                      setActiveLessonId(null);
+                    }}
+                    className="p-4 rounded-2xl bg-black/20 hover:bg-white/[0.06] border border-white/10 hover:border-indigo-500/40 flex items-start justify-between gap-3 transition-all duration-200 cursor-pointer group"
+                  >
+                    <div className="space-y-2 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {assign.type && assign.type !== "lesson" && (
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                            assign.type === "final" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                            assign.type === "midterm" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                            "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                          }`}>
+                            {assign.type === "final" ? "Cuối kỳ" : assign.type === "midterm" ? "Giữa kỳ" : "Cuối chương"}
+                          </span>
+                        )}
+                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full border font-bold ${statusBg}`}>
+                          {statusText}
+                        </span>
+                      </div>
+                      <h5 className="font-bold text-white text-xs group-hover:text-indigo-200 transition-colors leading-snug line-clamp-2">
+                        {assign.title}
+                      </h5>
+                      <span className="text-[10px] text-white/40 font-mono block">
+                        Hạn nộp: {new Date(assign.deadline).toLocaleDateString("vi-VN")}
+                      </span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition shrink-0 mt-1" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderAllFoldersGrid = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+        <div>
+          <h4 className="text-lg font-display font-extrabold text-white flex items-center gap-2">
+            <Folder className="h-5 w-5 text-amber-300" />
+            Thư mục Buổi học ({courseSessions.length} buổi)
+          </h4>
+          <p className="text-xs text-white/50 mt-0.5">
+            Mỗi buổi học là một thư mục riêng biệt. Bấm vào bất kỳ thư mục nào để xem tài liệu, slide, video và bài tập.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {courseSessions.map((session) => {
+          const itemCount = session.materials.length + session.lessons.length + session.assignments.length;
+
+          return (
+            <div
+              key={session.number}
+              onClick={() => {
+                setExpandedSessions(prev => ({ ...prev, [session.number]: true }));
+                setActivePresentationSessionNumber(session.number);
+                setActiveLessonId(null);
+                setActiveAssignmentId(null);
+              }}
+              className="group bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 hover:border-amber-400/50 hover:from-white/[0.08] hover:to-white/[0.03] p-5 rounded-3xl transition-all duration-300 shadow-xl cursor-pointer flex flex-col justify-between"
+            >
+              <div className="space-y-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/20 group-hover:scale-105 flex items-center justify-center text-amber-300 transition-all duration-300 shadow-inner">
+                    <Folder className="h-6 w-6" />
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-white/60 bg-white/10 border border-white/10 px-2.5 py-1 rounded-full">
+                    {itemCount} mục
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <h5 className="font-display font-bold text-white text-base leading-snug group-hover:text-amber-200 transition-colors">
+                    {session.title}{session.topic ? ` - ${session.topic}` : ""}
+                  </h5>
+                  {session.content && (
+                    <p className="text-xs text-white/60 line-clamp-2 leading-relaxed">
+                      {session.content}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-white/40 pt-1">
+                  {session.materials.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                      📄 {session.materials.length} tài liệu
+                    </span>
+                  )}
+                  {session.lessons.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                      📖 {session.lessons.length} bài học
+                    </span>
+                  )}
+                  {session.assignments.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                      📝 {session.assignments.length} bài tập
+                    </span>
+                  )}
+                  {session.videoUrl && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                      🎥 Video
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/5 mt-4 flex items-center justify-between text-xs">
+                <span className="text-[11px] font-mono text-white/40">
+                  {session.date ? `⏰ ${new Date(session.date).toLocaleDateString("vi-VN")}` : "⏳ Chờ xếp lịch"}
+                </span>
+                <span className="text-xs font-bold text-amber-300 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                  Mở thư mục <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const getEnrollmentSection = (enroll: any) => {
     const registration = (store.courseRegistrations || []).find((r: any) => {
       if (r.studentId !== currentUser.id || ["dropped", "waitlisted", "withdrawn"].includes(r.status)) return false;
@@ -494,6 +825,29 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 <span className="text-xs font-bold text-white uppercase tracking-wider block border-b border-white/5 pb-2.5">Nội dung học tập</span>
                 
                 <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1.5 scrollbar-thin">
+                  {/* All Folders Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePresentationSessionNumber(null);
+                      setActiveLessonId(null);
+                      setActiveAssignmentId(null);
+                    }}
+                    className={`w-full flex items-center justify-between p-2.5 px-3.5 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                      !activePresentationSessionNumber && !activeLessonId && !activeAssignmentId
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-md"
+                        : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Folder className="h-4 w-4 text-amber-300" />
+                      <span>Tất cả thư mục</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-white/50 bg-white/10 px-2 py-0.5 rounded-full">
+                      {courseSessions.length}
+                    </span>
+                  </button>
+
                   {courseSessions.map((session) => {
                     const isExpanded = expandedSessions[session.number] ?? false;
                     // Each session reads as a folder: the badge counts what is inside it.
@@ -504,19 +858,17 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         {/* Session Accordion Header Toggle */}
                         <button
                           onClick={() => {
-                            setExpandedSessions(prev => ({ ...prev, [session.number]: !isExpanded }));
+                            setExpandedSessions(prev => ({ ...prev, [session.number]: true }));
                             setActivePresentationSessionNumber(session.number);
-                            const firstLesson = session.lessons[0];
-                            if (firstLesson) {
-                              setActiveLessonId(firstLesson.id);
-                              setActiveAssignmentId(null);
-                            } else {
-                              setActiveLessonId(null);
-                              setActiveAssignmentId(null);
-                            }
+                            setActiveLessonId(null);
+                            setActiveAssignmentId(null);
                           }}
                           className={`w-full flex items-center justify-between p-4 bg-gradient-to-r ${
-                            isExpanded ? "from-indigo-950/40 to-indigo-900/10 border-l-4 border-indigo-500" : "from-white/5 to-white/[0.02]"
+                            activePresentationSessionNumber === session.number && !activeLessonId && !activeAssignmentId
+                              ? "from-amber-500/20 to-indigo-900/20 border-l-4 border-amber-400"
+                              : isExpanded
+                              ? "from-indigo-950/40 to-indigo-900/10 border-l-4 border-indigo-500"
+                              : "from-white/5 to-white/[0.02]"
                           } hover:from-white/10 hover:to-white/5 text-xs font-bold text-white transition-all duration-300 cursor-pointer`}
                         >
                           <div className="flex flex-col text-left gap-0.5">
@@ -771,10 +1123,38 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   const isDeadlineExpired = new Date(assignObj.deadline).getTime() < Date.now();
 
                   return (
-                    <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                      {/* Decorative glow */}
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full filter blur-3xl pointer-events-none" />
-                      {renderPresentationSessionInfo(activePresentationSession)}
+                    <div className="space-y-4">
+                      {/* Breadcrumb back to session folder */}
+                      <div className="flex items-center gap-2 text-xs text-white/60 bg-white/[0.03] p-3 rounded-2xl border border-white/5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActivePresentationSessionNumber(null);
+                            setActiveLessonId(null);
+                            setActiveAssignmentId(null);
+                          }}
+                          className="hover:text-white flex items-center gap-1.5 cursor-pointer transition"
+                        >
+                          <Folder className="h-3.5 w-3.5 text-amber-300" /> Thư mục lớp học
+                        </button>
+                        <span>/</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveAssignmentId(null);
+                          }}
+                          className="hover:text-amber-200 text-amber-300 font-semibold flex items-center gap-1.5 cursor-pointer transition"
+                        >
+                          <FolderOpen className="h-3.5 w-3.5" /> {activePresentationSession?.title || "Buổi học"}
+                        </button>
+                        <span>/</span>
+                        <span className="text-white font-bold truncate">{assignObj.title}</span>
+                      </div>
+
+                      <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+                        {/* Decorative glow */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full filter blur-3xl pointer-events-none" />
+                        {renderPresentationSessionInfo(activePresentationSession)}
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-5 gap-3">
                         <div className="space-y-1">
@@ -877,10 +1257,38 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         )}
                       </div>
                     </div>
+                    </div>
                   );
                 })() : currentLessonContentObj ? (
                   // Condition 2: View Lesson content (default display)
-                  <>
+                  <div className="space-y-4">
+                    {/* Breadcrumb back to session folder */}
+                    <div className="flex items-center gap-2 text-xs text-white/60 bg-white/[0.03] p-3 rounded-2xl border border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePresentationSessionNumber(null);
+                          setActiveLessonId(null);
+                          setActiveAssignmentId(null);
+                        }}
+                        className="hover:text-white flex items-center gap-1.5 cursor-pointer transition"
+                      >
+                        <Folder className="h-3.5 w-3.5 text-amber-300" /> Thư mục lớp học
+                      </button>
+                      <span>/</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveLessonId(null);
+                        }}
+                        className="hover:text-amber-200 text-amber-300 font-semibold flex items-center gap-1.5 cursor-pointer transition"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" /> {activePresentationSession?.title || "Buổi học"}
+                      </button>
+                      <span>/</span>
+                      <span className="text-white font-bold truncate">{currentLessonContentObj.title}</span>
+                    </div>
+
                     {activeLessonVideoUrl && renderVideoStage(activeLessonVideoUrl, activeLessonVideoTitle)}
 
                     <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
@@ -901,33 +1309,11 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         {currentLessonContentObj.content}
                       </div>
                     </div>
-                  </>
-                ) : activePresentationSession ? (
-                  <>
-                    {activePresentationSession.videoUrl ? (
-                      renderVideoStage(activePresentationSession.videoUrl, activePresentationSession.topic || activePresentationSession.title)
-                    ) : activePresentationSession.materials.length === 0 ? (
-                      <div className="text-center py-16 bg-black/10 border border-dashed border-white/10 rounded-2xl text-xs text-white/45">
-                        Buổi học này chưa có video hoặc bài học chi tiết để trình chiếu.
-                      </div>
-                    ) : null}
-
-                    <div className="bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full filter blur-3xl pointer-events-none" />
-                      {renderPresentationSessionInfo(activePresentationSession)}
-                    </div>
-                  </>
-                ) : (
-                  
-                  // Condition 3: Default Blank State Placeholder
-                  <div className="text-center py-24 bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col justify-center items-center shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full filter blur-3xl pointer-events-none" />
-                    <BookOpen className="h-14 w-14 text-indigo-400/40 mb-4 animate-pulse" />
-                    <h5 className="font-bold text-white text-base font-display">Chào mừng đến với lớp học trực tuyến!</h5>
-                    <p className="text-xs text-white/50 max-w-sm mt-1.5 leading-relaxed">
-                      Vui lòng nhấp chọn bất kỳ buổi học nào ở thanh bên trái, sau đó mở tài liệu bài học lý thuyết hoặc bài tập tự luận để bắt đầu quá trình nghiên cứu của bạn.
-                    </p>
                   </div>
+                ) : activePresentationSession ? (
+                  renderFolderView(activePresentationSession)
+                ) : (
+                  renderAllFoldersGrid()
                 )}
               </div>
             </div>
