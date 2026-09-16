@@ -264,7 +264,17 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 const percentage = totalLessonsCount ? Math.round((completedProgress / totalLessonsCount) * 100) : 0;
 
                 return (
-                  <div key={enroll.id} className="bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 hover:border-white/20 p-6 rounded-2xl flex flex-col justify-between transition-all duration-300 shadow-xl group">
+                  <div key={enroll.id} className="bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 hover:border-white/20 rounded-2xl flex flex-col justify-between transition-all duration-300 shadow-xl group overflow-hidden">
+                    {course.thumbnail ? (
+                      <div className="h-32 w-full overflow-hidden">
+                        <img src={course.thumbnail} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="h-20 w-full bg-gradient-to-br from-indigo-600/30 to-slate-800/50 flex items-center justify-center">
+                        <BookOpen className="h-8 w-8 text-white/30" />
+                      </div>
+                    )}
+                    <div className="p-6 flex flex-col justify-between flex-1">
                     <div className="space-y-3.5">
                       <div className="flex justify-between items-start gap-3">
                         <span className="text-[10px] font-mono text-indigo-300 uppercase bg-indigo-500/10 py-1 px-2.5 rounded-full border border-indigo-500/20 font-bold">
@@ -360,6 +370,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           </button>
                         </>
                       )}
+                    </div>
                     </div>
                   </div>
                 );
