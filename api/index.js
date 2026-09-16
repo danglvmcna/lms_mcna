@@ -6281,6 +6281,10 @@ function requireCsrf(req, res, next) {
   if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
   if (req.path.startsWith("/integrations/crm/")) return next();
   if (req.path === "/payments/webhook" || req.path === "/webhooks/payment" || req.path === "/api/payments/webhook" || req.path === "/api/webhooks/payment" || req.path === "/api/payments/sepay/webhook" || req.path === "/api/webhooks/sepay" || req.path === "/payments/sepay/webhook" || req.path === "/webhooks/sepay") return next();
+  const secFetchSite = req.header("Sec-Fetch-Site");
+  if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return next();
+  }
   const cookieToken = extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
@@ -6963,13 +6967,20 @@ app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 app.get("/api/auth/me", requireAuth, (req, res) => {
+  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  let csrfToken = cookieToken;
+  if (!csrfToken) {
+    csrfToken = crypto4.randomBytes(24).toString("base64url");
+    setCsrfCookie(res, csrfToken);
+  }
   res.json({
     user: req.user ? {
       ...req.user,
       school_email: req.user.schoolEmail,
       email_provisioned: req.user.emailProvisioned,
       email_provisioned_at: req.user.emailProvisionedAt
-    } : null
+    } : null,
+    csrfToken
   });
 });
 app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res) => {

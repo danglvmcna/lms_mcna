@@ -564,6 +564,13 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
     req.path === "/payments/sepay/webhook" ||
     req.path === "/webhooks/sepay"
   ) return next();
+
+  // Allow same-origin browser fetch requests (Sec-Fetch-Site is a forbidden header that cannot be forged by external sites)
+  const secFetchSite = req.header("Sec-Fetch-Site");
+  if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return next();
+  }
+
   const cookieToken = extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
@@ -1402,6 +1409,12 @@ app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => {
+  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  let csrfToken = cookieToken;
+  if (!csrfToken) {
+    csrfToken = crypto.randomBytes(24).toString("base64url");
+    setCsrfCookie(res, csrfToken);
+  }
   res.json({
     user: req.user
       ? {
@@ -1410,7 +1423,8 @@ app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => {
           email_provisioned: req.user.emailProvisioned,
           email_provisioned_at: req.user.emailProvisionedAt,
         }
-      : null
+      : null,
+    csrfToken
   });
 });
 

@@ -12,8 +12,16 @@ export function setCsrfToken(token: string | null) {
   }
 }
 
+export function getCsrfToken(): string | null {
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(?:^|;\s*)e16_lms_csrf=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  return sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
+}
+
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
+  const csrfToken = getCsrfToken();
   const response = await fetch(url, {
     ...init,
     credentials: "include",
@@ -44,7 +52,7 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 async function postMultipart<T>(url: string, formData: FormData, fallbackError: string): Promise<T> {
-  const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
+  const csrfToken = getCsrfToken();
   const response = await fetch(url, {
     method: "POST",
     credentials: "include",
