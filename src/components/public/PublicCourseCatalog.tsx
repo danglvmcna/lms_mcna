@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, BookOpen, Calendar, ChevronDown, Clock, MapPin, 
 import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
 import { PublicCourseDetail, PublicCourseSummary } from "../../types";
+import LinkedText from "../LinkedText";
 
 interface PublicCourseCatalogProps {
   initialCourseId?: string;
@@ -179,7 +180,9 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
               {course.level && <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/60">{course.level}</span>}
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-extrabold leading-tight">{course.title}</h1>
-            <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{course.description}</p>
+            <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">
+              <LinkedText text={course.description} />
+            </p>
 
             {lessons && lessons.length > 0 && (
               <div className="mt-6 bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3">

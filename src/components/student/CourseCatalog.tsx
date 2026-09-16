@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Copy } from "lucide-react";
 import { AppStore } from "../../store";
 import ModalPortal from "../ModalPortal";
+import LinkedText from "../LinkedText";
 import { api } from "../../api";
 
 interface ComponentProps {
@@ -303,7 +304,9 @@ export default function CourseCatalog(props: ComponentProps) {
                         {crs.category}
                       </span>
                       <h4 className="text-2xl font-display font-extrabold text-white mt-2">{crs.title}</h4>
-                      <p className="text-sm text-white/70 leading-relaxed font-sans">{crs.description}</p>
+                      <p className="text-sm text-white/70 leading-relaxed font-sans whitespace-pre-line">
+                        <LinkedText text={crs.description} />
+                      </p>
                     </div>
 
                     {/* Available Class Sections */}

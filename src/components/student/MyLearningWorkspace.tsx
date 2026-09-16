@@ -1,8 +1,9 @@
 import React from "react";
-import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin, Video, ExternalLink, MessageSquare } from "lucide-react";
+import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin, Video, ExternalLink, MessageSquare, Folder, FolderOpen } from "lucide-react";
 import { AppStore } from "../../store";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
+import LinkedText from "../LinkedText";
 
 interface ComponentProps {
   [key: string]: any;
@@ -484,6 +485,8 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1.5 scrollbar-thin">
                   {courseSessions.map((session) => {
                     const isExpanded = expandedSessions[session.number] ?? false;
+                    // Each session reads as a folder: the badge counts what is inside it.
+                    const itemCount = session.materials.length + session.lessons.length + session.assignments.length;
 
                     return (
                       <div key={session.number} className="border border-white/10 rounded-2xl overflow-hidden bg-black/20 shadow-md">
@@ -507,8 +510,13 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         >
                           <div className="flex flex-col text-left gap-0.5">
                             <span className="flex items-center gap-2">
-                              <Calendar className="h-4.5 w-4.5 text-indigo-400" />
+                              {isExpanded
+                                ? <FolderOpen className="h-4.5 w-4.5 text-amber-300 shrink-0" />
+                                : <Folder className="h-4.5 w-4.5 text-amber-300/80 shrink-0" />}
                               <span className="text-[13px]">{session.title} {session.topic && `- ${session.topic}`}</span>
+                              <span className="shrink-0 text-[9px] font-mono font-bold text-white/50 bg-white/10 border border-white/10 rounded-full px-1.5 py-0.5">
+                                {itemCount} mục
+                              </span>
                             </span>
                             {session.date ? (
                               <span className="text-[10px] text-indigo-300/80 font-mono ml-6.5">⏰ Ngày giờ: {new Date(session.date).toLocaleString()}</span>
@@ -536,7 +544,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                                   <div>
                                     <span className="text-white/40 block text-[9px] uppercase font-mono font-bold">Nội dung chi tiết</span>
                                     <p className="text-white/80 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto bg-black/10 p-2 rounded-lg mt-0.5 border border-white/5">
-                                      {session.content}
+                                      <LinkedText text={session.content} />
                                     </p>
                                   </div>
                                 )}
@@ -570,6 +578,13 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                                     <ExternalLink className="h-3.5 w-3.5" />
                                   </a>
                                 )}
+                              </div>
+                            )}
+
+                            {/* Folder contents: the files, slides and links attached to this session */}
+                            {session.materials.length > 0 && (
+                              <div className="bg-black/25 p-3 rounded-xl border border-white/5">
+                                <SessionMaterialsList materials={session.materials} />
                               </div>
                             )}
 
@@ -959,7 +974,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 <div className="space-y-1">
                   <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold">MÔN HỌC</span>
                   <h3 className="text-lg font-bold text-white leading-snug">{course?.title || "Không rõ môn học"}</h3>
-                  <p className="text-xs text-white/50">{course?.description || "Không có mô tả chi tiết môn học."}</p>
+                  <p className="text-xs text-white/50 whitespace-pre-line">
+                    {course?.description ? <LinkedText text={course.description} /> : "Không có mô tả chi tiết môn học."}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
