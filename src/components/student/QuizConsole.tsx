@@ -93,7 +93,7 @@ export default function QuizConsole(props: ComponentProps) {
                     </div>
 
                     {/* Timer visualization */}
-                    <div className="p-2 py-1 px-3 bg-red-50 border border-red-200 rounded-xl text-red-600 font-mono text-xs flex items-center gap-1.5 font-semibold">
+                    <div className="mcna-badge-danger inline-flex items-center gap-1.5 font-mono px-3 py-1">
                       <Clock className="h-4 w-4 animate-pulse" />
                       <span>
                         Còn lại: {Math.floor(quizTimeRemaining / 60)}:{(quizTimeRemaining % 60).toString().padStart(2, "0")}
@@ -131,8 +131,8 @@ export default function QuizConsole(props: ComponentProps) {
                                 }}
                                 className={`w-full text-left p-4 rounded-xl border text-xs font-semibold transition cursor-pointer ${
                                   isChosen 
-                                    ? "bg-indigo-50 border-indigo-200 text-indigo-900 shadow-xs" 
-                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                                    ? "bg-indigo-50/80 border-indigo-300 text-indigo-900 shadow-xs ring-1 ring-indigo-500/20" 
+                                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
                                   }`}
                               >
                                 <span className="font-mono text-indigo-600 mr-2">[{idx + 1}]</span>
@@ -147,7 +147,7 @@ export default function QuizConsole(props: ComponentProps) {
                           placeholder="Nhập từ khóa hoặc câu trả lời chính xác..."
                           value={quizAnswers[currentQuestionObj.id] || ""}
                           onChange={(e) => handleSelectQuizAnswer(currentQuestionObj.id, e.target.value)}
-                          className="w-full px-3.5 py-3 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs shadow-xs"
+                          className="mcna-input"
                         />
                       )}
                     </div>
@@ -158,7 +158,7 @@ export default function QuizConsole(props: ComponentProps) {
                     <button
                       disabled={currentQuestionIndex === 0}
                       onClick={() => setCurrentQuestionIndex(p => p - 1)}
-                      className="px-4 py-2 text-slate-600 hover:text-slate-900 transition cursor-pointer disabled:text-slate-300 text-xs font-medium"
+                      className="mcna-btn-ghost text-xs"
                     >
                       ← Quay lại câu trước
                     </button>
@@ -166,14 +166,14 @@ export default function QuizConsole(props: ComponentProps) {
                     {currentQuestionIndex < questions.length - 1 ? (
                       <button
                         onClick={() => setCurrentQuestionIndex(p => p + 1)}
-                        className="px-4.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer shadow-xs"
+                        className="mcna-btn-secondary text-xs"
                       >
                         Câu tiếp theo →
                       </button>
                     ) : (
                       <button
                         onClick={handleAutoSubmitQuiz}
-                        className="px-5 py-2.5 bg-indigo-600 font-semibold hover:bg-indigo-700 rounded-xl text-xs transition cursor-pointer text-white shadow-xs"
+                        className="mcna-btn-primary text-xs"
                       >
                         Nộp bài trắc nghiệm
                       </button>

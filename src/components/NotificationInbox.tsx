@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, Inbox, Search } from "lucide-react";
+import { Bell, CheckCheck, Inbox, Search, Check } from "lucide-react";
 import { api } from "../api";
 import { LMSDataStore, Notification, User } from "../types";
 
@@ -300,9 +300,14 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                       <button
                         onClick={() => handleSelfCheckinSubmit(note.relatedEntityId!, checkinCodes[note.id] || "", note.id)}
                         disabled={checkinLoading[note.id]}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-150 text-xs shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-150 text-xs shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs flex items-center gap-1.5"
                       >
-                        {checkinLoading[note.id] ? "Đang xử lý..." : "Xác nhận Có mặt ✍️"}
+                        {checkinLoading[note.id] ? "Đang xử lý..." : (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            Xác nhận Có mặt
+                          </>
+                        )}
                       </button>
                     </div>
                   );

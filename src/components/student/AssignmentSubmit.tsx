@@ -174,9 +174,9 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   const isDeadlineExpired = new Date(a.deadline).getTime() < Date.now();
 
                   return (
-                    <div key={a.id} className="bg-white border border-slate-200 p-5 rounded-2xl hover:border-indigo-200 transition-all duration-200 shadow-xs relative overflow-hidden">
+                    <div key={a.id} className="mcna-card hover:border-indigo-300 transition-all relative overflow-hidden space-y-4">
                       {isDeadlineExpired && (
-                        <div className="mb-4 bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2 text-rose-800 text-xs">
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2 text-rose-800 text-xs">
                           <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
                           <div>
                             <span className="font-bold">Đã quá hạn nộp bài!</span> Hạn cuối là {new Date(a.deadline).toLocaleDateString("vi-VN")} lúc {new Date(a.deadline).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}. Bạn không thể nộp bài này nữa.
@@ -187,7 +187,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                         <div className="space-y-2 flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 py-0.5 px-2.5 rounded-full border border-indigo-100 uppercase">{courseTitle}</span>
+                            <span className="mcna-badge-primary uppercase">{courseTitle}</span>
                             {(() => {
                               if (a.type === "lesson" && a.lessonId) {
                                 const lesson = store.lessons.find((l: any) => l.id === a.lessonId);
@@ -199,21 +199,21 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               }
                               if (a.type === "chapter") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 py-0.5 px-2.5 rounded-full border border-amber-200 uppercase">
+                                  <span className="mcna-badge-warning uppercase">
                                     Cuối chương
                                   </span>
                                 );
                               }
                               if (a.type === "midterm") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 py-0.5 px-2.5 rounded-full border border-rose-200 uppercase">
+                                  <span className="mcna-badge-danger uppercase">
                                     Giữa kỳ
                                   </span>
                                 );
                               }
                               if (a.type === "final") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 py-0.5 px-2.5 rounded-full border border-emerald-200 uppercase">
+                                  <span className="mcna-badge-success uppercase">
                                     Cuối kỳ
                                   </span>
                                 );
@@ -239,7 +239,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               setExistingAttachment(null);
                             }}
                             disabled={isDeadlineExpired}
-                            className="p-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl disabled:bg-slate-100 disabled:text-slate-400 disabled:border disabled:border-slate-200 disabled:cursor-not-allowed transition cursor-pointer shadow-xs"
+                            className="mcna-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Nộp bài làm
                           </button>
@@ -287,7 +287,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   const contentPreview = cleanSubmissionContent(submission.content || "");
 
                   return (
-                    <div key={submission.id} className="bg-white border border-slate-200 p-5 rounded-2xl space-y-3 shadow-xs">
+                    <div key={submission.id} className="mcna-card space-y-3">
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                         <div className="space-y-2 min-w-0">
                            <div className="flex flex-wrap items-center gap-2">
@@ -303,21 +303,21 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               }
                               if (assignment.type === "chapter") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 py-0.5 px-2.5 rounded-full border border-amber-200 uppercase">
+                                  <span className="mcna-badge-warning uppercase">
                                     Cuối chương
                                   </span>
                                 );
                               }
                               if (assignment.type === "midterm") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 py-0.5 px-2.5 rounded-full border border-rose-200 uppercase">
+                                  <span className="mcna-badge-danger uppercase">
                                     Giữa kỳ
                                   </span>
                                 );
                               }
                               if (assignment.type === "final") {
                                 return (
-                                  <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 py-0.5 px-2.5 rounded-full border border-emerald-200 uppercase">
+                                  <span className="mcna-badge-success uppercase">
                                     Cuối kỳ
                                   </span>
                                 );
@@ -325,7 +325,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               return null;
                             })()}
                             <span className="text-[10px] font-mono text-slate-400">Đã nộp: {new Date(submission.submittedAt).toLocaleString("vi-VN")}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${typeof submission.score === "number" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}`}>
+                            <span className={typeof submission.score === "number" ? "mcna-badge-success" : "mcna-badge-warning"}>
                               {typeof submission.score === "number" ? `Đã chấm: ${submission.score}/${assignment.maxScore} điểm` : "Chờ chấm"}
                             </span>
                           </div>
@@ -334,7 +334,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                         {!isDeadlineExpired && (
                           <button
                             onClick={() => openAssignmentSubmission(assignment, submission)}
-                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs"
+                            className="mcna-btn-secondary text-xs py-1.5"
                           >
                             Cập nhật bài làm
                           </button>
@@ -399,7 +399,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   placeholder="Nhập mã nguồn HTML, tóm tắt giải pháp hay nội dung trả lời câu hỏi bài tập tự luận..."
                   value={submissionCodeText}
                   onChange={(e) => setSubmissionCodeText(e.target.value)}
-                  className="w-full px-3.5 py-3 bg-white text-slate-800 font-mono placeholder-slate-400 h-36 max-h-48 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs mt-2"
+                  className="mcna-textarea font-mono h-36 max-h-48 mt-2"
                 />
               </div>
 
@@ -443,14 +443,14 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   type="button"
                   onClick={() => { setSubmittingAssignmentId(null); setSubmissionFile(null); }}
                   disabled={isSubmittingAssignment}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer disabled:opacity-50 disabled:cursor-wait font-medium"
+                  className="mcna-btn-ghost disabled:opacity-50 disabled:cursor-wait"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingAssignment}
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer disabled:opacity-60 disabled:cursor-wait shadow-xs"
+                  className="mcna-btn-primary disabled:opacity-60 disabled:cursor-wait"
                 >
                   {isSubmittingAssignment ? "Đang gửi bài..." : "Xác nhận nộp bài"}
                 </button>

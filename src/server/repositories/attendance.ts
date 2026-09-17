@@ -6,7 +6,7 @@ import { eventBus } from "../eventBus";
 export const attendanceRepository = {
   async createSession(db: Queryable, session: AttendanceSession): Promise<AttendanceSession> {
     const columns = (await db.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id')"
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id', 'video_url', 'recording_url', 'content')"
     )).rows.map(row => row.column_name);
     const sessionDateOnly = session.date.slice(0, 10);
     if (columns.includes("session_date") && columns.includes("date")) {
@@ -28,6 +28,15 @@ export const attendanceRepository = {
     }
     if (columns.includes("section_id") && session.sectionId) {
       await db.query("UPDATE attendance_sessions SET section_id = $1 WHERE id = $2", [session.sectionId, session.id]);
+    }
+    if (columns.includes("video_url") && session.videoUrl !== undefined) {
+      await db.query("UPDATE attendance_sessions SET video_url = $1 WHERE id = $2", [session.videoUrl || null, session.id]);
+    }
+    if (columns.includes("recording_url") && session.recordingUrl !== undefined) {
+      await db.query("UPDATE attendance_sessions SET recording_url = $1 WHERE id = $2", [session.recordingUrl || null, session.id]);
+    }
+    if (columns.includes("content") && session.content !== undefined) {
+      await db.query("UPDATE attendance_sessions SET content = $1 WHERE id = $2", [session.content || null, session.id]);
     }
     return session;
   },

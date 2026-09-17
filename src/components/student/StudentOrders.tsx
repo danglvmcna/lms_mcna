@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertCircle, CreditCard, FileText } from "lucide-react";
+import { AlertCircle, CreditCard, FileText, Search } from "lucide-react";
 
 interface ComponentProps {
   [key: string]: any;
@@ -44,7 +44,7 @@ export default function StudentOrders(props: ComponentProps) {
         <h4 className="text-base font-display font-bold text-slate-900 flex items-center gap-2">
           <CreditCard className="h-5 w-5 text-indigo-600" /> Đơn hàng & thanh toán
         </h4>
-        <p className="text-xs text-slate-500">Các khóa học bạn đã đăng ký và lịch sử giao dịch chuyển khoản.</p>
+        <p className="text-xs text-slate-500 mt-0.5">Các khóa học bạn đã đăng ký và lịch sử giao dịch chuyển khoản.</p>
       </div>
 
       <div className="space-y-3">
@@ -56,7 +56,7 @@ export default function StudentOrders(props: ComponentProps) {
           );
 
           return (
-            <div key={enrollment.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-xs">
+            <div key={enrollment.id} className="mcna-card p-5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <h5 className="font-bold text-slate-900 text-sm">{course?.title || "Khóa học"}</h5>
@@ -117,48 +117,48 @@ export default function StudentOrders(props: ComponentProps) {
           </div>
 
           <div className="relative max-w-xs w-full">
+            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Tìm mã giao dịch, khóa học..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-white text-slate-800 border border-slate-200 rounded-xl py-1.5 px-3 pl-8 text-xs outline-none focus:border-indigo-500 placeholder-slate-400 shadow-xs"
+              className="mcna-input pl-9"
             />
-            <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">🔍</span>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
-          <table className="w-full text-xs text-left border-collapse">
+        <div className="mcna-table-wrapper overflow-x-auto">
+          <table className="mcna-table">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono tracking-wider font-bold">
-                <th className="p-3 text-[10.5px]">Mã giao dịch</th>
-                <th className="p-3 text-[10.5px]">Khóa học</th>
-                <th className="p-3 text-right text-[10.5px]">Số tiền</th>
-                <th className="p-3 text-[10.5px]">Phương thức</th>
-                <th className="p-3 text-[10.5px]">Thời gian</th>
-                <th className="p-3 text-right text-[10.5px]">Trạng thái</th>
+              <tr>
+                <th className="mcna-th">Mã giao dịch</th>
+                <th className="mcna-th">Khóa học</th>
+                <th className="mcna-th text-right">Số tiền</th>
+                <th className="mcna-th">Phương thức</th>
+                <th className="mcna-th">Thời gian</th>
+                <th className="mcna-th text-right">Trạng thái</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody>
               {myTransactions.map((tx: any) => {
                 const course = store.courses.find((c: any) => c.id === tx.courseId);
                 return (
-                  <tr key={tx.id} className="hover:bg-slate-50/75 transition duration-150">
-                    <td className="p-3 font-mono font-bold text-indigo-700">{tx.id}</td>
-                    <td className="p-3 font-medium text-slate-900">{course?.title || "Khóa học"}</td>
-                    <td className="p-3 text-right font-mono font-bold text-emerald-700">{tx.amount.toLocaleString()} VND</td>
-                    <td className="p-3 text-slate-500">{tx.paymentMethod}</td>
-                    <td className="p-3 text-slate-400">{new Date(tx.createdAt).toLocaleString()}</td>
-                    <td className="p-3 text-right font-mono">
+                  <tr key={tx.id}>
+                    <td className="mcna-td font-mono font-bold text-indigo-700">{tx.id}</td>
+                    <td className="mcna-td font-medium text-slate-900">{course?.title || "Khóa học"}</td>
+                    <td className="mcna-td text-right font-mono font-bold text-emerald-700">{tx.amount.toLocaleString()} VND</td>
+                    <td className="mcna-td text-slate-500">{tx.paymentMethod}</td>
+                    <td className="mcna-td text-slate-400 font-mono text-[11px]">{new Date(tx.createdAt).toLocaleString()}</td>
+                    <td className="mcna-td text-right font-mono">
                       {tx.status === "approved" && (
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">Thành công</span>
+                        <span className="mcna-badge-success">Thành công</span>
                       )}
                       {tx.status === "pending" && (
-                        <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-bold">Chờ xác nhận</span>
+                        <span className="mcna-badge-warning">Chờ xác nhận</span>
                       )}
                       {tx.status === "rejected" && (
-                        <span className="bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded text-[10px] font-bold">Từ chối</span>
+                        <span className="mcna-badge-danger">Từ chối</span>
                       )}
                     </td>
                   </tr>

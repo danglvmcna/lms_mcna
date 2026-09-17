@@ -190,19 +190,19 @@ export default function AdminOrdersManager({
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs">
+        <div className="mcna-card p-4">
           <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Tổng đơn đăng ký</p>
           <h3 className="text-2xl font-bold font-mono text-slate-900 mt-1">{orders.length}</h3>
         </div>
-        <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-2xl shadow-xs">
+        <div className="mcna-card p-4 bg-amber-50/40 border-amber-200/80">
           <p className="text-[11px] text-amber-800 uppercase tracking-wider font-semibold">Chờ thanh toán</p>
           <h3 className="text-2xl font-bold font-mono text-amber-900 mt-1">{pendingPaymentCount}</h3>
         </div>
-        <div className="bg-indigo-50/60 border border-indigo-200/80 p-4 rounded-2xl shadow-xs">
+        <div className="mcna-card p-4 bg-indigo-50/40 border-indigo-200/80">
           <p className="text-[11px] text-indigo-800 uppercase tracking-wider font-semibold">Chờ xếp lớp</p>
           <h3 className="text-2xl font-bold font-mono text-indigo-900 mt-1">{pendingPlacementCount}</h3>
         </div>
-        <div className="bg-emerald-50/60 border border-emerald-200/80 p-4 rounded-2xl shadow-xs">
+        <div className="mcna-card p-4 bg-emerald-50/40 border-emerald-200/80">
           <p className="text-[11px] text-emerald-800 uppercase tracking-wider font-semibold">Đã kích hoạt / Doanh thu</p>
           <h3 className="text-lg md:text-xl font-bold font-mono text-emerald-900 mt-1 truncate">
             {formatMoney(totalRevenue)}
@@ -219,7 +219,7 @@ export default function AdminOrdersManager({
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Tìm theo tên học viên, SĐT, email, tên khóa..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 shadow-xs"
+            className="mcna-input pl-9"
           />
         </div>
 
@@ -227,7 +227,7 @@ export default function AdminOrdersManager({
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+            className="mcna-select"
           >
             <option value="all">Tất cả trạng thái ({orders.length})</option>
             <option value="pending_payment">Chờ xác nhận đóng tiền ({pendingPaymentCount})</option>
@@ -238,7 +238,7 @@ export default function AdminOrdersManager({
         <select
           value={courseFilter}
           onChange={e => setCourseFilter(e.target.value)}
-          className="bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 min-w-48 shadow-xs"
+          className="mcna-select min-w-48"
           aria-label="Lọc đơn theo khóa học"
         >
           <option value="all">Tất cả khóa học</option>
@@ -263,122 +263,120 @@ export default function AdminOrdersManager({
       </div>
 
       {/* Orders Table */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-mono tracking-wider font-semibold">
+      <div className="mcna-table-wrapper">
+        <table className="mcna-table">
+          <thead className="mcna-thead">
+            <tr>
+              <th className="mcna-th pl-4">Học viên</th>
+              <th className="mcna-th">Khóa học</th>
+              <th className="mcna-th">Lớp & Lịch học</th>
+              <th className="mcna-th text-right">Số tiền</th>
+              <th className="mcna-th text-center">Trạng thái</th>
+              <th className="mcna-th text-right pr-4">Hành động</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-sans">
+            {filteredOrders.length === 0 ? (
               <tr>
-                <th className="p-3.5 pl-4">Học viên</th>
-                <th className="p-3.5">Khóa học</th>
-                <th className="p-3.5">Lớp & Lịch học</th>
-                <th className="p-3.5 text-right">Số tiền</th>
-                <th className="p-3.5 text-center">Trạng thái</th>
-                <th className="p-3.5 text-right pr-4">Hành động</th>
+                <td colSpan={6} className="p-8 text-center text-slate-400">
+                  Không tìm thấy đơn đăng ký nào phù hợp.
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-sans">
-              {filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400">
-                    Không tìm thấy đơn đăng ký nào phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                paginatedOrders.map(order => {
-                  const isPending = order.status === "pending_payment" || order.status === "pending";
-                  const isActive = order.status === "active";
-                  const activeSection = order.currentSection || order.requestedSection;
+            ) : (
+              paginatedOrders.map(order => {
+                const isPending = order.status === "pending_payment" || order.status === "pending";
+                const isActive = order.status === "active";
+                const activeSection = order.currentSection || order.requestedSection;
 
-                  return (
-                    <tr key={order.id} className="hover:bg-slate-50/60 transition">
-                      <td className="p-3.5 pl-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-slate-900 text-xs">
-                            {order.student?.name || "Học viên"}
+                return (
+                  <tr key={order.id} className="hover:bg-slate-50/60 transition">
+                    <td className="mcna-td pl-4">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 text-xs">
+                          {order.student?.name || "Học viên"}
+                        </span>
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          <Mail className="h-3 w-3" /> {order.student?.email || "—"}
+                        </span>
+                        {order.student?.phone && (
+                          <span className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5 font-mono">
+                            <Phone className="h-3 w-3 text-slate-400" /> {order.student?.phone}
                           </span>
-                          <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Mail className="h-3 w-3" /> {order.student?.email || "—"}
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="mcna-td">
+                      <span className="font-medium text-slate-900 line-clamp-2">
+                        {order.course?.title || "Khóa học"}
+                      </span>
+                      <span className="text-[10px] text-indigo-600 font-mono block mt-0.5">
+                        {order.course?.category}
+                      </span>
+                    </td>
+
+                    <td className="mcna-td">
+                      {activeSection ? (
+                        <div>
+                          <span className="mcna-badge-primary">
+                            {activeSection.sectionCode}
                           </span>
-                          {order.student?.phone && (
-                            <span className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5 font-mono">
-                              <Phone className="h-3 w-3 text-slate-400" /> {order.student?.phone}
+                          {activeSection.openingDate && (
+                            <span className="text-[10px] text-slate-500 block mt-1">
+                              Khai giảng: {new Date(activeSection.openingDate).toLocaleDateString("vi-VN")}
                             </span>
                           )}
                         </div>
-                      </td>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">Chưa chọn lớp</span>
+                      )}
+                    </td>
 
-                      <td className="p-3.5">
-                        <span className="font-medium text-slate-900 line-clamp-2">
-                          {order.course?.title || "Khóa học"}
+                    <td className="mcna-td text-right font-mono font-bold text-slate-900">
+                      {formatMoney(order.price)}
+                    </td>
+
+                    <td className="mcna-td text-center">
+                      {order.status === "pending_payment" && (
+                        <span className="mcna-badge-warning inline-flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Chờ thanh toán
                         </span>
-                        <span className="text-[10px] text-indigo-600 font-mono block mt-0.5">
-                          {order.course?.category}
+                      )}
+                      {order.status === "pending" && (
+                        <span className="mcna-badge-primary inline-flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" /> Chờ xếp lớp
                         </span>
-                      </td>
+                      )}
+                      {order.status === "active" && (
+                        <span className="mcna-badge-success inline-flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Đang học
+                        </span>
+                      )}
+                    </td>
 
-                      <td className="p-3.5">
-                        {activeSection ? (
-                          <div>
-                            <span className="font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 text-[10px]">
-                              {activeSection.sectionCode}
-                            </span>
-                            {activeSection.openingDate && (
-                              <span className="text-[10px] text-slate-500 block mt-1">
-                                Khai giảng: {new Date(activeSection.openingDate).toLocaleDateString("vi-VN")}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic text-[11px]">Chưa chọn lớp</span>
-                        )}
-                      </td>
-
-                      <td className="p-3.5 text-right font-mono font-bold text-slate-900">
-                        {formatMoney(order.price)}
-                      </td>
-
-                      <td className="p-3.5 text-center">
-                        {order.status === "pending_payment" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            <Clock className="h-3 w-3" /> Chờ thanh toán
-                          </span>
-                        )}
-                        {order.status === "pending" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <AlertCircle className="h-3 w-3" /> Chờ xếp lớp
-                          </span>
-                        )}
-                        {order.status === "active" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle className="h-3 w-3" /> Đang học
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-3.5 text-right pr-4">
-                        {isPending ? (
-                          <button
-                            onClick={() => handleQuickActivate(order)}
-                            disabled={activatingId === order.id}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl transition text-[11px] shadow-xs flex items-center gap-1.5 ml-auto cursor-pointer"
-                            title="Xác nhận thanh toán và kích hoạt vào lớp"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                            <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt 1-chạm"}</span>
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 flex items-center justify-end gap-1 font-mono">
-                            <Check className="h-3 w-3 text-emerald-600" /> Đã hoàn tất
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                    <td className="mcna-td text-right pr-4">
+                      {isPending ? (
+                        <button
+                          onClick={() => handleQuickActivate(order)}
+                          disabled={activatingId === order.id}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl transition text-[11px] shadow-xs flex items-center gap-1.5 ml-auto cursor-pointer"
+                          title="Xác nhận thanh toán và kích hoạt vào lớp"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt 1-chạm"}</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 flex items-center justify-end gap-1 font-mono">
+                          <Check className="h-3 w-3 text-emerald-600" /> Đã hoàn tất
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       {pageCount > 1 && (

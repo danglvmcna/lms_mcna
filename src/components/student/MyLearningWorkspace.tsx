@@ -494,31 +494,41 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono pt-1">
                   {session.materials.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
-                      📄 {session.materials.length} tài liệu
+                    <span className="mcna-badge-primary inline-flex items-center gap-1">
+                      <FileText className="h-3 w-3" /> {session.materials.length} tài liệu
                     </span>
                   )}
                   {session.lessons.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200 font-semibold">
-                      📖 {session.lessons.length} bài học
+                    <span className="mcna-badge-neutral inline-flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" /> {session.lessons.length} bài học
                     </span>
                   )}
                   {session.assignments.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 font-semibold">
-                      📝 {session.assignments.length} bài tập
+                    <span className="mcna-badge-warning inline-flex items-center gap-1">
+                      <Award className="h-3 w-3" /> {session.assignments.length} bài tập
                     </span>
                   )}
                   {session.videoUrl && (
-                    <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-                      🎥 Video
+                    <span className="mcna-badge-success inline-flex items-center gap-1">
+                      <Video className="h-3 w-3" /> Video
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-500">
-                  {session.date ? `⏰ ${new Date(session.date).toLocaleDateString("vi-VN")}` : "⏳ Chờ xếp lịch"}
+                <span className="text-[11px] text-slate-500 inline-flex items-center gap-1 font-mono">
+                  {session.date ? (
+                    <>
+                      <Calendar className="h-3 w-3 text-slate-400" />
+                      {new Date(session.date).toLocaleDateString("vi-VN")}
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="h-3 w-3 text-slate-400" />
+                      Chờ xếp lịch
+                    </>
+                  )}
                 </span>
                 <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
                   Xem buổi học <ArrowRight className="h-3.5 w-3.5" />

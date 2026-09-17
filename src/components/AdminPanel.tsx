@@ -28,7 +28,8 @@ import {
   ChevronRight,
   FileText,
   HelpCircle,
-  Bell
+  Bell,
+  Eye
 } from "lucide-react";
 import { User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
@@ -592,9 +593,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                       <div className="flex gap-2 justify-between items-center text-xs pt-4 border-t border-slate-100 mt-4">
                         <button
                           onClick={() => setCourseDetailId(course.id)}
-                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl transition text-[11px] font-semibold cursor-pointer"
+                          className="mcna-badge-primary inline-flex items-center gap-1.5 cursor-pointer hover:bg-indigo-100 transition px-3 py-1.5 text-xs font-semibold"
                         >
-                          Xem chi tiết 👁️
+                          <Eye className="h-3.5 w-3.5" />
+                          Xem chi tiết
                         </button>
                         <div className="flex gap-2">
                           <button

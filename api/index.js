@@ -1595,6 +1595,9 @@ var schemas = {
     sectionId: z.string().trim().min(1).optional(),
     date: z.string().trim().min(1),
     topic: z.string().trim().min(1),
+    content: z.string().trim().optional(),
+    videoUrl: z.string().trim().optional(),
+    recordingUrl: z.string().trim().optional(),
     records: z.array(z.object({
       studentId: z.string().trim().min(1),
       status: z.enum(["present", "absent", "late", "excused"]),
@@ -4806,7 +4809,7 @@ var courseRegistrationsRepository = {
 var attendanceRepository = {
   async createSession(db, session) {
     const columns = (await db.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id')"
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id', 'video_url', 'recording_url', 'content')"
     )).rows.map((row) => row.column_name);
     const sessionDateOnly = session.date.slice(0, 10);
     if (columns.includes("session_date") && columns.includes("date")) {
@@ -4828,6 +4831,15 @@ var attendanceRepository = {
     }
     if (columns.includes("section_id") && session.sectionId) {
       await db.query("UPDATE attendance_sessions SET section_id = $1 WHERE id = $2", [session.sectionId, session.id]);
+    }
+    if (columns.includes("video_url") && session.videoUrl !== void 0) {
+      await db.query("UPDATE attendance_sessions SET video_url = $1 WHERE id = $2", [session.videoUrl || null, session.id]);
+    }
+    if (columns.includes("recording_url") && session.recordingUrl !== void 0) {
+      await db.query("UPDATE attendance_sessions SET recording_url = $1 WHERE id = $2", [session.recordingUrl || null, session.id]);
+    }
+    if (columns.includes("content") && session.content !== void 0) {
+      await db.query("UPDATE attendance_sessions SET content = $1 WHERE id = $2", [session.content || null, session.id]);
     }
     return session;
   },
@@ -8947,7 +8959,10 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     sectionId: req.body.sectionId,
     teacherId: req.user.role === "teacher" ? req.user.id : course.teacherId,
     date: req.body.date,
-    topic: req.body.topic
+    topic: req.body.topic,
+    content: req.body.content || void 0,
+    videoUrl: req.body.videoUrl || void 0,
+    recordingUrl: req.body.recordingUrl || void 0
   };
   const records = (req.body.records || []).map((record) => ({
     id: generateId2("atr"),

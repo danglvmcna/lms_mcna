@@ -1,8 +1,8 @@
-import React from "react";
+import React, { ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface Props {
-  children: React.ReactNode;
+  children: ReactNode;
   fallbackTitle?: string;
 }
 
@@ -11,30 +11,33 @@ interface State {
   error: Error | null;
 }
 
-export default class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundaryInternal extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = {
+    (this as any).state = {
       hasError: false,
       error: null,
     };
   }
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("Uncaught render error in ErrorBoundary:", error, errorInfo);
   }
 
-  private handleReset = () => {
-    this.setState({ hasError: false, error: null });
+  handleReset = (): void => {
+    (this as any).setState({ hasError: false, error: null });
     window.location.href = window.location.pathname;
   };
 
-  public render() {
-    if (this.state.hasError) {
+  render(): ReactNode {
+    const state = (this as any).state as State;
+    const props = (this as any).props as Props;
+
+    if (state.hasError) {
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-white border border-slate-200/80 rounded-2xl p-6 shadow-lg text-center space-y-4">
@@ -43,15 +46,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             </div>
             <div className="space-y-1">
               <h2 className="text-lg font-bold text-slate-900">
-                {this.props.fallbackTitle || "Đã xảy ra lỗi hiển thị"}
+                {props.fallbackTitle || "Đã xảy ra lỗi hiển thị"}
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Hệ thống gặp sự cố khi hiển thị nội dung này. Vui lòng thử tải lại trang hoặc quay lại danh sách.
               </p>
             </div>
-            {this.state.error?.message && (
+            {state.error?.message && (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-mono text-slate-600 text-left overflow-x-auto max-h-24">
-                {this.state.error.message}
+                {state.error.message}
               </div>
             )}
             <div className="flex items-center justify-center gap-2 pt-2">
@@ -68,6 +71,9 @@ export default class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return props.children;
   }
 }
+
+const ErrorBoundary = ErrorBoundaryInternal as unknown as React.ComponentType<Props>;
+export default ErrorBoundary;

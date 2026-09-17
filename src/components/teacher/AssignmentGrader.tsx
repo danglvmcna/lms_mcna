@@ -251,7 +251,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                 if (courseSubmissions.length === 0) return null;
                 
                 return (
-                  <div key={course.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
+                  <div key={course.id} className="mcna-card space-y-4">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                       <div>
                         <h5 className="text-sm font-bold text-slate-900 font-display flex items-center gap-1.5">
@@ -261,23 +261,23 @@ export default function AssignmentGrader(props: ComponentProps) {
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-                      <table className="w-full text-left text-xs text-slate-700 font-sans border-collapse">
-                        <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider font-semibold font-mono">
+                    <div className="mcna-table-wrapper">
+                      <table className="mcna-table">
+                        <thead className="mcna-thead">
                           <tr>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("studentName")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("studentName")}>
                               Tên Học viên {subSortField === "studentName" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("challengeTitle")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("challengeTitle")}>
                               Bài tập Thử thách {subSortField === "challengeTitle" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("submittedAt")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("submittedAt")}>
                               Ngày nộp {subSortField === "submittedAt" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("score")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("score")}>
                               Điểm số đạt được {subSortField === "score" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold text-right">Hành động Chấm điểm</th>
+                            <th className="mcna-th text-right">Hành động Chấm điểm</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
@@ -287,40 +287,40 @@ export default function AssignmentGrader(props: ComponentProps) {
                             
                             return (
                               <tr key={sub.id} className="hover:bg-slate-50/60 transition-colors">
-                                <td className="p-3.5 font-medium text-slate-900">{student?.name || "Học viên ẩn danh"}</td>
-                                <td className="p-3.5 font-semibold text-slate-800">
+                                <td className="mcna-td font-medium text-slate-900">{student?.name || "Học viên ẩn danh"}</td>
+                                <td className="mcna-td font-semibold text-slate-800">
                                   <div className="flex items-center gap-1.5">
                                     <span>{challenge?.title || "Không xác định"}</span>
                                     {challenge && (
                                       <button
                                         onClick={() => setCourseDetailId(challenge.courseId)}
-                                        className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer font-sans border border-indigo-200/60"
+                                        className="mcna-badge-primary inline-flex items-center gap-1 cursor-pointer hover:bg-indigo-100 transition"
                                       >
                                         <Eye className="w-3 h-3" /> Xem
                                       </button>
                                     )}
                                   </div>
                                 </td>
-                                <td className="p-3.5 text-slate-500 font-mono text-[11px]">{new Date(sub.submittedAt).toLocaleDateString()}</td>
-                                <td className="p-3.5">
+                                <td className="mcna-td text-slate-500 font-mono text-[11px]">{new Date(sub.submittedAt).toLocaleDateString()}</td>
+                                <td className="mcna-td">
                                   {sub.score !== undefined ? (
-                                    <span className="inline-flex rounded-md bg-emerald-50 px-2.5 py-0.5 text-emerald-700 font-bold font-mono text-[11px] border border-emerald-200/80">
-                                      {sub.score}/{challenge?.maxScore || 100}
+                                    <span className="mcna-badge-success">
+                                      {sub.score}/{challenge?.maxScore || 100} điểm
                                     </span>
                                   ) : (
-                                    <span className="inline-flex rounded-md bg-amber-50 px-2.5 py-0.5 text-amber-700 font-semibold text-[11px] border border-amber-200/80">
+                                    <span className="mcna-badge-warning">
                                       Chưa chấm điểm
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-3.5 text-right">
+                                <td className="mcna-td text-right">
                                   <button
                                     onClick={() => {
                                       setActiveSubmissionId(sub.id);
                                       setGradingScore(sub.score ?? challenge?.maxScore ?? 100);
                                       setGradingFeedback(sub.feedback ?? "");
                                     }}
-                                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 border border-slate-200 rounded-xl cursor-pointer transition shadow-xs hover:border-slate-300"
+                                    className="mcna-btn-secondary text-[11px] py-1.5"
                                   >
                                     {sub.score !== undefined ? "Cập nhật Điểm" : "Chấm điểm & Nhận xét"}
                                   </button>
@@ -418,7 +418,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                       max={chal?.maxScore || 100}
                       value={gradingScore}
                       onChange={(e) => setGradingScore(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                      className="mcna-input"
                     />
                   </div>
 
@@ -429,7 +429,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                       placeholder="Ví dụ: Ý tưởng tốt, cách trình bày rõ ràng, cần tối ưu thêm mã nguồn."
                       value={gradingFeedback}
                       onChange={(e) => setGradingFeedback(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 h-20 max-h-32 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-xs"
+                      className="mcna-textarea h-20 max-h-32"
                     />
                   </div>
 
@@ -437,13 +437,13 @@ export default function AssignmentGrader(props: ComponentProps) {
                     <button
                       type="button"
                       onClick={() => setActiveSubmissionId(null)}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer font-medium"
+                      className="mcna-btn-ghost"
                     >
                       Hủy bỏ
                     </button>
                     <button
                       type="submit"
-                      className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition shadow-xs cursor-pointer"
+                      className="mcna-btn-primary"
                     >
                       Hoàn tất Chấm điểm
                     </button>

@@ -2,7 +2,7 @@ import React from "react";
 import { 
   BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, 
   ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus, 
-  MapPin, Calendar, Trash2, AlertCircle, Layers, Folder, FolderOpen, Video, ArrowRight, ArrowLeft, Upload, ExternalLink, Play
+  MapPin, Calendar, Trash2, AlertCircle, Layers, Folder, FolderOpen, Video, ArrowRight, ArrowLeft, Upload, ExternalLink, Play, CheckCircle2
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 import { AppStore } from "../../store";
@@ -147,6 +147,19 @@ export default function CourseBuilder(props: ComponentProps) {
   const [editSessionVideoUrl, setEditSessionVideoUrl] = React.useState("");
   const [isSavingSession, setIsSavingSession] = React.useState(false);
 
+  // Session Create State for Teacher
+  const [showCreateSessionModal, setShowCreateSessionModal] = React.useState(false);
+  const [newSessionNumber, setNewSessionNumber] = React.useState<number>(1);
+  const [newSessionSectionId, setNewSessionSectionId] = React.useState<string>("");
+  const [newSessionTopic, setNewSessionTopic] = React.useState("");
+  const [newSessionDate, setNewSessionDate] = React.useState("");
+  const [newSessionContent, setNewSessionContent] = React.useState("");
+  const [newSessionDuration, setNewSessionDuration] = React.useState("2 giờ");
+  const [newSessionVideoUrl, setNewSessionVideoUrl] = React.useState("");
+  const [newSessionRecordingUrl, setNewSessionRecordingUrl] = React.useState("");
+  const [syncLessonToCurriculum, setSyncLessonToCurriculum] = React.useState(true);
+  const [isCreatingSession, setIsCreatingSession] = React.useState(false);
+
   const handleOpenEditSession = (session: any) => {
     setEditingSessionNumber(session.number);
     setEditingSessionId(session.sessionId || null);
@@ -178,16 +191,17 @@ export default function CourseBuilder(props: ComponentProps) {
           sectionId: currentSecId,
           topic: editSessionTopic.trim(),
           date: editSessionDate.trim() || new Date().toISOString(),
+          content: editSessionContent.trim() || undefined,
           videoUrl: editSessionVideoUrl.trim() || undefined,
           recordingUrl: editSessionRecordingUrl.trim() || undefined,
           records: []
         });
       }
-      if (triggerToast) triggerToast("✅ Đã cập nhật thông tin buổi học & Video Recording thành công!");
+      if (triggerToast) triggerToast("Đã cập nhật thông tin buổi học & Video Recording thành công!");
       setShowEditSessionModal(false);
       onRefreshData();
     } catch (err: any) {
-      if (triggerToast) triggerToast(`❌ ${err.message || "Không thể lưu thông tin buổi học"}`);
+      if (triggerToast) triggerToast(`Lỗi: ${err.message || "Không thể lưu thông tin buổi học"}`);
     } finally {
       setIsSavingSession(false);
     }
@@ -511,7 +525,11 @@ export default function CourseBuilder(props: ComponentProps) {
     return Array.from({ length: numSessions }, (_, idx) => {
       const sessionNum = idx + 1;
       const lessonsInSession = courseLessons.filter((l: any, lIdx: number) => (l.order ? l.order === sessionNum : lIdx === idx));
-      const attendanceSession = courseSessionsData[idx] || null;
+      const attendanceSession = courseSessionsData.find((s: any) => {
+        const match = s.topic?.match(/Buổi\s*(?:học\s*)?(\d+)/i);
+        if (match && parseInt(match[1], 10) === sessionNum) return true;
+        return false;
+      }) || courseSessionsData[idx] || null;
       
       const assignmentsInSession = courseAssignmentsList.filter((assign: any) => {
         if (assign.sessionId && attendanceSession) {
@@ -559,6 +577,93 @@ export default function CourseBuilder(props: ComponentProps) {
   const currentFolderSession = selectedFolderSessionNumber
     ? courseSessions.find(s => s.number === selectedFolderSessionNumber) || null
     : null;
+
+  const handleOpenCreateSession = () => {
+    const nextNum = (courseSessions?.length || 0) + 1;
+    setNewSessionNumber(nextNum);
+    setNewSessionSectionId(selectedClassSectionId || "");
+    setNewSessionTopic(`Buổi ${nextNum}: `);
+    const now = new Date();
+    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setNewSessionDate(localIso);
+    setNewSessionContent("");
+    setNewSessionDuration("2 giờ");
+    setNewSessionVideoUrl("");
+    setNewSessionRecordingUrl("");
+    setSyncLessonToCurriculum(true);
+    setShowCreateSessionModal(true);
+  };
+
+  const handleCreateSessionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCourse) return;
+    if (!newSessionTopic.trim()) {
+      if (triggerToast) triggerToast("Vui lòng nhập chủ đề / tiêu đề buổi học.");
+      return;
+    }
+
+    setIsCreatingSession(true);
+    try {
+      const targetSectionId = newSessionSectionId.trim() || undefined;
+      const sessionDateIso = newSessionDate ? new Date(newSessionDate).toISOString() : new Date().toISOString();
+
+      // 1. Lưu AttendanceSession (quản lý thư mục buổi, tài liệu, điểm danh, recording)
+      await api.saveAttendance({
+        courseId: activeCourse.id,
+        sectionId: targetSectionId,
+        topic: newSessionTopic.trim(),
+        date: sessionDateIso,
+        content: newSessionContent.trim() || undefined,
+        videoUrl: newSessionVideoUrl.trim() || undefined,
+        recordingUrl: newSessionRecordingUrl.trim() || undefined,
+        records: []
+      });
+
+      // 2. Đồng bộ vào Lesson trong giáo trình môn học nếu được bật
+      if (syncLessonToCurriculum) {
+        try {
+          await api.addLesson({
+            courseId: activeCourse.id,
+            title: newSessionTopic.trim(),
+            content: newSessionContent.trim() || `Nội dung giáo án Buổi học ${newSessionNumber}`,
+            videoUrl: newSessionVideoUrl.trim() || undefined,
+            order: newSessionNumber,
+            duration: newSessionDuration.trim() || "2 giờ"
+          });
+        } catch (lessonErr: any) {
+          console.warn("Could not sync to curriculum lesson:", lessonErr);
+        }
+      }
+
+      // 3. Nếu số thứ tự buổi học vượt quá số buổi hiện tại của khóa học, cập nhật numberOfLessons
+      if (newSessionNumber > (activeCourse.numberOfLessons || 0)) {
+        try {
+          await api.updateCourse(activeCourse.id, {
+            title: activeCourse.title,
+            description: activeCourse.description,
+            category: activeCourse.category || "General",
+            thumbnail: activeCourse.thumbnail,
+            price: activeCourse.price || 0,
+            level: activeCourse.level,
+            tags: activeCourse.tags || [],
+            openingDate: activeCourse.openingDate,
+            numberOfLessons: newSessionNumber
+          });
+        } catch (courseErr: any) {
+          console.warn("Could not update course lessons count:", courseErr);
+        }
+      }
+
+      if (triggerToast) triggerToast("Đã tạo buổi học mới thành công!");
+      setShowCreateSessionModal(false);
+      onRefreshData();
+      setSelectedFolderSessionNumber(newSessionNumber);
+    } catch (err: any) {
+      if (triggerToast) triggerToast(`Lỗi: ${err.message || "Không thể tạo buổi học"}`);
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
 
   const filteredCourses = myCourses.filter((course: any) => {
     return !courseSearch ||
@@ -764,8 +869,16 @@ export default function CourseBuilder(props: ComponentProps) {
 
                 {/* Quick actions for teacher */}
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateSession}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Tạo buổi học
+                  </button>
                   {activeCourse.status === "published" && currentUser.role !== "teacher" && (
                     <button
+                      type="button"
                       onClick={handleOpenCreateSection}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                     >
@@ -774,6 +887,7 @@ export default function CourseBuilder(props: ComponentProps) {
                   )}
                   {activeCourse.status === "draft" && (
                     <button
+                      type="button"
                       onClick={() => handleSubmitCourseForApproval(activeCourse.id)}
                       className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
                     >
@@ -847,6 +961,13 @@ export default function CourseBuilder(props: ComponentProps) {
                       {courseSessions.length} buổi học · Chọn một buổi để quản lý file slide bài giảng, tài liệu Word/PDF và video cho lớp.
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateSession}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 self-start sm:self-auto"
+                  >
+                    <Plus className="h-4 w-4" /> Tạo buổi học mới
+                  </button>
                 </div>
 
                 {/* Grid các thư mục buổi học */}
@@ -863,8 +984,8 @@ export default function CourseBuilder(props: ComponentProps) {
                             <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 group-hover:bg-amber-100 flex items-center justify-center text-amber-600 transition shadow-sm">
                               <Folder className="h-6 w-6" />
                             </div>
-                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 font-mono">
-                              {session.materials.length} file tài liệu
+                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 font-mono flex items-center gap-1">
+                              <FileText className="h-3 w-3 text-slate-400" /> {session.materials.length} file tài liệu
                             </span>
                           </div>
 
@@ -884,7 +1005,7 @@ export default function CourseBuilder(props: ComponentProps) {
 
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono pt-1">
                             <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold flex items-center gap-1">
-                              📄 {session.materials.length} tài liệu / slide
+                              <FileText className="h-3 w-3 text-indigo-500" /> {session.materials.length} tài liệu / slide
                             </span>
                             {(session.videoUrl || session.recordingUrl) && (
                               <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-semibold flex items-center gap-0.5">
@@ -895,8 +1016,9 @@ export default function CourseBuilder(props: ComponentProps) {
                         </div>
 
                         <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between text-xs">
-                          <span className="text-[11px] text-slate-500 font-mono">
-                            {session.date ? `⏰ ${new Date(session.date).toLocaleDateString("vi-VN")}` : "⏳ Ca học theo TKB"}
+                          <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-slate-400" />
+                            {session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Ca học theo TKB"}
                           </span>
                           <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
                             Mở thư mục file <ArrowRight className="h-3.5 w-3.5" />
@@ -960,14 +1082,23 @@ export default function CourseBuilder(props: ComponentProps) {
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <button
+                        type="button"
+                        onClick={handleOpenCreateSession}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Thêm buổi học
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleOpenEditSession(currentFolderSession)}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
                         <Edit className="h-3.5 w-3.5" /> Sửa thông tin buổi / Video
                       </button>
                       {currentFolderSession.date && (
-                        <span className="shrink-0 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
-                          ⏰ {new Date(currentFolderSession.date).toLocaleString("vi-VN")}
+                        <span className="shrink-0 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                          {new Date(currentFolderSession.date).toLocaleString("vi-VN")}
                         </span>
                       )}
                     </div>
@@ -1681,6 +1812,208 @@ export default function CourseBuilder(props: ComponentProps) {
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
                   >
                     {isSavingSession ? "Đang lưu..." : "Lưu thông tin buổi học"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* MODAL: CREATE NEW SESSION */}
+      {showCreateSessionModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-xl shadow-2xl relative text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-150 my-8">
+              <button
+                type="button"
+                onClick={() => setShowCreateSessionModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                title="Đóng"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4 mb-4">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                  <FolderPlus className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
+                      GIẢNG VIÊN TẠO BUỔI HỌC
+                    </span>
+                    <span className="text-[10px] font-mono font-semibold text-slate-500">
+                      {activeCourse?.title}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-display font-bold text-slate-900 mt-0.5">
+                    Thêm Buổi học Mới cho Khóa học
+                  </h3>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateSessionSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1 sm:col-span-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Layers className="h-3.5 w-3.5 text-indigo-600" /> Buổi số *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      required
+                      value={newSessionNumber}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 1;
+                        setNewSessionNumber(val);
+                        if (!newSessionTopic || newSessionTopic.startsWith("Buổi ")) {
+                          setNewSessionTopic(`Buổi ${val}: `);
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm font-semibold"
+                    />
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5 text-indigo-600" /> Áp dụng cho lớp học phần
+                    </label>
+                    <select
+                      value={newSessionSectionId}
+                      onChange={(e) => setNewSessionSectionId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    >
+                      <option value="">Tất cả các lớp / Giáo trình chung của môn</option>
+                      {courseSections.map((sec: any) => (
+                        <option key={sec.id} value={sec.id}>
+                          Lớp {sec.sectionCode} ({getSectionRegisteredCount(sec.id)} học viên)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Chủ đề / Tiêu đề buổi học *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newSessionTopic}
+                    onChange={(e) => setNewSessionTopic(e.target.value)}
+                    placeholder="Ví dụ: Buổi 5: Xử lý State nâng cao & Redux Toolkit"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-indigo-600" /> Thời gian diễn ra
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newSessionDate}
+                      onChange={(e) => setNewSessionDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-indigo-600" /> Thời lượng ước tính
+                    </label>
+                    <input
+                      type="text"
+                      value={newSessionDuration}
+                      onChange={(e) => setNewSessionDuration(e.target.value)}
+                      placeholder="Ví dụ: 2 giờ hoặc 90 phút"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Nội dung tóm tắt / Mục tiêu buổi học</label>
+                  <textarea
+                    rows={3}
+                    value={newSessionContent}
+                    onChange={(e) => setNewSessionContent(e.target.value)}
+                    placeholder="Tóm tắt giáo án, kiến thức cốt lõi và bài tập cần hoàn thành trong buổi này..."
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <Video className="h-3.5 w-3.5 text-indigo-600" /> Video bài giảng trực tiếp (MP4 URL hoặc tải file lên)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={newSessionVideoUrl}
+                      onChange={(e) => setNewSessionVideoUrl(e.target.value)}
+                      placeholder="https://... hoặc tải video từ máy tính"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                    />
+                    <label className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1 shadow-sm transition">
+                      <Upload className="h-3.5 w-3.5" />
+                      {isVideoUploading ? "Đang tải..." : "Tải tệp"}
+                      <input
+                        type="file"
+                        accept="video/*"
+                        disabled={isVideoUploading}
+                        className="hidden"
+                        onChange={(e) => handleVideoUpload(e, setNewSessionVideoUrl)}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <ExternalLink className="h-3.5 w-3.5 text-emerald-600" /> Link Video Recording (Zoom / Google Drive / Teams)
+                  </label>
+                  <input
+                    type="url"
+                    value={newSessionRecordingUrl}
+                    onChange={(e) => setNewSessionRecordingUrl(e.target.value)}
+                    placeholder="https://zoom.us/rec/... hoặc liên kết Google Drive"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                  />
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="syncCurriculumCheckbox"
+                    checked={syncLessonToCurriculum}
+                    onChange={(e) => setSyncLessonToCurriculum(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="syncCurriculumCheckbox" className="text-xs text-slate-700 cursor-pointer select-none">
+                    <span className="font-bold block text-slate-800">Đồng bộ vào Giáo trình bài học (Curriculum) cho học viên</span>
+                    <span className="text-[11px] text-slate-500">
+                      Tự động tạo một bài học (Lesson) tương ứng trong cây chương trình để học viên có thể học và theo dõi tiến độ hoàn thành.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateSessionModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingSession}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {isCreatingSession ? "Đang tạo buổi học..." : "Khởi tạo buổi học"}
                   </button>
                 </div>
               </form>

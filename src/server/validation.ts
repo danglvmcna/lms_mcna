@@ -164,6 +164,9 @@ export const schemas = {
     sectionId: z.string().trim().min(1).optional(),
     date: z.string().trim().min(1),
     topic: z.string().trim().min(1),
+    content: z.string().trim().optional(),
+    videoUrl: z.string().trim().optional(),
+    recordingUrl: z.string().trim().optional(),
     records: z.array(z.object({
       studentId: z.string().trim().min(1),
       status: z.enum(["present", "absent", "late", "excused"]),

@@ -3656,7 +3656,10 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     sectionId: req.body.sectionId,
     teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
     date: req.body.date,
-    topic: req.body.topic
+    topic: req.body.topic,
+    content: req.body.content || undefined,
+    videoUrl: req.body.videoUrl || undefined,
+    recordingUrl: req.body.recordingUrl || undefined
   };
   const records = (req.body.records || []).map((record: any) => ({
     id: generateId("atr"),

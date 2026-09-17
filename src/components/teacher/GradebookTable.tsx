@@ -211,33 +211,37 @@ export default function GradebookTable(props: ComponentProps) {
                 });
 
                 return (
-                  <div key={course.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
+                  <div key={course.id} className="mcna-card space-y-4">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h5 className="text-sm font-bold text-slate-900 font-display">📖 {course.title}</h5>
+                          <h5 className="text-sm font-bold text-slate-900 font-display flex items-center gap-1.5">
+                            <BookOpen className="h-4 w-4 text-indigo-600" />
+                            {course.title}
+                          </h5>
                           <button
                             onClick={() => setCourseDetailId(course.id)}
-                            className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-semibold border border-indigo-100 transition flex items-center gap-0.5 cursor-pointer font-sans"
+                            className="mcna-badge-primary inline-flex items-center gap-1 cursor-pointer hover:bg-indigo-100 transition"
                           >
-                            Xem 👁️
+                            <Eye className="h-3 w-3" />
+                            Xem chi tiết
                           </button>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">Phân loại: {course.category} · Tổng số {filteredCourseEnrollments.length} học viên</p>
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-                      <table className="w-full text-left text-xs text-slate-700 font-sans border-collapse">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-mono tracking-wider font-semibold">
+                    <div className="mcna-table-wrapper">
+                      <table className="mcna-table">
+                        <thead className="mcna-thead">
                           <tr>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleGradebookSort("studentName")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleGradebookSort("studentName")}>
                               Tên Học sinh {gradebookSortField === "studentName" ? (gradebookSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleGradebookSort("progress")}>
+                            <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleGradebookSort("progress")}>
                               Tiến độ bài học {gradebookSortField === "progress" ? (gradebookSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
-                            <th className="p-3.5 font-semibold text-right">Tóm tắt trạng thái</th>
+                            <th className="mcna-th text-right">Tóm tắt trạng thái</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -248,7 +252,7 @@ export default function GradebookTable(props: ComponentProps) {
 
                             return (
                                 <tr key={idx} className="hover:bg-slate-50/60 transition">
-                                  <td className="p-3.5 font-medium text-slate-900">
+                                  <td className="mcna-td font-medium text-slate-900">
                                     <div>{studentUser?.name || "Không xác định"}</div>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       <span className="text-[11px] text-slate-400 font-mono">{studentUser?.email || "Không xác định"}</span>
@@ -256,18 +260,18 @@ export default function GradebookTable(props: ComponentProps) {
                                         const sec = getEnrollmentSection(enroll);
                                         if (!sec) return null;
                                         return (
-                                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-mono text-[9px] font-bold uppercase">
+                                          <span className="mcna-badge-primary text-[9px] uppercase">
                                             Lớp: {sec.sectionCode}
                                           </span>
                                         );
                                       })()}
                                     </div>
                                   </td>
-                                <td className="p-3.5 text-xs font-mono text-slate-600">
+                                <td className="mcna-td text-xs font-mono text-slate-600">
                                   Đã hoàn thành {completedLessons}/{totalLessons} bài học
                                 </td>
-                                <td className="p-3.5 text-right text-[11px] text-emerald-600 font-medium">
-                                  Học viên đang hoạt động
+                                <td className="mcna-td text-right">
+                                  <span className="mcna-badge-success">Học viên đang hoạt động</span>
                                 </td>
                               </tr>
                             );
@@ -320,7 +324,7 @@ export default function GradebookTable(props: ComponentProps) {
                     onClick={() => setCourseDetailId(null)}
                     className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
                   >
-                    <span className="text-base font-bold">✕</span>
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 

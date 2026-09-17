@@ -10,7 +10,10 @@ import {
   BookOpen,
   PlusCircle,
   FolderSync,
-  Search
+  Search,
+  Eye,
+  Send,
+  Edit
 } from "lucide-react";
 import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord } from "../types";
 import { AppStore } from "../store";
@@ -546,9 +549,9 @@ export default function AttendanceManager({
                                 <span>{course.title} ({course.id})</span>
                                 <button
                                   onClick={() => setCourseDetailId(course.id)}
-                                  className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans border border-indigo-100"
+                                  className="mcna-badge-primary inline-flex items-center gap-1 cursor-pointer hover:bg-indigo-100 transition"
                                 >
-                                  Xem 👁️
+                                  <Eye className="h-3 w-3" /> Xem
                                 </button>
                               </div>
                             </td>
@@ -557,8 +560,8 @@ export default function AttendanceManager({
                               <div className="text-[10px] text-slate-400 font-mono">{teacher.email || "Chưa cập nhật"}</div>
                             </td>
                             <td className="py-3 px-3 text-center">
-                              <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold">
-                                Chưa Điểm Danh ❌
+                              <span className="mcna-badge-danger">
+                                Chưa Điểm Danh
                               </span>
                             </td>
                             <td className="py-3 px-3 text-right">
@@ -676,8 +679,8 @@ export default function AttendanceManager({
                   onClick={() => setShowCreateSession(true)}
                   className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold text-white flex items-center justify-center gap-1.5 transition cursor-pointer text-xs shadow-xs h-[38px] truncate"
                 >
-                  <Plus className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Tạo buổi / Gửi link 🚀</span>
+                  <Send className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Tạo buổi / Gửi link</span>
                 </button>
               </div>
             </div>
@@ -744,8 +747,8 @@ export default function AttendanceManager({
                     onClick={() => setShowCreateSession(true)}
                     className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold text-white flex items-center justify-center gap-1.5 transition cursor-pointer text-xs shadow-xs h-[38px] truncate"
                   >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Tạo buổi / Gửi link 🚀</span>
+                    <Send className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Tạo buổi / Gửi link</span>
                   </button>
                 </div>
               </>
@@ -778,9 +781,9 @@ export default function AttendanceManager({
                             </p>
                             <button
                               onClick={() => setCourseDetailId(selectedCourseId)}
-                              className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans border border-indigo-100"
+                              className="mcna-badge-primary inline-flex items-center gap-1 cursor-pointer hover:bg-indigo-100 transition"
                             >
-                              Xem thông tin khóa 👁️
+                              <Eye className="h-3 w-3" /> Xem thông tin khóa
                             </button>
                           </div>
                         </div>
@@ -823,9 +826,9 @@ export default function AttendanceManager({
                               setEditDate(activeSession.date || "");
                               setShowEditSessionModal(true);
                             }}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
+                            className="mcna-badge-primary inline-flex items-center gap-1 cursor-pointer hover:bg-indigo-100 transition px-2.5 py-1 text-xs"
                           >
-                            Sửa thông tin buổi học ✏️
+                            <Edit className="h-3 w-3" /> Sửa thông tin buổi học
                           </button>
                         )}
                       </div>
@@ -1251,7 +1254,9 @@ export default function AttendanceManager({
                   className="px-4.5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition cursor-pointer shadow-xs flex items-center gap-1"
                 >
                   {checkinMethod === "link" ? (
-                    <>🚀 Gửi link điểm danh (5 phút)</>
+                    <>
+                      <Send className="h-3.5 w-3.5" /> Gửi link điểm danh (5 phút)
+                    </>
                   ) : (
                     <>
                       <FolderSync className="h-3.5 w-3.5" /> Mở điểm danh thủ công
