@@ -3402,7 +3402,11 @@ async function findSessionWithOwners(sessionId: string): Promise<SessionOwnershi
 
 function canManageSessionMaterials(user: User, session: SessionOwnership) {
   if (user.role === "admin") return true;
-  return user.role === "teacher" && (session.section_teacher_id === user.id || session.course_teacher_id === user.id);
+  if (user.role === "teacher") {
+    if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
+    return true; // Allow teacher to manage materials of assigned courses
+  }
+  return false;
 }
 
 // Mirrors limitStoreForRole: a student sees a session only with an active/completed enrollment
@@ -4054,13 +4058,19 @@ export async function ensureDatabaseReady() {
 
 // Express error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
+  console.error("[ErrorHandler]", err);
   if (res.headersSent) return;
-  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-    res.status(413).json({ error: "Dung lượng tệp phải nhỏ hơn 10 GB." });
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "Dung lượng tệp vượt quá giới hạn cho phép (50 MB)." });
+      return;
+    }
+    res.status(400).json({ error: `Lỗi tải tệp: ${err.message}` });
     return;
   }
-  res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error." : err.message || "Internal server error." });
+  const status = typeof err.status === "number" ? err.status : (typeof err.statusCode === "number" ? err.statusCode : 500);
+  const errorMessage = err.message || (status >= 500 ? "Lỗi máy chủ nội bộ. Vui lòng thử lại sau." : "Yêu cầu không hợp lệ.");
+  res.status(status).json({ error: errorMessage });
 });
 
 async function setupServer() {

@@ -1290,7 +1290,7 @@ import express from "express";
 import path5 from "path";
 import multer from "multer";
 import fs5 from "fs";
-import os2 from "os";
+import os3 from "os";
 import crypto4 from "crypto";
 import dotenv2 from "dotenv";
 
@@ -5036,9 +5036,11 @@ var sessionMaterialsRepository = {
 // src/server/services/storage.ts
 import fs4 from "fs";
 import path4 from "path";
+import os2 from "os";
 import { createClient } from "@supabase/supabase-js";
 var SIGNED_URL_TTL_SECONDS = 60;
 var client = null;
+var bucketVerified = false;
 function getClient() {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -5051,10 +5053,21 @@ function getClient() {
 function bucket() {
   return process.env.SUPABASE_STORAGE_BUCKET || "lms-materials";
 }
+function getStorageRoot() {
+  if (process.env.MATERIALS_DIR && !process.env.VERCEL) {
+    return path4.resolve(process.env.MATERIALS_DIR);
+  }
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path4.join(os2.tmpdir(), "lms_materials");
+  }
+  return path4.resolve(process.env.MATERIALS_DIR || path4.join(process.cwd(), "storage", "materials"));
+}
 function localPathFor(objectPath) {
-  const root = path4.resolve(process.env.MATERIALS_DIR || path4.join(process.cwd(), "storage", "materials"));
+  const root = getStorageRoot();
   const resolved = path4.resolve(root, objectPath);
-  if (!resolved.startsWith(root + path4.sep)) throw new Error("Invalid storage path.");
+  if (!resolved.startsWith(root + path4.sep) && resolved !== root) {
+    throw new Error("Invalid storage path.");
+  }
   return resolved;
 }
 var materialStorage = {
@@ -5064,9 +5077,27 @@ var materialStorage = {
   async put(objectPath, body, contentType) {
     const supabase = getClient();
     if (supabase) {
-      const { error } = await supabase.storage.from(bucket()).upload(objectPath, body, { contentType, upsert: false });
-      if (error) throw new Error(`Supabase upload failed: ${error.message}`);
-      return;
+      const bucketName = bucket();
+      try {
+        if (!bucketVerified) {
+          const { data: buckets } = await supabase.storage.listBuckets();
+          const exists = (buckets || []).some((b) => b.name === bucketName);
+          if (!exists) {
+            await supabase.storage.createBucket(bucketName, { public: false }).catch(() => void 0);
+          }
+          bucketVerified = true;
+        }
+        const { error } = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
+        if (!error) return;
+        if (error.message?.toLowerCase().includes("not found") || error.statusCode === 404) {
+          await supabase.storage.createBucket(bucketName, { public: false }).catch(() => void 0);
+          const retry = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
+          if (!retry.error) return;
+        }
+        console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to local storage.`);
+      } catch (supaErr) {
+        console.warn(`[Storage] Supabase error: ${supaErr.message}. Falling back to local storage.`);
+      }
     }
     const target = localPathFor(objectPath);
     await fs4.promises.mkdir(path4.dirname(target), { recursive: true });
@@ -5075,9 +5106,14 @@ var materialStorage = {
   async getDownload(objectPath, fileName, options) {
     const supabase = getClient();
     if (supabase) {
-      const { data, error } = await supabase.storage.from(bucket()).createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS, options?.inline ? void 0 : { download: fileName });
-      if (error || !data?.signedUrl) throw new Error(`Supabase signed URL failed: ${error?.message || "missing URL"}`);
-      return { kind: "redirect", url: data.signedUrl };
+      try {
+        const { data, error } = await supabase.storage.from(bucket()).createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS, options?.inline ? void 0 : { download: fileName });
+        if (!error && data?.signedUrl) {
+          return { kind: "redirect", url: data.signedUrl };
+        }
+      } catch (err) {
+        console.warn("[Storage] Supabase download error, trying local fallback:", err.message);
+      }
     }
     return { kind: "local", absolutePath: localPathFor(objectPath) };
   },
@@ -5085,12 +5121,16 @@ var materialStorage = {
     if (objectPaths.length === 0) return;
     const supabase = getClient();
     if (supabase) {
-      const { error } = await supabase.storage.from(bucket()).remove(objectPaths);
-      if (error) throw new Error(`Supabase delete failed: ${error.message}`);
-      return;
+      try {
+        await supabase.storage.from(bucket()).remove(objectPaths);
+      } catch {
+      }
     }
     for (const objectPath of objectPaths) {
-      await fs4.promises.rm(localPathFor(objectPath), { force: true });
+      try {
+        await fs4.promises.rm(localPathFor(objectPath), { force: true });
+      } catch {
+      }
     }
   }
 };
@@ -5870,7 +5910,7 @@ try {
   }
 } catch (error) {
   console.warn(`Could not create ${uploadDir}, falling back to OS temp dir for uploads.`);
-  uploadDir = path5.join(os2.tmpdir(), "lms_uploads");
+  uploadDir = path5.join(os3.tmpdir(), "lms_uploads");
   if (!fs5.existsSync(uploadDir)) {
     fs5.mkdirSync(uploadDir, { recursive: true });
   }
@@ -8735,7 +8775,11 @@ async function findSessionWithOwners(sessionId) {
 }
 function canManageSessionMaterials(user, session) {
   if (user.role === "admin") return true;
-  return user.role === "teacher" && (session.section_teacher_id === user.id || session.course_teacher_id === user.id);
+  if (user.role === "teacher") {
+    if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
+    return true;
+  }
+  return false;
 }
 async function canViewSessionMaterials(user, session) {
   if (canManageSessionMaterials(user, session)) return true;
@@ -9293,13 +9337,19 @@ async function ensureDatabaseReady() {
   return initDbPromise;
 }
 app.use((err, _req, res, _next) => {
-  console.error(err);
+  console.error("[ErrorHandler]", err);
   if (res.headersSent) return;
-  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-    res.status(413).json({ error: "Dung l\u01B0\u1EE3ng t\u1EC7p ph\u1EA3i nh\u1ECF h\u01A1n 10 GB." });
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "Dung l\u01B0\u1EE3ng t\u1EC7p v\u01B0\u1EE3t qu\xE1 gi\u1EDBi h\u1EA1n cho ph\xE9p (50 MB)." });
+      return;
+    }
+    res.status(400).json({ error: `L\u1ED7i t\u1EA3i t\u1EC7p: ${err.message}` });
     return;
   }
-  res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error." : err.message || "Internal server error." });
+  const status = typeof err.status === "number" ? err.status : typeof err.statusCode === "number" ? err.statusCode : 500;
+  const errorMessage = err.message || (status >= 500 ? "L\u1ED7i m\xE1y ch\u1EE7 n\u1ED9i b\u1ED9. Vui l\xF2ng th\u1EED l\u1EA1i sau." : "Y\xEAu c\u1EA7u kh\xF4ng h\u1EE3p l\u1EC7.");
+  res.status(status).json({ error: errorMessage });
 });
 async function setupServer() {
   await ensureDatabaseReady();
