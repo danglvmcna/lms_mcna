@@ -112,7 +112,7 @@ import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
 import { LMSDataStore, User } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
-import { pool, Queryable } from "./src/server/db";
+import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
 import { DbUserRow, toPublicUser, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow } from "./src/server/mappers";
@@ -1250,10 +1250,28 @@ function dashboardFromStore(store: any, user: User) {
   return scoped;
 }
 
+export let isDevMockDb = false;
+export let devMockStore: LMSDataStore | null = null;
+
 async function initializeDatabase() {
   registerEventHandlers();
   if (process.env.VERCEL) {
     return;
+  }
+  try {
+    const client = await pool.connect();
+    client.release();
+  } catch (err: any) {
+    if (isLocalDb && process.env.NODE_ENV !== "production") {
+      console.warn("\n=======================================================");
+      console.warn("⚠️  [DEV NOTICE] Khong the ket noi PostgreSQL cuc bo (127.0.0.1:5432).");
+      console.warn("🚀 Kich hoat Dev In-Memory Mock Store de xem va trai nghiem day du giao dien ngay!");
+      console.warn("=======================================================\n");
+      isDevMockDb = true;
+      devMockStore = getInitialStore();
+      return;
+    }
+    throw err;
   }
   await runMigrations(pool);
   await usersRepository.normalizeLegacyRoles(pool);
@@ -1282,12 +1300,41 @@ app.post("/api/auth/force-logout", asyncHandler(async (req, res) => {
 app.use("/api", requireCsrf);
 
 app.get("/health", asyncHandler(async (_req, res) => {
+  if (isDevMockDb) {
+    return res.json({ ok: true, database: "mock_in_memory", uptime: process.uptime() });
+  }
   await pool.query("SELECT 1");
   res.json({ ok: true, database: "ok", uptime: process.uptime() });
 }));
 
 app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const cleanEmail = email.toLowerCase().trim();
+    const userItem = store.users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (!userItem || !verifyPassword(password, userItem.passwordHash, userItem.passwordSalt || undefined)) {
+      return res.status(401).json({ error: "Incorrect email or password." });
+    }
+    if (!userItem.isActive) return res.status(403).json({ error: "Account inactive." });
+
+    const user: User = {
+      id: userItem.id,
+      email: userItem.email,
+      passwordHash: "",
+      name: userItem.name,
+      role: userItem.role,
+      isActive: userItem.isActive,
+      createdAt: userItem.createdAt
+    };
+
+    setAuthCookie(res, signToken(user));
+    const csrfToken = crypto.randomBytes(24).toString("base64url");
+    setCsrfCookie(res, csrfToken);
+    return res.json({ user, csrfToken });
+  }
+
   const row = await usersRepository.findAuthByEmail(pool, email) as DbUserRow | null;
   if (!row || !verifyPassword(password, row.password_hash, row.password_salt || undefined)) return res.status(401).json({ error: "Incorrect email or password." });
   if (!row.is_active) return res.status(403).json({ error: "Account inactive." });
@@ -1451,6 +1498,11 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
 
 app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
   try {
+    if (isDevMockDb) {
+      const store = devMockStore || getInitialStore();
+      const limited = limitStoreForRole(store, req.user!);
+      return res.json(limited);
+    }
     const snapshot = await storeSnapshotFromDb(pool);
     const limited = limitStoreForRole(snapshot, req.user!);
     res.json(limited);
@@ -1461,11 +1513,21 @@ app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
 }));
 
 app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json({ ...dashboardFromStore(store, req.user!), auditLogs: [] });
+  }
   const store = await storeSnapshotFromDb(pool);
   res.json({ ...dashboardFromStore(store, req.user!), auditLogs: await auditRepository.listRecent(pool, 100) });
 }));
-app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
-app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
+app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => {
+  const store = isDevMockDb ? (devMockStore || getInitialStore()) : (await storeSnapshotFromDb(pool));
+  res.json(dashboardFromStore(store, req.user!));
+}));
+app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  const store = isDevMockDb ? (devMockStore || getInitialStore()) : (await storeSnapshotFromDb(pool));
+  res.json(dashboardFromStore(store, req.user!));
+}));
 
 
 const PUBLIC_COURSE_SELECT = `
@@ -1488,12 +1550,86 @@ async function listOpenSectionRows(courseIds: string[]) {
 }
 
 app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json(store.courses.filter(c => c.status === "published").map(c => {
+      const teacher = (store.users || []).find(u => u.id === c.teacherId);
+      const openSections = (store.courseSections || []).filter(s => s.courseId === c.id && s.status !== "cancelled");
+      const lessonCount = (store.lessons || []).filter(l => l.courseId === c.id).length;
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        price: c.price,
+        level: c.level,
+        thumbnail: c.thumbnail,
+        tags: c.tags,
+        teacherName: teacher?.name,
+        numberOfLessons: lessonCount,
+        openSectionCount: openSections.length
+      };
+    }));
+  }
   const rows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
   res.setHeader("Cache-Control", "public, max-age=30");
   res.json(rows.map(publicCourseFromRow));
 }));
 
 app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const course = store.courses.find(c => c.id === req.params.id);
+    if (!course) return res.status(404).json({ error: "Không tìm thấy khóa học." });
+    const teacher = (store.users || []).find(u => u.id === course.teacherId);
+    const courseSections = (store.courseSections || []).filter(s => s.courseId === course.id && s.status !== "cancelled");
+    const lessonRows = (store.lessons || []).filter(l => l.courseId === course.id);
+    const toDateText = (value: any) => (value instanceof Date ? value.toISOString() : value ? String(value) : undefined);
+    return res.json({
+      course: {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        category: course.category,
+        price: course.price,
+        level: course.level,
+        thumbnail: course.thumbnail,
+        tags: course.tags,
+        teacherName: teacher?.name,
+        numberOfLessons: lessonRows.length,
+        openSectionCount: courseSections.length
+      },
+      sections: courseSections.map(s => {
+        const regCount = (store.courseRegistrations || []).filter(r => r.sectionId === s.id && r.status === "registered").length;
+        const maxStudents = typeof s.maxStudents === "number" ? s.maxStudents : 30;
+        const sectionSessions = (store.attendanceSessions || []).filter(sess =>
+          (sess.sectionId && sess.sectionId === s.id) || (!sess.sectionId && sess.courseId === course.id)
+        );
+        const secTeacher = (s as any).teacherName || (s.teacherId ? (store.users || []).find(u => u.id === s.teacherId)?.name : teacher?.name);
+        return {
+          id: s.id,
+          sectionCode: s.sectionCode,
+          teacherName: secTeacher,
+          maxStudents,
+          seatsLeft: Math.max(0, maxStudents - regCount),
+          schedule: s.schedule || [],
+          openingDate: s.openingDate,
+          numberOfSessions: s.numberOfSessions || sectionSessions.length,
+          sessions: sectionSessions.map(sess => ({
+            id: sess.id,
+            topic: sess.topic || (sess as any).title || "Buổi học",
+            date: toDateText(sess.date)
+          }))
+        };
+      }),
+      lessons: lessonRows.map((l, idx) => ({
+        id: l.id,
+        title: l.title,
+        duration: l.duration || "45m",
+        order: (l as any).lesson_order ?? (l as any).order ?? (idx + 1)
+      }))
+    });
+  }
   const courseRow = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [req.params.id])).rows[0];
   if (!courseRow) return res.status(404).json({ error: "Không tìm thấy khóa học." });
   const sectionRows = await listOpenSectionRows([courseRow.id]);
@@ -3241,6 +3377,19 @@ type SessionOwnership = {
 };
 
 async function findSessionWithOwners(sessionId: string): Promise<SessionOwnership | null> {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const s = (store.attendanceSessions || []).find(sess => sess.id === sessionId);
+    if (!s) return null;
+    const sec = (store.courseSections || []).find(sec => sec.id === (s as any).sectionId);
+    return {
+      id: s.id,
+      course_id: s.courseId,
+      section_id: (s as any).sectionId || null,
+      course_teacher_id: "user_teacher",
+      section_teacher_id: sec?.teacherId || "user_teacher"
+    };
+  }
   return (await pool.query(
     `SELECT s.id, s.course_id, s.section_id, c.teacher_id AS course_teacher_id, cs.teacher_id AS section_teacher_id
      FROM attendance_sessions s
@@ -3306,6 +3455,11 @@ async function generatedSessionsWithMaterialsBeyond(db: Queryable, sectionId: st
 }
 
 app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const mats = (store.sessionMaterials || []).filter((m: any) => m.sessionId === req.params.sessionId);
+    return res.json(mats);
+  }
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
   if (!await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
@@ -3313,6 +3467,27 @@ app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (r
 }));
 
 app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin", "super_admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (!store.sessionMaterials) store.sessionMaterials = [];
+    const type = req.body.type as "slide" | "document" | "youtube" | "link";
+    const fileName = req.file ? Buffer.from(req.file.originalname, "latin1").toString("utf8") : undefined;
+    const ext = fileName ? path.extname(fileName).toLowerCase() : "";
+    const newMat = {
+      id: "mat_" + Date.now(),
+      sessionId: req.params.sessionId,
+      type,
+      title: req.body.title || (fileName ? path.basename(fileName, path.extname(fileName)) : (type === "youtube" ? "Video bài giảng" : "Tài liệu")),
+      url: req.file ? `/uploads/${req.file.filename}` : ((type === "youtube" || type === "link") ? resolveMaterialUrl(type, req.body.url) : (req.body.url || "")),
+      fileName,
+      sizeBytes: req.file ? req.file.size : undefined,
+      mimeType: ext ? (MATERIAL_MIME_BY_EXT[ext] || "application/octet-stream") : undefined,
+      createdAt: new Date().toISOString()
+    };
+    store.sessionMaterials.push(newMat as any);
+    return res.status(201).json(newMat);
+  }
+
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
   if (!canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
@@ -3370,6 +3545,21 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
 }));
 
 app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const ids: string[] = req.body.materialIds || [];
+    if (store.sessionMaterials) {
+      store.sessionMaterials.sort((a: any, b: any) => {
+        const ai = ids.indexOf(a.id);
+        const bi = ids.indexOf(b.id);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    }
+    return res.json((store.sessionMaterials || []).filter((m: any) => m.sessionId === req.params.sessionId));
+  }
+
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
   if (!canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
@@ -3379,6 +3569,15 @@ app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["t
 }));
 
 app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const mat = (store.sessionMaterials || []).find((m: any) => m.id === req.params.id);
+    if (!mat) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
+    if (req.body.title) mat.title = req.body.title;
+    if (req.body.url) mat.url = req.body.url;
+    return res.json(mat);
+  }
+
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
   const session = await findSessionWithOwners(row.session_id);
@@ -3397,6 +3596,14 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "s
 }));
 
 app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (store.sessionMaterials) {
+      store.sessionMaterials = store.sessionMaterials.filter((m: any) => m.id !== req.params.id);
+    }
+    return res.status(204).send();
+  }
+
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
   const session = await findSessionWithOwners(row.session_id);
@@ -3824,6 +4031,10 @@ app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin", "sup
 }));
 
 app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "manager"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    devMockStore = { ...(devMockStore || getInitialStore()), ...(req.body || {}) };
+    return res.json({ ok: true, mode: "dev-mock-synchronized" });
+  }
   await syncClientStoreToDb(req.body || {});
   invalidateStoreCache();
   await audit(req, "store_sync", "store", "Client store changes synchronized into Postgres.");

@@ -598,7 +598,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     <div className="space-y-8">
       {/* Toast Alert bottom right */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#16a34a] text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl border border-white/10">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
           {toastMessage}
         </div>
       )}
@@ -606,13 +606,10 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
       {/* Header section spacing */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-mono font-semibold tracking-widest text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 uppercase">
-            Góc Nghiệp vụ Giảng viên MCNA
-          </span>
-          <h2 className="text-2xl font-display font-bold text-white mt-1.5">
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900">
             Không gian Giảng dạy & Đào tạo
           </h2>
-          <p className="text-sm text-white/60">
+          <p className="text-xs md:text-sm text-slate-500 mt-1">
             Quản lý giáo án, bài giảng, điểm danh ca học, lưu trữ video recording và chấm điểm bài nộp của học viên.
           </p>
         </div>
@@ -624,12 +621,12 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
         <div className="lg:hidden w-full">
           <button
             onClick={() => setShowSidebar(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white/70 hover:text-white hover:bg-white/8 transition cursor-pointer"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs text-slate-700 hover:text-slate-900 transition cursor-pointer shadow-xs"
           >
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
               <span className="font-semibold">Menu điều hướng</span>
-              <span className="text-white/40">— đang xem: <strong className="text-indigo-300">{{
+              <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
                 courses: "Khóa học & Bài giảng",
                 attendance: "Lớp học & Điểm danh",
                 assignments: "Bài tập & Chấm điểm",
@@ -644,51 +641,51 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
 
         {/* Left Navigation Sidebar */}
         <div className={`w-full lg:w-64 xl:w-72 flex flex-col gap-4 shrink-0 ${showSidebar ? "block" : "hidden"} lg:flex lg:flex-col`}>
-          <div className="bg-white/3 border border-white/10 rounded-3xl p-3 flex flex-col gap-1 w-full text-xs">
-            <span className="text-[10px] text-white/40 uppercase tracking-widest px-3 py-2 font-bold font-mono border-b border-white/5 mb-1.5">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 flex flex-col gap-1 w-full text-xs shadow-xs">
+            <span className="text-[11px] text-slate-400 uppercase tracking-wider px-3 py-2 font-semibold">
               NGHIỆP VỤ GIẢNG DẠY
             </span>
             
             <button
               onClick={() => { handleNavClick("courses"); setSelectedCourseId(null); }}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "courses" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <BookOpen className={`h-4.5 w-4.5 ${activeSubTab === "courses" ? "text-indigo-300" : "text-white/40"}`} />
+              <BookOpen className={`h-4 w-4 ${activeSubTab === "courses" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Khóa học & Bài giảng</span>
             </button>
 
             <button
               onClick={() => handleNavClick("attendance")}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "attendance" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <Clock className={`h-4.5 w-4.5 ${activeSubTab === "attendance" ? "text-indigo-300" : "text-white/40"}`} />
+              <Clock className={`h-4 w-4 ${activeSubTab === "attendance" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Lớp học & Điểm danh</span>
             </button>
 
             <button
               onClick={() => handleNavClick("assignments")}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "assignments" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <Edit className={`h-4.5 w-4.5 ${activeSubTab === "assignments" ? "text-indigo-300" : "text-white/40"}`} />
+              <Edit className={`h-4 w-4 ${activeSubTab === "assignments" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Bài tập & Chấm điểm</span>
             </button>
           </div>
         </div>
 
         {/* Active Panel View Canvas */}
-        <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 min-w-0 w-full">
+        <div className="flex-1 min-w-0 w-full">
           <CourseBuilder {...teacherPanelProps} />
           <QuizBuilder {...teacherPanelProps} />
           <AssignmentGrader {...teacherPanelProps} />
@@ -726,22 +723,22 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
       {/* MODAL 5: CREATE ASSIGNMENT FORM (Shared in Parent) */}
       {showAssignModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-          <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-xs text-white">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto font-sans">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-slate-900">
             <button 
               onClick={() => setShowAssignModal(false)}
-              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-lg font-display font-medium text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3">
-              <FileText className="h-5 w-5 text-indigo-400" /> Tạo Thử thách Bài tự luận Khóa học
+            <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <FileText className="h-5 w-5 text-indigo-600" /> Tạo Thử thách Bài tự luận Khóa học
             </h3>
 
             <form onSubmit={handleAddAssignmentSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-white/70">Chọn Khóa học tương ứng</label>
+                <label className="text-xs font-semibold text-slate-700">Chọn Khóa học tương ứng</label>
                 <select
                   required
                   value={selectedCourseId || ""}
@@ -750,11 +747,11 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                     setAssignSectionId("");
                     setAssignSessionId("");
                   }}
-                  className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-sans"
+                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
                 >
                   <option value="" disabled>-- Chọn khóa học --</option>
                   {myCourses.map((c: any) => (
-                    <option key={c.id} value={c.id} className="bg-slate-900">
+                    <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
                   ))}
@@ -762,31 +759,31 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-white/70">Tiêu đề Thử thách bài tập</label>
+                <label className="text-xs font-semibold text-slate-700">Tiêu đề Thử thách bài tập</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Thiết lập Express Routing Controller"
                   value={assignTitle}
                   onChange={(e) => setAssignTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400"
+                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Hạn chót Hoàn thành</label>
+                  <label className="text-xs font-semibold text-slate-700">Hạn chót Hoàn thành</label>
                   <input
                     type="datetime-local"
                     required
                     value={assignDeadline}
                     onChange={(e) => setAssignDeadline(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
+                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Điểm tối đa</label>
+                  <label className="text-xs font-semibold text-slate-700">Điểm tối đa</label>
                   <input
                     type="number"
                     required
@@ -794,21 +791,21 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                     max={100}
                     value={assignMaxScore}
                     onChange={(e) => setAssignMaxScore(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
+                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Loại bài tập</label>
+                  <label className="text-xs font-semibold text-slate-700">Loại bài tập</label>
                   <select
                     value={assignType}
                     onChange={(e) => {
                       const val = e.target.value as any;
                       setAssignType(val);
                     }}
-                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-sans"
+                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
                   >
                     <option value="lesson">Bài tập buổi học</option>
                     <option value="chapter">Bài tập cuối chương</option>
@@ -818,7 +815,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Chọn Lớp học phần</label>
+                  <label className="text-xs font-semibold text-slate-700">Chọn Lớp học phần</label>
                   <select
                     required
                     value={assignSectionId || ""}
@@ -826,7 +823,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                       setAssignSectionId(e.target.value);
                       setAssignSessionId("");
                     }}
-                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-sans"
+                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
                   >
                     <option value="" disabled>-- Chọn lớp học phần --</option>
                     {(store.courseSections || [])
@@ -841,12 +838,12 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-white/70">Buổi học áp dụng</label>
+                <label className="text-xs font-semibold text-slate-700">Buổi học áp dụng</label>
                 <select
                   required
                   value={assignSessionId || ""}
                   onChange={(e) => setAssignSessionId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 font-sans"
+                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
                 >
                   <option value="" disabled>-- Chọn buổi học --</option>
                   {(store.attendanceSessions || [])
@@ -861,13 +858,13 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-white/70">Mô tả / Yêu cầu chi tiết</label>
+                <label className="text-xs font-semibold text-slate-700">Mô tả / Yêu cầu chi tiết</label>
                 <textarea
                   required
                   placeholder="Dán các định dạng file hoặc yêu cầu nộp sản phẩm..."
                   value={assignDesc}
                   onChange={(e) => setAssignDesc(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/20 text-white h-24 max-h-32 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 text-xs"
+                  className="w-full px-3 py-2 bg-white text-slate-900 h-24 max-h-32 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 text-xs"
                 />
               </div>
 
@@ -875,13 +872,13 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 <button
                   type="button"
                   onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer"
+                  className="px-4 py-2 bg-transparent text-slate-500 hover:text-slate-800 transition cursor-pointer font-medium"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer"
+                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-sm"
                 >
                   Tạo Thử thách
                 </button>

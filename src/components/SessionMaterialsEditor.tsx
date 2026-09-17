@@ -11,10 +11,11 @@ interface SessionMaterialsEditorProps {
   sessionId: string;
   triggerToast: (message: string) => void;
   onChanged?: () => void;
+  theme?: "light" | "dark";
 }
 
 /** Teacher/admin editor for one session's slides, documents and YouTube videos. */
-export default function SessionMaterialsEditor({ sessionId, triggerToast, onChanged }: SessionMaterialsEditorProps) {
+export default function SessionMaterialsEditor({ sessionId, triggerToast, onChanged, theme = "light" }: SessionMaterialsEditorProps) {
   const [materials, setMaterials] = useState<SessionMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -22,6 +23,8 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
   const [youtubeTitle, setYoutubeTitle] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+
+  const isLight = theme === "light";
 
   useEffect(() => {
     let cancelled = false;
@@ -111,21 +114,31 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
     }, "Đã xóa tài liệu.");
   };
 
-  const uploadButtonClass = "flex-1 min-w-[140px] px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer text-white";
+  const uploadButtonClass = "flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-2 cursor-pointer text-white shadow-sm";
 
   return (
-    <div className="p-4 bg-slate-900/60 border border-white/10 rounded-2xl space-y-3 font-sans text-xs shadow-md">
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
-        <h5 className="font-bold uppercase tracking-wider text-[11px] text-white/70">Slide, tài liệu & video YouTube</h5>
-        {busy && <span className="h-4 w-4 rounded-full border-2 border-cyan-300 border-t-transparent animate-spin" aria-label="Đang xử lý" />}
+    <div className={`p-4 rounded-2xl space-y-3 font-sans text-xs transition-colors ${
+      isLight 
+        ? "bg-slate-50/80 border border-slate-200 text-slate-800" 
+        : "bg-slate-900/60 border border-white/10 text-white shadow-md"
+    }`}>
+      <div className={`flex items-center justify-between gap-2 pb-2 border-b ${
+        isLight ? "border-slate-200" : "border-white/5"
+      }`}>
+        <h5 className={`font-bold uppercase tracking-wider text-[11px] ${
+          isLight ? "text-slate-600" : "text-white/70"
+        }`}>Slide, tài liệu & video YouTube</h5>
+        {busy && <span className={`h-4 w-4 rounded-full border-2 border-t-transparent animate-spin ${
+          isLight ? "border-indigo-600" : "border-cyan-300"
+        }`} aria-label="Đang xử lý" />}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <label className={`${uploadButtonClass} bg-indigo-600 hover:bg-indigo-500 ${busy ? "opacity-50 pointer-events-none" : ""}`}>
-          <Presentation className="h-4 w-4" /> Tải slide
+      <div className="flex flex-wrap gap-2.5">
+        <label className={`${uploadButtonClass} bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <Presentation className="h-4 w-4" /> Tải slide (PPT/PDF)
           <input type="file" accept=".ppt,.pptx,.pdf" className="hidden" onChange={handleUpload("slide")} disabled={busy} />
         </label>
-        <label className={`${uploadButtonClass} bg-sky-600 hover:bg-sky-500 ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+        <label className={`${uploadButtonClass} bg-sky-600 hover:bg-sky-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
           <FileText className="h-4 w-4" /> Tải file Word/PDF
           <input type="file" accept=".doc,.docx,.pdf" className="hidden" onChange={handleUpload("document")} disabled={busy} />
         </label>
@@ -136,36 +149,52 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
           type="url"
           value={youtubeUrl}
           onChange={e => setYoutubeUrl(e.target.value)}
-          placeholder="Link YouTube (youtube.com/watch?v=..., youtu.be/...)"
-          className="flex-1 min-w-0 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/30"
+          placeholder="Dán link YouTube (youtube.com/watch?v=... hoặc youtu.be/...)"
+          className={`flex-1 min-w-0 px-3.5 py-2 rounded-xl border text-xs transition focus:outline-none ${
+            isLight
+              ? "bg-white text-slate-900 border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 placeholder-slate-400"
+              : "bg-slate-950 text-white border-white/10 focus:border-indigo-400 placeholder-white/30"
+          }`}
         />
         <input
           type="text"
           value={youtubeTitle}
           onChange={e => setYoutubeTitle(e.target.value)}
-          placeholder="Tiêu đề (không bắt buộc)"
-          className="sm:w-48 min-w-0 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/30"
+          placeholder="Tiêu đề video (tùy chọn)"
+          className={`sm:w-52 min-w-0 px-3.5 py-2 rounded-xl border text-xs transition focus:outline-none ${
+            isLight
+              ? "bg-white text-slate-900 border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 placeholder-slate-400"
+              : "bg-slate-950 text-white border-white/10 focus:border-indigo-400 placeholder-white/30"
+          }`}
         />
         <button
           type="submit"
           disabled={busy || !youtubeUrl.trim()}
-          className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.98]"
         >
-          <Play className="h-4 w-4" /> Thêm video
+          <Play className="h-4 w-4 fill-current" /> Thêm video
         </button>
       </form>
 
       {loading ? (
-        <div className="py-6 text-center text-white/40">Đang tải tài liệu...</div>
+        <div className={`py-6 text-center ${isLight ? "text-slate-400" : "text-white/40"}`}>Đang tải tài liệu...</div>
       ) : materials.length === 0 ? (
-        <div className="py-6 text-center text-white/40 bg-black/20 rounded-xl border border-white/5 border-dashed">
-          Buổi học chưa có tài liệu nào.
+        <div className={`py-8 text-center rounded-xl border border-dashed text-xs ${
+          isLight
+            ? "bg-white border-slate-200 text-slate-500"
+            : "bg-black/20 border-white/5 text-white/40"
+        }`}>
+          Buổi học này chưa có tài liệu nào. Bấm nút phía trên để tải slide, file tài liệu hoặc thêm video bài giảng!
         </div>
       ) : (
         <ul className="space-y-2">
           {materials.map((material, index) => (
-            <li key={material.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-black/20 border border-white/5">
-              <MaterialIcon type={material.type} className="h-4.5 w-4.5 text-cyan-300 shrink-0" />
+            <li key={material.id} className={`flex items-center gap-3 p-3 rounded-xl border transition ${
+              isLight
+                ? "bg-white border-slate-200 hover:border-slate-300 shadow-sm"
+                : "bg-black/20 border-white/5"
+            }`}>
+              <MaterialIcon type={material.type} className={`h-5 w-5 shrink-0 ${isLight ? "text-indigo-600" : "text-cyan-300"}`} />
               <div className="min-w-0 flex-1">
                 {editingId === material.id ? (
                   <input
@@ -176,30 +205,44 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
                       if (e.key === "Enter") void handleRename(material);
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="w-full px-2 py-1 bg-slate-950 text-white border border-indigo-400 rounded-lg focus:outline-none"
+                    className={`w-full px-2 py-1 rounded-lg border focus:outline-none text-xs font-semibold ${
+                      isLight
+                        ? "bg-white text-slate-900 border-indigo-600 ring-2 ring-indigo-100"
+                        : "bg-slate-950 text-white border-indigo-400"
+                    }`}
                   />
                 ) : (
-                  <span className="block font-bold text-white truncate">{material.title}</span>
+                  <span className={`block font-semibold truncate ${isLight ? "text-slate-900" : "text-white"}`}>{material.title}</span>
                 )}
-                <span className="block text-[10px] font-mono text-white/40 truncate">
+                <span className={`block text-[11px] font-mono truncate ${isLight ? "text-slate-500" : "text-white/40"}`}>
                   {[MATERIAL_TYPE_LABEL[material.type], material.fileName, formatFileSize(material.sizeBytes)].filter(Boolean).join(" · ")}
                 </span>
               </div>
-              <div className="flex items-center gap-0.5 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 {editingId === material.id ? (
                   <>
-                    <IconButton title="Lưu tên" onClick={() => void handleRename(material)} disabled={busy}><Check className="h-3.5 w-3.5" /></IconButton>
-                    <IconButton title="Hủy" onClick={() => setEditingId(null)}><X className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton isLight={isLight} title="Lưu tên" onClick={() => void handleRename(material)} disabled={busy}><Check className="h-4 w-4 text-emerald-600" /></IconButton>
+                    <IconButton isLight={isLight} title="Hủy" onClick={() => setEditingId(null)}><X className="h-4 w-4" /></IconButton>
                   </>
                 ) : (
                   <>
-                    <a href={materialHref(material)} target="_blank" rel="noreferrer" title="Mở / tải về" className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white">
-                      <ExternalLink className="h-3.5 w-3.5" />
+                    <a
+                      href={materialHref(material)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Mở / tải về"
+                      className={`p-1.5 rounded-lg transition ${
+                        isLight
+                          ? "text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
                     </a>
-                    <IconButton title="Lên" onClick={() => handleMove(index, -1)} disabled={busy || index === 0}><ArrowUp className="h-3.5 w-3.5" /></IconButton>
-                    <IconButton title="Xuống" onClick={() => handleMove(index, 1)} disabled={busy || index === materials.length - 1}><ArrowDown className="h-3.5 w-3.5" /></IconButton>
-                    <IconButton title="Đổi tên" onClick={() => { setEditingId(material.id); setEditingTitle(material.title); }} disabled={busy}><Pencil className="h-3.5 w-3.5" /></IconButton>
-                    <IconButton title="Xóa" onClick={() => void handleDelete(material)} disabled={busy} danger><Trash2 className="h-3.5 w-3.5" /></IconButton>
+                    <IconButton isLight={isLight} title="Lên" onClick={() => handleMove(index, -1)} disabled={busy || index === 0}><ArrowUp className="h-4 w-4" /></IconButton>
+                    <IconButton isLight={isLight} title="Xuống" onClick={() => handleMove(index, 1)} disabled={busy || index === materials.length - 1}><ArrowDown className="h-4 w-4" /></IconButton>
+                    <IconButton isLight={isLight} title="Đổi tên" onClick={() => { setEditingId(material.id); setEditingTitle(material.title); }} disabled={busy}><Pencil className="h-4 w-4" /></IconButton>
+                    <IconButton isLight={isLight} title="Xóa" onClick={() => void handleDelete(material)} disabled={busy} danger><Trash2 className="h-4 w-4" /></IconButton>
                   </>
                 )}
               </div>
@@ -211,7 +254,7 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
   );
 }
 
-function IconButton({ title, onClick, disabled, danger, children }: { title: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: React.ReactNode }) {
+function IconButton({ title, onClick, disabled, danger, isLight, children }: { title: string; onClick: () => void; disabled?: boolean; danger?: boolean; isLight?: boolean; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -219,7 +262,15 @@ function IconButton({ title, onClick, disabled, danger, children }: { title: str
       aria-label={title}
       onClick={onClick}
       disabled={disabled}
-      className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${danger ? "text-red-400 hover:bg-red-500/15" : "text-white/60 hover:text-white hover:bg-white/10"}`}
+      className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+        danger 
+          ? isLight 
+            ? "text-rose-600 hover:bg-rose-50" 
+            : "text-red-400 hover:bg-red-500/15" 
+          : isLight 
+            ? "text-slate-500 hover:text-slate-900 hover:bg-slate-200/70" 
+            : "text-white/60 hover:text-white hover:bg-white/10"
+      }`}
     >
       {children}
     </button>

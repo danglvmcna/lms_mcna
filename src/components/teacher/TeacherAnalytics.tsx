@@ -103,7 +103,7 @@ export default function TeacherAnalytics(props: ComponentProps) {
         {/* Tab 5: Analytics metrics */}
         {activeSubTab === "analytics" && (
           <div className="space-y-6">
-            <h4 className="text-base font-display font-semibold text-white">Bảng Thống kê Hiệu suất Giáo dục & Đào tạo</h4>
+            <h4 className="text-base font-semibold text-slate-900">Bảng Thống kê Hiệu suất Giáo dục & Đào tạo</h4>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {myCourses.map(course => {
@@ -115,24 +115,32 @@ export default function TeacherAnalytics(props: ComponentProps) {
                 const totalAvgQuiz = averageScoreRaw.reduce((sum, qa) => sum + qa.score, 0) / (averageScoreRaw.length || 1);
 
                 return (
-                  <div key={course.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-white/20 transition backdrop-blur-md">
-                    <span className="text-[10px] font-mono text-white/40 block pb-1 border-b border-white/5 truncate uppercase">
+                  <div key={course.id} className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs hover:shadow-md transition">
+                    <span className="text-[10px] font-mono text-slate-400 block pb-1 border-b border-slate-100 truncate uppercase tracking-wider font-semibold">
                       Chi tiết Đánh giá Khóa học
                     </span>
-                    <h5 className="font-display font-bold text-white text-sm my-2 truncate">{course.title}</h5>
+                    <h5 className="font-bold text-slate-900 text-sm my-2 truncate">{course.title}</h5>
 
-                    <div className="space-y-3.5 pt-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/40">Lượt đăng ký học</span>
-                        <span className="font-mono text-white font-bold">{enrolledEnroll.length} học viên</span>
+                    <div className="space-y-3 pt-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Lượt đăng ký học</span>
+                        <span className="font-mono text-slate-800 font-semibold">{enrolledEnroll.length} học viên</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/40">Điểm kiểm tra trung bình</span>
-                        <span className="font-mono text-cyan-300 font-bold">{Math.round(totalAvgQuiz)}%</span>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Điểm kiểm tra trung bình</span>
+                        <span className="font-mono text-indigo-600 font-bold">{Math.round(totalAvgQuiz)}%</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/40">Trạng thái khóa học</span>
-                        <span className="text-indigo-200 uppercase font-mono text-[10px] bg-white/5 py-0.5 px-2 rounded-full border border-white/10 font-bold">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Trạng thái khóa học</span>
+                        <span className={`uppercase font-mono text-[10px] py-0.5 px-2.5 rounded-full font-bold ${
+                          course.status === "published"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : course.status === "pending"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : course.status === "rejected"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
+                        }`}>
                           {course.status === "published" ? "Đang mở" : course.status === "pending" ? "Chờ xuất bản" : course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                         </span>
                       </div>
@@ -142,7 +150,7 @@ export default function TeacherAnalytics(props: ComponentProps) {
               })}
 
               {myCourses.length === 0 && (
-                <div className="col-span-full text-center py-16 text-white/40">
+                <div className="col-span-full text-center py-16 text-slate-400 bg-white border border-slate-200/80 rounded-2xl shadow-xs text-xs font-medium">
                   Chưa có dữ liệu thống kê. Vui lòng khởi tạo chương trình đào tạo của bạn trước.
                 </div>
               )}

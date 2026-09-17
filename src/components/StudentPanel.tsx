@@ -552,7 +552,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     <div className="space-y-8">
       {/* Toast popup Alert bottom right */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#2563eb] text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl border border-white/10 animate-fade-in">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
           {toastMessage}
         </div>
       )}
@@ -560,35 +560,35 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
       {/* Change Password Modal */}
       {showChangePassword && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 pt-6 md:pt-10 overflow-y-auto" onClick={() => { setShowChangePassword(false); setCpError(null); setCpSuccess(false); }}>
-          <div className="bg-slate-900 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-display font-bold text-white">Đổi mật khẩu</h3>
-              <button onClick={() => { setShowChangePassword(false); setCpError(null); setCpSuccess(false); }} className="text-white/40 hover:text-white transition cursor-pointer"><X className="h-4 w-4" /></button>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-xs p-4 pt-10 md:pt-14 overflow-y-auto" onClick={() => { setShowChangePassword(false); setCpError(null); setCpSuccess(false); }}>
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 text-slate-900" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Đổi mật khẩu</h3>
+              <button onClick={() => { setShowChangePassword(false); setCpError(null); setCpSuccess(false); }} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-lg transition cursor-pointer"><X className="h-4 w-4" /></button>
             </div>
             {cpSuccess ? (
               <div className="flex flex-col items-center gap-3 py-6 text-center">
-                <CheckCircle className="h-10 w-10 text-emerald-400" />
-                <p className="text-sm text-white font-semibold">Đổi mật khẩu thành công!</p>
-                <p className="text-xs text-white/50">Mật khẩu của bạn đã được cập nhật.</p>
-                <button onClick={() => { setShowChangePassword(false); setCpSuccess(false); }} className="mt-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer">Đóng</button>
+                <CheckCircle className="h-10 w-10 text-emerald-600" />
+                <p className="text-sm text-slate-900 font-semibold">Đổi mật khẩu thành công!</p>
+                <p className="text-xs text-slate-500">Mật khẩu của bạn đã được cập nhật.</p>
+                <button onClick={() => { setShowChangePassword(false); setCpSuccess(false); }} className="mt-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm">Đóng</button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-white/50 font-mono uppercase tracking-widest">Mật khẩu hiện tại</label>
-                  <input type="password" value={cpOldPass} onChange={e => { setCpOldPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition" />
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Mật khẩu hiện tại</label>
+                  <input type="password" value={cpOldPass} onChange={e => { setCpOldPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 transition" />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-white/50 font-mono uppercase tracking-widest">Mật khẩu mới</label>
-                  <input type="password" value={cpNewPass} onChange={e => { setCpNewPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition" />
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Mật khẩu mới</label>
+                  <input type="password" value={cpNewPass} onChange={e => { setCpNewPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 transition" />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-white/50 font-mono uppercase tracking-widest">Xác nhận mật khẩu mới</label>
-                  <input type="password" value={cpConfirmPass} onChange={e => { setCpConfirmPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition" />
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Xác nhận mật khẩu mới</label>
+                  <input type="password" value={cpConfirmPass} onChange={e => { setCpConfirmPass(e.target.value); setCpError(null); }} placeholder="••••••••" className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 transition" />
                 </div>
                 {cpError && (
-                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">{cpError}</p>
+                  <p className="text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded-xl">{cpError}</p>
                 )}
                 <button
                   disabled={cpLoading}
@@ -624,7 +624,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                       setCpLoading(false);
                     }
                   }}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm"
                 >
                   {cpLoading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
                 </button>
@@ -638,11 +638,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
       {/* Header section spacing */}
       <div className={`${learningCourseId ? "hidden" : "flex"} flex-col md:flex-row md:items-center justify-between gap-4`}>
         <div>
-          <span className="text-xs font-mono font-semibold tracking-widest text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 uppercase">
-            Cổng Học Tập Học Viên
-          </span>
-          <h2 className="text-2xl font-display font-bold text-white mt-1.5">Chào mừng trở lại, {currentUser.name} 🎓</h2>
-          <p className="text-sm text-white/60">Khám phá các khóa học thực chiến, tham gia lớp học trực tuyến, xem lại video bài giảng và quản lý học phí.</p>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Chào mừng trở lại, {currentUser.name} 🎓</h2>
+          <p className="text-xs md:text-sm text-slate-500 mt-1">Khám phá các khóa học thực chiến, tham gia lớp học trực tuyến, xem lại video bài giảng và quản lý học phí.</p>
         </div>
       </div>
 
@@ -652,12 +649,12 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         <div className={`${learningCourseId ? "hidden" : "lg:hidden"} w-full`}>
           <button
             onClick={() => setShowSidebar(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white/70 hover:text-white hover:bg-white/8 transition cursor-pointer"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs text-slate-700 hover:text-slate-900 transition cursor-pointer shadow-xs"
           >
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
               <span className="font-semibold">Menu điều hướng</span>
-              <span className="text-white/40">— đang xem: <strong className="text-indigo-300">{{
+              <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
                 catalog: "Khám phá Khóa học",
                 learning: "Lớp học của tôi",
                 orders: "Đơn hàng & Thanh toán",
@@ -672,48 +669,59 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
         {/* Left Navigation Sidebar */}
         <div className={learningCourseId ? "hidden" : `w-full lg:w-64 xl:w-72 flex-col gap-4 shrink-0 ${showSidebar ? "flex" : "hidden"} lg:flex`}>
-          <div className="bg-white/3 border border-white/10 rounded-3xl p-3 flex flex-col gap-1 w-full text-xs">
-            <span className="text-[10px] text-white/40 uppercase tracking-widest px-3 py-2 font-bold font-mono border-b border-white/5 mb-1.5">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 flex flex-col gap-1 w-full text-xs shadow-xs">
+            <span className="text-[11px] text-slate-400 uppercase tracking-wider px-3 py-2 font-semibold">
               HỌC VIỆN MCNA
             </span>
             <button
               onClick={() => { setActiveSubTab("catalog"); setLearningCourseId(null); setShowSidebar(false); }}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "catalog" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <Search className={`h-4.5 w-4.5 ${activeSubTab === "catalog" ? "text-indigo-300" : "text-white/40"}`} />
+              <Search className={`h-4 w-4 ${activeSubTab === "catalog" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Khám phá Khóa học</span>
             </button>
             <button
               onClick={() => { setActiveSubTab("learning"); setShowSidebar(false); }}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "learning" 
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <BookOpen className={`h-4.5 w-4.5 ${activeSubTab === "learning" ? "text-indigo-300" : "text-white/40"}`} />
+              <BookOpen className={`h-4 w-4 ${activeSubTab === "learning" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Lớp học của tôi</span>
             </button>
             <button
               onClick={() => { setActiveSubTab("orders"); setShowSidebar(false); }}
-              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "orders"
-                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <CreditCard className={`h-4.5 w-4.5 ${activeSubTab === "orders" ? "text-indigo-300" : "text-white/40"}`} />
+              <CreditCard className={`h-4 w-4 ${activeSubTab === "orders" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Đơn hàng & Thanh toán</span>
+            </button>
+            <button
+              onClick={() => { setActiveSubTab("certificates"); setShowSidebar(false); }}
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+                activeSubTab === "certificates"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <Award className={`h-4 w-4 ${activeSubTab === "certificates" ? "text-indigo-600" : "text-slate-400"}`} />
+              <span>Chứng nhận của tôi</span>
             </button>
           </div>
         </div>
 
         {/* Right Canvas workspace content bodies */}
-        <div ref={contentRef} className={`relative flex-1 w-full min-w-0 scroll-mt-4 ${learningCourseId ? "" : "bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6"}`}>
+        <div ref={contentRef} className="relative flex-1 w-full min-w-0 scroll-mt-4">
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />
@@ -721,14 +729,14 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         {/* Tab 4: Graduation Certificates display board */}
         {activeSubTab === "certificates" && (
           <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
+      {isLoading && <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500 shadow-xs">Đang tải dữ liệu...</div>}
       {isError && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
           <span>Không thể tải dữ liệu từ server.</span>
-          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1 font-semibold text-red-100 hover:bg-red-500/20">Thử lại</button>
+          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1 font-semibold text-red-700 hover:bg-red-50 transition cursor-pointer shadow-xs">Thử lại</button>
         </div>
       )}
-            <h4 className="text-base font-display font-semibold text-white">Chứng nhận của tôi ({store.certificates.filter(c => c.studentId === currentUser.id).length})</h4>
+            <h4 className="text-base font-display font-bold text-slate-900">Chứng nhận của tôi ({store.certificates.filter(c => c.studentId === currentUser.id).length})</h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {store.certificates.filter(c => c.studentId === currentUser.id).map(cert => {
@@ -736,34 +744,33 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                 const enrolledVal = store.enrollments.find(e => e.id === cert.enrollmentId);
 
                 return (
-                  <div key={cert.id} className="relative overflow-hidden bg-slate-900 border border-amber-500/30 rounded-3xl p-6 shadow-xl backdrop-blur-md">
-                    {/* Background glows details */}
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full filter blur-xl" />
-                    
+                  <div key={cert.id} className="relative overflow-hidden bg-white border border-amber-200/80 rounded-2xl p-6 shadow-xs">
                     <div className="space-y-4">
                       <div className="flex items-start justify-between">
-                        <Award className="h-10 w-10 text-amber-500" />
-                        <span className="text-[10px] font-mono text-amber-500 border border-amber-500/25 px-2 py-0.5 rounded-full uppercase font-bold tracking-widest">
+                        <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                          <Award className="h-6 w-6" />
+                        </div>
+                        <span className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full uppercase font-bold tracking-wider">
                           Xác thực chính chủ
                         </span>
                       </div>
 
                       <div className="space-y-1.5 pt-1">
-                        <span className="text-[10px] font-mono text-white/40 tracking-widest uppercase">HỆ THỐNG ĐÀO TẠO E16</span>
-                        <h5 className="font-display font-black text-white text-base leading-tight tracking-tight">{cTitle}</h5>
-                        <p className="text-xs text-white/60 font-sans leading-relaxed">
-                          Chứng nhận tốt nghiệp được trao tặng cho học viên <strong className="text-white">{currentUser.name}</strong> vì đã hoàn thành toàn diện lộ trình giáo trình và vượt qua các yêu cầu đánh giá năng lực của khóa học.
+                        <span className="text-[10px] font-mono text-slate-400 tracking-wider uppercase font-semibold">HỆ THỐNG ĐÀO TẠO E16</span>
+                        <h5 className="font-display font-bold text-slate-900 text-base leading-snug">{cTitle}</h5>
+                        <p className="text-xs text-slate-600 font-sans leading-relaxed">
+                          Chứng nhận tốt nghiệp được trao tặng cho học viên <strong className="text-slate-900 font-semibold">{currentUser.name}</strong> vì đã hoàn thành toàn diện lộ trình giáo trình và vượt qua các yêu cầu đánh giá năng lực của khóa học.
                         </p>
                       </div>
 
-                      <div className="pt-4 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono">
+                      <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono">
                         <div>
-                          <span className="text-white/40 block uppercase">Ngày cấp chứng chỉ</span>
-                          <span className="text-white/70 font-semibold">{new Date(cert.issuedAt).toLocaleDateString()}</span>
+                          <span className="text-slate-400 block uppercase font-medium">Ngày cấp chứng chỉ</span>
+                          <span className="text-slate-700 font-semibold">{new Date(cert.issuedAt).toLocaleDateString()}</span>
                         </div>
                         <div className="text-right">
-                          <span className="text-white/40 block uppercase">Mã kiểm định độc bản</span>
-                          <span className="text-amber-400 font-bold font-mono tracking-widest uppercase">{cert.certificateCode}</span>
+                          <span className="text-slate-400 block uppercase font-medium">Mã kiểm định độc bản</span>
+                          <span className="text-amber-700 font-bold font-mono tracking-wider uppercase">{cert.certificateCode}</span>
                         </div>
                       </div>
                     </div>
@@ -772,7 +779,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               })}
 
               {store.certificates.filter(c => c.studentId === currentUser.id).length === 0 && (
-                <div className="col-span-full text-center py-16 bg-black/15 border border-dashed border-white/5 rounded-2xl text-xs text-white/40">
+                <div className="col-span-full text-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
                   Bạn chưa sở hữu chứng nhận nào. Hãy hoàn thành tất cả giáo trình bài học và đạt điểm bài trắc nghiệm cuối khóa để kích hoạt chứng nhận.
                 </div>
               )}

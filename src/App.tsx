@@ -32,6 +32,7 @@ import { api, setCsrfToken } from "./api";
 import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
 import { ForcedPasswordChange, ForgotPasswordForm, SignUpForm } from "./components/public/AccountForms";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -415,19 +416,15 @@ function AppShell() {
 
   return (
     <div className={`min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative ${!currentUser ? "pb-12 overflow-hidden" : ""}`}>
-      {/* Dynamic Ambient Blur Spheres */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-purple-600/5 rounded-full blur-[140px] pointer-events-none" />
-
       {appNotice && (
         <div
           role="status"
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-lg px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold flex items-start justify-between gap-3 border ${
-            appNotice.type === "success" ? "bg-emerald-950 border-emerald-500/30 text-emerald-200" : "bg-red-950 border-red-500/30 text-red-200"
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-lg px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold flex items-start justify-between gap-3 border ${
+            appNotice.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
           }`}
         >
           <span>{appNotice.message}</span>
-          <button type="button" onClick={() => setAppNotice(null)} className="shrink-0 cursor-pointer" aria-label="Đóng thông báo">
+          <button type="button" onClick={() => setAppNotice(null)} className="shrink-0 text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Đóng thông báo">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -452,15 +449,15 @@ function AppShell() {
         <div className="min-h-screen flex flex-col md:flex-row relative">
 
           {/* DESKTOP SIDEBAR NAV BAR */}
-          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-4 flex-shrink-0 sticky top-0 h-screen z-40 backdrop-blur-xl transition-all duration-300 ${
+          <aside className={`hidden md:flex flex-col bg-white border-r border-slate-200/80 p-4 flex-shrink-0 sticky top-0 h-screen z-40 transition-all duration-300 ${
             isSidebarCollapsed ? "w-20 items-center px-2" : "w-64"
           }`}>
             {/* Top Logo and Toggle */}
-            <div className={`flex items-center justify-between pb-4 border-b border-white/5 w-full ${
+            <div className={`flex items-center justify-between pb-4 border-b border-slate-100 w-full ${
               isSidebarCollapsed ? "flex-col gap-3" : ""
             }`}>
               <div className="flex items-center space-x-3">
-                <div className="w-11 h-11 bg-white rounded-xl p-1 shrink-0 shadow-md flex items-center justify-center">
+                <div className="w-11 h-11 bg-white border border-slate-200/80 rounded-xl p-1 shrink-0 shadow-xs flex items-center justify-center">
                   <img
                     src="/mcna-logo.png"
                     alt="MCNA Technology School"
@@ -469,8 +466,8 @@ function AppShell() {
                 </div>
                 {!isSidebarCollapsed && (
                   <div>
-                    <h1 className="text-sm font-display font-black tracking-widest text-white uppercase leading-none">MCNA LMS</h1>
-                    <p className="text-[9px] text-white/40 uppercase tracking-tighter mt-1">Học viện MCNA v1.1</p>
+                    <h1 className="text-sm font-bold tracking-wider text-slate-900 uppercase leading-none">MCNA LMS</h1>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-tight mt-1 font-medium">Học viện MCNA v1.1</p>
                   </div>
                 )}
               </div>
@@ -478,7 +475,7 @@ function AppShell() {
               {/* Collapse/Expand Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="p-1 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition duration-150 cursor-pointer"
+                className="p-1 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition duration-150 cursor-pointer"
                 title={isSidebarCollapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
               >
                 {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -486,27 +483,27 @@ function AppShell() {
             </div>
 
             {/* USER PROFILE DROPDOWN MENU / POPOVER */}
-            <div className="relative w-full py-4 border-b border-white/5">
+            <div className="relative w-full py-4 border-b border-slate-100">
               {/* Dropdown Menu Popup */}
               {userDropdownOpen && (
-                <div className={`absolute top-full mt-3 z-50 bg-[#0f172a] border border-white/10 rounded-2xl p-2.5 shadow-2xl backdrop-blur-2xl w-60 animate-in fade-in slide-in-from-top-2 duration-150 ${
+                <div className={`absolute top-full mt-2 z-50 bg-white border border-slate-200 rounded-2xl p-2 shadow-2xl text-slate-800 w-60 animate-in fade-in slide-in-from-top-2 duration-150 ${
                   isSidebarCollapsed ? "left-0" : "left-0 right-0 w-full"
                 }`}>
                   {/* Scoped Profile Header Info */}
-                  <div className="px-3 py-2 border-b border-white/5 mb-1.5 text-xs text-left">
-                    <p className="font-mono text-[9px] text-indigo-300 font-extrabold uppercase tracking-wider mb-0.5">
+                  <div className="px-3 py-2 border-b border-slate-100 mb-1 text-xs text-left">
+                    <p className="font-mono text-[9px] text-indigo-600 font-extrabold uppercase tracking-wider mb-0.5">
                       {roleLabel(currentUser.role)}
                     </p>
-                    <h6 className="font-bold text-white truncate text-xs">{currentUser.name}</h6>
-                    <p className="text-[10px] text-white/40 truncate font-mono mt-0.5">{currentUser.email}</p>
+                    <h6 className="font-bold text-slate-900 truncate text-xs">{currentUser.name}</h6>
+                    <p className="text-[10px] text-slate-500 truncate font-mono mt-0.5">{currentUser.email}</p>
                   </div>
 
                   {/* Action Buttons */}
                   <button
                     onClick={() => { setShowProfileModal(true); setUserDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
                   >
-                    <Fingerprint className="h-4 w-4 text-indigo-400" />
+                    <Fingerprint className="h-4 w-4 text-indigo-600" />
                     <span>Xem lý lịch cá nhân</span>
                   </button>
 
@@ -520,17 +517,17 @@ function AppShell() {
                       setNewPassword("");
                       setConfirmPassword("");
                     }}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
                   >
-                    <Lock className="h-4 w-4 text-amber-400" />
+                    <Lock className="h-4 w-4 text-amber-500" />
                     <span>Đổi mật khẩu tài khoản</span>
                   </button>
 
-                  <div className="border-t border-white/5 my-1.5" />
+                  <div className="border-t border-slate-100 my-1" />
 
                   <button
                     onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 text-xs font-bold text-red-400 hover:text-white hover:bg-red-500/10 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Đăng xuất phiên</span>
@@ -541,21 +538,21 @@ function AppShell() {
               {/* Main Profile Trigger Button */}
               <button
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className={`w-full flex items-center gap-3 p-2 bg-white/3 hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-2xl transition duration-150 cursor-pointer ${
+                className={`w-full flex items-center gap-3 p-2 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-2xl transition duration-150 cursor-pointer ${
                   isSidebarCollapsed ? "justify-center p-1.5 h-11 w-11" : "text-left"
                 }`}
                 title={currentUser.name}
               >
                 {/* Avatar circle */}
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-xs text-white shadow-inner shrink-0 uppercase font-mono">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm shrink-0 uppercase font-mono">
                   {currentUser.name.slice(0, 2)}
                 </div>
 
                 {/* User Details */}
                 {!isSidebarCollapsed && (
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold text-white truncate leading-none">{currentUser.name}</p>
-                    <span className="text-[8px] font-mono font-bold tracking-wider text-white/30 truncate block mt-1 uppercase">
+                    <p className="text-xs font-bold text-slate-900 truncate leading-none">{currentUser.name}</p>
+                    <span className="text-[9px] font-mono font-medium tracking-wider text-indigo-600 truncate block mt-1 uppercase">
                       {roleLabel(currentUser.role)}
                     </span>
                   </div>
@@ -563,7 +560,7 @@ function AppShell() {
 
                 {/* Arrow indicator */}
                 {!isSidebarCollapsed && (
-                  <ChevronDown className={`h-4 w-4 text-white/30 transform transition-transform duration-200 ${
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transform transition-transform duration-200 ${
                     userDropdownOpen ? "rotate-180" : ""
                   }`} />
                 )}
@@ -576,29 +573,69 @@ function AppShell() {
 
           {/* MOBILE NAVIGATION SIDEBAR DRAWER */}
           {sidebarOpen && (
-            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex md:hidden animate-in fade-in duration-150">
-              <div className="w-64 bg-slate-900 border-r border-white/15 p-6 space-y-6 animate-in slide-in-from-left duration-200 shadow-2xl">
-                <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                  <div className="flex items-center space-x-2">
-                    <GraduationCap className="h-5 w-5 text-indigo-400" />
-                    <span className="text-sm font-bold text-white font-display">Lớp học E16 LMS</span>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex md:hidden animate-in fade-in duration-150">
+              <div className="w-72 bg-white border-r border-slate-200 p-6 space-y-6 animate-in slide-in-from-left duration-200 shadow-2xl flex flex-col justify-between text-slate-900 font-sans">
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="h-8 w-8 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+                        <GraduationCap className="h-4.5 w-4.5" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 tracking-tight">Học Viện MCNA</span>
+                    </div>
+                    <button 
+                      onClick={() => setSidebarOpen(false)} 
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="h-4.5 w-4.5" />
+                    </button>
                   </div>
-                  <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg text-white/60">
-                    <X className="h-5 w-5" />
-                  </button>
+
+                  <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center font-mono uppercase shrink-0">
+                        {currentUser.name.slice(0, 2)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-slate-900 font-semibold truncate leading-tight">{currentUser.name}</p>
+                        <p className="font-mono text-indigo-600 text-[10px] font-medium uppercase tracking-wider mt-0.5">
+                          {roleLabel(currentUser.role)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <button
+                      onClick={() => { setShowProfileModal(true); setSidebarOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Fingerprint className="h-4 w-4 text-indigo-600" />
+                      <span>Xem lý lịch cá nhân</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowChangePasswordModal(true);
+                        setSidebarOpen(false);
+                        setChangePasswordError(null);
+                        setChangePasswordSuccess(null);
+                        setCurrentPassword("");
+                        setNewPassword("");
+                        setConfirmPassword("");
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Lock className="h-4 w-4 text-amber-500" />
+                      <span>Đổi mật khẩu tài khoản</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="bg-white/5 p-4 rounded-xl text-xs space-y-1">
-                  <p className="font-mono text-indigo-300 uppercase font-bold text-[9px]">
-                    Vai trò: {roleLabel(currentUser.role)}
-                  </p>
-                  <p className="text-white font-bold truncate">{currentUser.name}</p>
-                </div>
-
-                <div className="space-y-4 pt-4 text-xs">
+                <div className="pt-4 border-t border-slate-100 text-xs">
                   <button
                     onClick={handleLogout}
-                    className="w-full text-left py-2.5 px-3 bg-red-500/15 text-red-400 font-bold rounded-xl flex items-center gap-1.5"
+                    className="w-full text-left py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-xl flex items-center gap-2 transition cursor-pointer"
                   >
                     <LogOut className="h-4 w-4" /> Đăng xuất phiên
                   </button>
@@ -610,24 +647,24 @@ function AppShell() {
           {/* MAIN PAGE CONTAINERS */}
           <main className="flex-1 min-w-0 flex flex-col relative z-20">
             {/* Topbar headers in viewport */}
-            <header className="p-4 md:p-6 border-b border-white/10 bg-white/5 backdrop-blur-md flex justify-between items-center z-10">
+            <header className="px-4 md:px-8 py-3.5 border-b border-slate-200/80 bg-white/80 backdrop-blur-md flex justify-between items-center z-10 sticky top-0">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="p-1.5 bg-white/5 border border-white/10 rounded-lg text-white md:hidden hover:bg-white/10 cursor-pointer"
+                  className="p-1.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 md:hidden hover:bg-slate-200 cursor-pointer"
                 >
                   <Menu className="h-5 w-5" />
                 </button>
 
-                <h3 className="font-display font-black text-white text-sm md:text-base leading-none uppercase tracking-widest hidden md:block">
+                <h3 className="font-display font-bold text-slate-900 text-sm md:text-base leading-none uppercase tracking-wider hidden md:block">
                   HỌC VIỆN CÔNG NGHỆ MCNA
                 </h3>
               </div>
 
               {/* Header right: Clean Status Badge */}
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/80 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Hệ thống trực tuyến
                 </span>
               </div>
@@ -670,30 +707,29 @@ function AppShell() {
 
         </div>
       ) : authView === "catalog" && !resetToken ? (
-        <PublicCourseCatalog
-          initialCourseId={initialCourseId}
-          onLogin={() => setAuthView("login")}
-          onRegister={intent => {
-            if (intent) {
-              saveEnrollIntent(intent);
-              setPendingIntent(intent);
-            }
-            setAuthView("register");
-          }}
-        />
+        <ErrorBoundary fallbackTitle="Không thể tải danh mục khóa học">
+          <PublicCourseCatalog
+            initialCourseId={initialCourseId}
+            onLogin={() => setAuthView("login")}
+            onRegister={intent => {
+              if (intent) {
+                saveEnrollIntent(intent);
+                setPendingIntent(intent);
+              }
+              setAuthView("register");
+            }}
+          />
+        </ErrorBoundary>
       ) : (
         /* AUTH SECTION VIEW (SPLIT SCREEN LOGIN / WELCOME CARD) */
         <div className="min-h-screen flex items-center justify-center p-4 relative z-20 animate-in fade-in zoom-in-95 duration-200">
 
-          <div className="bg-slate-900 border border-white/15 w-full max-w-5xl rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 shadow-2xl">
+          <div className="bg-white border border-slate-200/80 w-full max-w-5xl rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 shadow-xl">
 
             {/* LEFT LOGO COLUMN */}
-            <div className="lg:col-span-5 bg-[#2563eb]/20 p-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-white/10 relative overflow-hidden min-h-[300px] lg:min-h-0">
-              {/* Blur bubble */}
-              <div className="absolute top-[-20%] left-[-20%] w-72 h-72 bg-[#2563eb]/35 rounded-full filter blur-[100px]" />
-
+            <div className="lg:col-span-5 bg-gradient-to-br from-indigo-50/70 via-slate-50 to-white text-slate-900 p-8 md:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80 relative overflow-hidden min-h-[300px] lg:min-h-0">
               <div className="flex items-center space-x-3 relative z-10 pt-2">
-                <div className="h-12 w-12 bg-white rounded-2xl p-1.5 shadow-md flex items-center justify-center shrink-0">
+                <div className="h-12 w-12 bg-white rounded-2xl p-1.5 shadow-xs border border-slate-200 flex items-center justify-center shrink-0">
                   <img
                     src="/mcna-logo.png"
                     alt="MCNA Technology School"
@@ -701,36 +737,36 @@ function AppShell() {
                   />
                 </div>
                 <div>
-                  <span className="font-display font-black text-white tracking-wider uppercase text-sm block">MCNA LMS</span>
-                  <span className="text-[10px] text-indigo-200/80 font-semibold tracking-wider uppercase block">Học Viện Công Nghệ MCNA</span>
+                  <span className="font-display font-extrabold text-slate-900 tracking-wider uppercase text-sm block">MCNA LMS</span>
+                  <span className="text-[10px] text-indigo-600 font-semibold tracking-wider uppercase block">Học Viện Công Nghệ MCNA</span>
                 </div>
               </div>
 
               <div className="relative z-10 py-12 space-y-4">
-                <h2 className="text-2xl font-display font-extrabold text-white leading-tight">Hệ thống Quản lý Học tập Nâng cao</h2>
-                <p className="text-xs text-indigo-200/75 leading-relaxed font-sans max-w-sm">
+                <h2 className="text-2xl font-display font-extrabold text-slate-900 leading-tight">Hệ thống Quản lý Học tập Nâng cao</h2>
+                <p className="text-xs text-slate-600 leading-relaxed font-sans max-w-sm">
                   Trải nghiệm môi trường học tập chất lượng cao. Quản lý yêu cầu khóa học, xây dựng đề cương chi tiết, đánh giá kết quả và cấp chứng chỉ trực tuyến tức thì.
                 </p>
               </div>
 
-              <div className="relative z-10 text-[10px] font-mono text-white/40">
-                Khởi tạo ngày: 2026-05-25 • Nền tảng MCNA
+              <div className="relative z-10 text-[10px] font-mono text-slate-400">
+                Nền tảng MCNA • Bản phát hành 2026
               </div>
             </div>
 
             {/* RIGHT FORM COLUMN */}
-            <div className="lg:col-span-7 p-8 md:p-10 flex flex-col justify-center space-y-6">
+            <div className="lg:col-span-7 p-8 md:p-10 flex flex-col justify-center space-y-6 bg-white text-slate-900">
               {!resetToken && (
                 <button
                   type="button"
                   onClick={() => setAuthView("catalog")}
-                  className="self-start inline-flex items-center gap-1 text-xs font-bold text-white/60 hover:text-white cursor-pointer"
+                  className="self-start inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 cursor-pointer transition"
                 >
                   <ChevronLeft className="h-4 w-4" /> Xem danh sách khóa học
                 </button>
               )}
               <div className="space-y-1">
-                <h3 className="text-lg font-display font-bold text-white tracking-tight">
+                <h3 className="text-xl font-display font-bold text-slate-900 tracking-tight">
                   {resetToken
                     ? "Đặt lại mật khẩu"
                     : authView === "register"
@@ -739,7 +775,7 @@ function AppShell() {
                         ? "Quên mật khẩu"
                         : "Đăng nhập tài khoản của bạn"}
                 </h3>
-                <p className="text-xs text-white/55">
+                <p className="text-xs text-slate-500">
                   {resetToken
                     ? "Thiết lập mật khẩu mới bằng liên kết một lần được gửi qua email."
                     : authView === "register"
@@ -751,7 +787,7 @@ function AppShell() {
               </div>
 
               {!resetToken && pendingIntent && (
-                <div className="bg-indigo-500/10 border border-indigo-400/20 text-indigo-200 p-3 rounded-xl text-xs flex items-start justify-between gap-3">
+                <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 p-3 rounded-xl text-xs flex items-start justify-between gap-3">
                   <span>
                     Đăng nhập hoặc tạo tài khoản để hoàn tất đăng ký {pendingIntent.sectionCode ? `lớp ${pendingIntent.sectionCode} – ` : ""}{pendingIntent.courseTitle || "khóa học đã chọn"}.
                   </span>
@@ -761,7 +797,7 @@ function AppShell() {
                       clearEnrollIntent();
                       setPendingIntent(null);
                     }}
-                    className="shrink-0 font-bold cursor-pointer"
+                    className="shrink-0 font-bold cursor-pointer text-indigo-700 hover:text-indigo-900"
                   >
                     Bỏ chọn
                   </button>
@@ -769,7 +805,7 @@ function AppShell() {
               )}
 
               {!resetToken && authView === "login" && authError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs space-y-2">
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs space-y-2">
                   <div className="flex items-center gap-2">
                     <Lock className="h-4 w-4 stroke-[2.5] shrink-0" />
                     <span>{authError}</span>
@@ -778,7 +814,7 @@ function AppShell() {
                     <button
                       type="button"
                       onClick={handleForceLogoutOtherSession}
-                      className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-200 font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full py-2 bg-red-100 hover:bg-red-200 border border-red-200 text-red-800 font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       Đăng xuất tài khoản đang chạy
@@ -788,13 +824,13 @@ function AppShell() {
               )}
 
               {resetPasswordError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs">
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs">
                   {resetPasswordError}
                 </div>
               )}
 
               {resetPasswordMessage && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-xl text-xs">
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-xl text-xs">
                   {resetPasswordMessage}
                 </div>
               )}
@@ -802,7 +838,7 @@ function AppShell() {
               {resetToken ? (
                 <form onSubmit={handleCompletePasswordReset} className="space-y-4 text-xs font-sans">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white/70 block">Mật khẩu mới</label>
+                    <label className="text-xs font-semibold text-slate-700 block">Mật khẩu mới</label>
                     <input
                       name="newPassword"
                       type="password"
@@ -811,12 +847,12 @@ function AppShell() {
                       placeholder="Tối thiểu 8 ký tự"
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                      className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-white/70 block">Xác nhận mật khẩu mới</label>
+                    <label className="text-xs font-semibold text-slate-700 block">Xác nhận mật khẩu mới</label>
                     <input
                       name="confirmNewPassword"
                       type="password"
@@ -825,13 +861,13 @@ function AppShell() {
                       placeholder="Nhập lại mật khẩu mới"
                       value={resetConfirmPassword}
                       onChange={(e) => setResetConfirmPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                      className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-white text-indigo-950 hover:bg-white/95 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider uppercase font-display"
+                    className="w-full py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold rounded-xl transition cursor-pointer shadow-sm tracking-wider uppercase font-display"
                   >
                     Đặt lại mật khẩu
                   </button>
@@ -845,7 +881,7 @@ function AppShell() {
                       setResetPasswordError(null);
                       window.history.replaceState({}, document.title, window.location.pathname);
                     }}
-                    className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-bold rounded-xl transition cursor-pointer"
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition cursor-pointer"
                   >
                     Quay lại đăng nhập
                   </button>
@@ -866,20 +902,20 @@ function AppShell() {
                   {/* Login submit form */}
                   <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs font-sans">
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-white/70 block">Địa chỉ Email đăng nhập</label>
+                      <label className="text-xs font-semibold text-slate-700 block">Địa chỉ Email đăng nhập</label>
                       <input
                         name="email"
                         type="email"
                         required
-                        placeholder="Ví dụ: admin@e16.local"
+                        placeholder="Ví dụ: admin@mcna.local"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/25 h-10"
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-white/70 block">Mật khẩu tài khoản</label>
+                      <label className="text-xs font-semibold text-slate-700 block">Mật khẩu tài khoản</label>
                       <input
                         name="password"
                         type="password"
@@ -887,13 +923,13 @@ function AppShell() {
                         placeholder="Mật khẩu của bạn"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10"
                       />
                     </div>
 
                     <button
                       type="submit"
-                      className="w-full py-2.5 bg-white text-indigo-950 hover:bg-white/95 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider uppercase font-display"
+                      className="w-full py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold rounded-xl transition cursor-pointer shadow-sm tracking-wider uppercase font-display"
                     >
                       Xác nhận Đăng nhập
                     </button>
@@ -905,7 +941,7 @@ function AppShell() {
                           setAuthError(null);
                           setAuthView("forgot");
                         }}
-                        className="text-white/60 hover:text-white font-semibold cursor-pointer"
+                        className="text-slate-500 hover:text-slate-900 font-semibold cursor-pointer transition"
                       >
                         Quên mật khẩu?
                       </button>
@@ -915,7 +951,7 @@ function AppShell() {
                           setAuthError(null);
                           setAuthView("register");
                         }}
-                        className="text-indigo-300 hover:text-indigo-200 font-bold cursor-pointer"
+                        className="text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer transition"
                       >
                         Chưa có tài khoản? Tạo tài khoản
                       </button>
@@ -934,58 +970,58 @@ function AppShell() {
 
       {/* 1. VIEW PROFILE MODAL */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left text-slate-800">
             <button
               onClick={() => setShowProfileModal(false)}
-              className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition duration-150 cursor-pointer"
             >
               <X className="h-4.5 w-4.5" />
             </button>
 
-            <div className="flex items-center gap-3 pb-4 border-b border-white/5">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-400/20 flex items-center justify-center">
-                <Fingerprint className="h-5 w-5 text-indigo-400" />
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <Fingerprint className="h-5 w-5 text-indigo-600" />
               </div>
               <div>
-                <h4 className="font-display font-black text-white text-base leading-none uppercase tracking-widest">LÝ LỊCH CÁ NHÂN</h4>
-                <p className="text-[10px] text-white/40 uppercase tracking-tighter mt-1">Thông tin chi tiết tài khoản</p>
+                <h4 className="font-bold text-slate-900 text-base leading-none">Lý lịch cá nhân</h4>
+                <p className="text-xs text-slate-500 mt-1">Thông tin chi tiết tài khoản người dùng</p>
               </div>
             </div>
 
-            <div className="space-y-4 text-xs font-sans">
-              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
-                <span className="text-white/40">Họ và Tên</span>
-                <strong className="text-white text-sm">{currentUser.name}</strong>
+            <div className="space-y-3 text-xs font-sans">
+              <div className="py-2 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-slate-500">Họ và Tên</span>
+                <strong className="text-slate-900 text-sm font-semibold">{currentUser.name}</strong>
               </div>
-              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
-                <span className="text-white/40">Địa chỉ Email</span>
-                <strong className="text-white font-mono">{currentUser.email}</strong>
+              <div className="py-2 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-slate-500">Địa chỉ Email</span>
+                <strong className="text-slate-900 font-mono">{currentUser.email}</strong>
               </div>
-              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
-                <span className="text-white/40">Vai trò Hệ thống</span>
-                <strong className="text-indigo-300 font-bold uppercase">{roleLabel(currentUser.role)}</strong>
+              <div className="py-2 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-slate-500">Vai trò Hệ thống</span>
+                <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md font-semibold">{roleLabel(currentUser.role)}</strong>
               </div>
-              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
-                <span className="text-white/40">Số Điện thoại</span>
-                <strong className="text-white font-mono">{currentUser.phone || "Chưa cập nhật"}</strong>
+              <div className="py-2 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-slate-500">Số Điện thoại</span>
+                <strong className="text-slate-900 font-mono">{currentUser.phone || "Chưa cập nhật"}</strong>
               </div>
               {currentUser.linkedStudentId && (
-                <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
-                  <span className="text-white/40">ID Học viên Liên kết</span>
-                  <strong className="text-white font-mono">{currentUser.linkedStudentId}</strong>
+                <div className="py-2 border-b border-slate-100 flex justify-between items-center">
+                  <span className="text-slate-500">ID Học viên Liên kết</span>
+                  <strong className="text-slate-900 font-mono">{currentUser.linkedStudentId}</strong>
                 </div>
               )}
-              <div className="space-y-1 py-1.5 flex justify-between items-center">
-                <span className="text-white/40">Ngày kích hoạt</span>
-                <strong className="text-white font-mono">{currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : "Chưa xác định"}</strong>
+              <div className="py-2 flex justify-between items-center">
+                <span className="text-slate-500">Ngày kích hoạt</span>
+                <strong className="text-slate-900 font-mono">{currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : "Chưa xác định"}</strong>
               </div>
             </div>
 
             <div className="pt-2">
               <button
                 onClick={() => setShowProfileModal(false)}
-                className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl text-xs transition cursor-pointer border border-white/10"
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer"
               >
                 Đóng thông tin
               </button>
@@ -996,33 +1032,33 @@ function AppShell() {
 
       {/* 2. CHANGE PASSWORD MODAL */}
       {showChangePasswordModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left text-slate-800">
             <button
               onClick={() => setShowChangePasswordModal(false)}
-              className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition duration-150 cursor-pointer"
             >
               <X className="h-4.5 w-4.5" />
             </button>
 
-            <div className="flex items-center gap-3 pb-4 border-b border-white/5">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-400/20 flex items-center justify-center">
-                <Lock className="h-5 w-5 text-amber-400" />
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                <Lock className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <h4 className="font-display font-black text-white text-base leading-none uppercase tracking-widest">ĐỔI MẬT KHẨU</h4>
-                <p className="text-[10px] text-white/40 uppercase tracking-tighter mt-1">Cập nhật khóa bảo mật tài khoản</p>
+                <h4 className="font-bold text-slate-900 text-base leading-none">Đổi mật khẩu</h4>
+                <p className="text-xs text-slate-500 mt-1">Cập nhật khóa bảo mật tài khoản cá nhân</p>
               </div>
             </div>
 
             {changePasswordError && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs">
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs">
                 {changePasswordError}
               </div>
             )}
 
             {changePasswordSuccess && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-xl text-xs">
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-xl text-xs">
                 {changePasswordSuccess}
               </div>
             )}
@@ -1069,44 +1105,44 @@ function AppShell() {
               }
             }} className="space-y-4 text-xs font-sans">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-white/70 block">Mật khẩu hiện tại</label>
+                <label className="text-xs font-semibold text-slate-700 block">Mật khẩu hiện tại</label>
                 <input
                   type="password"
                   required
                   placeholder="Nhập mật khẩu hiện tại"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10 transition"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-white/70 block">Mật khẩu mới</label>
+                <label className="text-xs font-semibold text-slate-700 block">Mật khẩu mới</label>
                 <input
                   type="password"
                   required
                   placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10 transition"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-white/70 block">Xác nhận mật khẩu mới</label>
+                <label className="text-xs font-semibold text-slate-700 block">Xác nhận mật khẩu mới</label>
                 <input
                   type="password"
                   required
                   placeholder="Nhập lại mật khẩu mới"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10 transition"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider uppercase font-display"
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm tracking-wider uppercase font-display"
               >
                 Cập nhật Mật khẩu
               </button>

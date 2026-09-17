@@ -8,6 +8,42 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/utils.ts
+function generateId(prefix = "id") {
+  return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
+}
+function extractYoutubeVideoId(input) {
+  const value = String(input || "").trim();
+  if (YOUTUBE_VIDEO_ID.test(value)) return value;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase().replace(/^(www|m)\./, "");
+  let id = null;
+  if (host === "youtu.be") {
+    id = url.pathname.split("/")[1] || null;
+  } else if (host === "youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+    if (url.pathname === "/watch") {
+      id = url.searchParams.get("v");
+    } else {
+      const match = url.pathname.match(/^\/(?:embed|shorts|live|v)\/([^/?#]+)/);
+      id = match ? match[1] : null;
+    }
+  }
+  return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
+}
+var MAX_UPLOAD_FILE_BYTES, YOUTUBE_VIDEO_ID, youtubeWatchUrl;
+var init_utils = __esm({
+  "src/utils.ts"() {
+    MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024 * 1024;
+    YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+    youtubeWatchUrl = (videoId) => `https://www.youtube.com/watch?v=${videoId}`;
+  }
+});
+
 // src/authHash.ts
 function sha256(ascii) {
   function rightRotate(value, amount) {
@@ -155,269 +191,6 @@ function verifyPassword(password, passwordHash, salt) {
 }
 var init_authHash = __esm({
   "src/authHash.ts"() {
-  }
-});
-
-// src/server/mappers.ts
-function normalizeRole(role) {
-  if (role === "teacher" || role === "advisor") return "teacher";
-  if (role === "student" || role === "parent") return "student";
-  return "admin";
-}
-function denormalizeRole(role) {
-  return role;
-}
-function toPublicUser(row) {
-  return {
-    id: row.id,
-    email: row.email,
-    passwordHash: "",
-    name: row.name,
-    role: normalizeRole(row.role),
-    isActive: Boolean(row.is_active),
-    phone: row.phone || void 0,
-    linkedStudentId: row.linked_student_id || void 0,
-    createdAt: row.created_at,
-    schoolEmail: row.school_email || void 0,
-    emailProvisioned: Boolean(row.email_provisioned),
-    emailProvisionedAt: row.email_provisioned_at || void 0,
-    mustChangePassword: Boolean(row.must_change_password),
-    signupSource: row.signup_source || "admin",
-    crmContactId: row.crm_contact_id || void 0
-  };
-}
-function courseFromRow(row) {
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    teacherId: row.teacher_id,
-    status: row.status,
-    category: row.category,
-    thumbnail: row.thumbnail || void 0,
-    price: row.price === null || row.price === void 0 ? void 0 : Number(row.price),
-    originalPrice: row.original_price === null || row.original_price === void 0 ? void 0 : Number(row.original_price),
-    level: row.level || void 0,
-    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
-    rejectionReason: row.rejection_reason || void 0,
-    createdAt: row.created_at,
-    openingDate: row.opening_date || void 0,
-    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === void 0 ? void 0 : Number(row.number_of_lessons)
-  };
-}
-function publicCourseFromRow(row) {
-  const course = courseFromRow(row);
-  return {
-    id: course.id,
-    title: course.title,
-    description: course.description,
-    category: course.category,
-    thumbnail: course.thumbnail,
-    price: course.price || 0,
-    originalPrice: course.originalPrice,
-    level: course.level,
-    tags: course.tags || [],
-    openingDate: course.openingDate,
-    numberOfLessons: course.numberOfLessons,
-    teacherName: row.teacher_name || void 0,
-    openSectionCount: Number(row.open_section_count || 0)
-  };
-}
-function publicCourseSectionFromRow(row, sessionRows) {
-  const section = courseSectionFromRow(row);
-  const toDateText = (value) => value instanceof Date ? value.toISOString() : value ? String(value) : void 0;
-  return {
-    id: section.id,
-    sectionCode: section.sectionCode,
-    teacherName: row.teacher_name || void 0,
-    maxStudents: section.maxStudents,
-    seatsLeft: Math.max(0, section.maxStudents - Number(row.registered_count || 0)),
-    schedule: section.schedule,
-    openingDate: section.openingDate,
-    numberOfSessions: section.numberOfSessions,
-    sessions: sessionRows.map((session) => ({
-      id: session.id,
-      topic: session.topic,
-      date: toDateText(session.date || session.session_date)
-    })).sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-  };
-}
-function enrollmentFromRow(row) {
-  return {
-    id: row.id,
-    courseId: row.course_id,
-    studentId: row.student_id,
-    status: row.status,
-    enrolledAt: row.enrolled_at,
-    completedAt: row.completed_at || void 0,
-    requestedSectionId: row.requested_section_id || void 0,
-    crmDealId: row.crm_deal_id || void 0
-  };
-}
-function sessionMaterialFromRow(row) {
-  return {
-    id: row.id,
-    sessionId: row.session_id,
-    sectionId: row.section_id || void 0,
-    courseId: row.course_id,
-    type: row.type,
-    title: row.title,
-    url: row.url || void 0,
-    fileName: row.file_name || void 0,
-    mimeType: row.mime_type || void 0,
-    sizeBytes: row.size_bytes === null || row.size_bytes === void 0 ? void 0 : Number(row.size_bytes),
-    sortOrder: Number(row.sort_order || 0),
-    createdBy: row.created_by || void 0,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
-  };
-}
-function lessonProgressFromRow(row) {
-  return {
-    id: row.id,
-    enrollmentId: row.enrollment_id,
-    lessonId: row.lesson_id,
-    completed: Boolean(row.completed),
-    completedAt: row.completed_at || void 0
-  };
-}
-function quizFromRow(row) {
-  return {
-    id: row.id,
-    courseId: row.course_id,
-    lessonId: row.lesson_id || void 0,
-    sessionId: row.session_id || void 0,
-    title: row.title,
-    passingScore: Number(row.passing_score),
-    timeLimit: Number(row.time_limit),
-    maxAttempts: Number(row.max_attempts),
-    deadline: row.deadline || void 0,
-    attachmentUrl: row.attachment_url || void 0
-  };
-}
-function questionFromRow(row) {
-  return {
-    id: row.id,
-    quizId: row.quiz_id,
-    text: row.text,
-    type: row.type,
-    options: row.options_json ? JSON.parse(row.options_json) : [],
-    correctAnswer: row.correct_answer,
-    createdAt: row.created_at
-  };
-}
-function quizAttemptFromRow(row) {
-  return {
-    id: row.id,
-    quizId: row.quiz_id,
-    studentId: row.student_id,
-    answers: row.answers_json ? JSON.parse(row.answers_json) : {},
-    score: Number(row.score),
-    passed: Boolean(row.passed),
-    startedAt: row.started_at,
-    submittedAt: row.submitted_at
-  };
-}
-function assignmentFromRow(row) {
-  return {
-    id: row.id,
-    courseId: row.course_id,
-    sessionId: row.session_id || void 0,
-    title: row.title,
-    description: row.description,
-    deadline: row.deadline,
-    maxScore: Number(row.max_score),
-    attachmentUrl: row.attachment_url || void 0,
-    lessonId: row.lesson_id || void 0,
-    type: row.type || void 0
-  };
-}
-function submissionFromRow(row) {
-  return {
-    id: row.id,
-    assignmentId: row.assignment_id,
-    studentId: row.student_id,
-    content: row.content,
-    score: row.score !== null ? row.score : void 0,
-    feedback: row.feedback || void 0,
-    submittedAt: row.submitted_at,
-    gradedAt: row.graded_at || void 0,
-    attachmentUrl: row.attachment_url || void 0
-  };
-}
-function courseSectionFromRow(row) {
-  return {
-    id: row.id,
-    courseId: row.course_id,
-    teacherId: row.teacher_id,
-    sectionCode: row.section_code,
-    maxStudents: Number(row.max_students),
-    schedule: parseSchedule(row),
-    status: row.status,
-    openingDate: row.opening_date || void 0,
-    numberOfSessions: row.number_of_sessions === null || row.number_of_sessions === void 0 ? void 0 : Number(row.number_of_sessions),
-    meetingUrl: row.meeting_url || void 0,
-    groupChatUrl: row.group_chat_url || void 0
-  };
-}
-function parseSchedule(row) {
-  const parsedSchedule = parseScheduleValue(row?.schedule);
-  if (parsedSchedule.length > 0) return parsedSchedule;
-  const parsedScheduleJson = parseScheduleValue(row?.schedule_json);
-  if (parsedScheduleJson.length > 0) return parsedScheduleJson;
-  return [];
-}
-var parseScheduleValue;
-var init_mappers = __esm({
-  "src/server/mappers.ts"() {
-    parseScheduleValue = (value) => {
-      if (Array.isArray(value)) return value;
-      if (value === null || value === void 0) return [];
-      if (typeof value !== "string") return [];
-      const trimmed = value.trim();
-      if (!trimmed || trimmed === "[]") return [];
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    };
-  }
-});
-
-// src/utils.ts
-function generateId2(prefix = "id") {
-  return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
-}
-function extractYoutubeVideoId(input) {
-  const value = String(input || "").trim();
-  if (YOUTUBE_VIDEO_ID.test(value)) return value;
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-  const host = url.hostname.toLowerCase().replace(/^(www|m)\./, "");
-  let id = null;
-  if (host === "youtu.be") {
-    id = url.pathname.split("/")[1] || null;
-  } else if (host === "youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
-    if (url.pathname === "/watch") {
-      id = url.searchParams.get("v");
-    } else {
-      const match = url.pathname.match(/^\/(?:embed|shorts|live|v)\/([^/?#]+)/);
-      id = match ? match[1] : null;
-    }
-  }
-  return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
-}
-var MAX_UPLOAD_FILE_BYTES, YOUTUBE_VIDEO_ID, youtubeWatchUrl;
-var init_utils = __esm({
-  "src/utils.ts"() {
-    MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024 * 1024;
-    YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-    youtubeWatchUrl = (videoId) => `https://www.youtube.com/watch?v=${videoId}`;
   }
 });
 
@@ -972,7 +745,7 @@ var init_store = __esm({
       static log(userId, action, target, detail) {
         const store = this.get();
         const logItem = {
-          id: generateId2("log"),
+          id: generateId("log"),
           userId,
           action,
           target,
@@ -986,7 +759,7 @@ var init_store = __esm({
       static notify(userId, type, message) {
         const store = this.get();
         const notification = {
-          id: generateId2("note"),
+          id: generateId("note"),
           userId,
           type,
           message,
@@ -996,6 +769,233 @@ var init_store = __esm({
         if (!store.notifications) store.notifications = [];
         store.notifications.unshift(notification);
         this.save(store, true);
+      }
+    };
+  }
+});
+
+// src/server/mappers.ts
+function normalizeRole(role) {
+  if (role === "teacher" || role === "advisor") return "teacher";
+  if (role === "student" || role === "parent") return "student";
+  return "admin";
+}
+function denormalizeRole(role) {
+  return role;
+}
+function toPublicUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: "",
+    name: row.name,
+    role: normalizeRole(row.role),
+    isActive: Boolean(row.is_active),
+    phone: row.phone || void 0,
+    linkedStudentId: row.linked_student_id || void 0,
+    createdAt: row.created_at,
+    schoolEmail: row.school_email || void 0,
+    emailProvisioned: Boolean(row.email_provisioned),
+    emailProvisionedAt: row.email_provisioned_at || void 0,
+    mustChangePassword: Boolean(row.must_change_password),
+    signupSource: row.signup_source || "admin",
+    crmContactId: row.crm_contact_id || void 0
+  };
+}
+function courseFromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    teacherId: row.teacher_id,
+    status: row.status,
+    category: row.category,
+    thumbnail: row.thumbnail || void 0,
+    price: row.price === null || row.price === void 0 ? void 0 : Number(row.price),
+    originalPrice: row.original_price === null || row.original_price === void 0 ? void 0 : Number(row.original_price),
+    level: row.level || void 0,
+    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
+    rejectionReason: row.rejection_reason || void 0,
+    createdAt: row.created_at,
+    openingDate: row.opening_date || void 0,
+    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === void 0 ? void 0 : Number(row.number_of_lessons)
+  };
+}
+function publicCourseFromRow(row) {
+  const course = courseFromRow(row);
+  return {
+    id: course.id,
+    title: course.title,
+    description: course.description,
+    category: course.category,
+    thumbnail: course.thumbnail,
+    price: course.price || 0,
+    originalPrice: course.originalPrice,
+    level: course.level,
+    tags: course.tags || [],
+    openingDate: course.openingDate,
+    numberOfLessons: course.numberOfLessons,
+    teacherName: row.teacher_name || void 0,
+    openSectionCount: Number(row.open_section_count || 0)
+  };
+}
+function publicCourseSectionFromRow(row, sessionRows) {
+  const section = courseSectionFromRow(row);
+  const toDateText = (value) => value instanceof Date ? value.toISOString() : value ? String(value) : void 0;
+  return {
+    id: section.id,
+    sectionCode: section.sectionCode,
+    teacherName: row.teacher_name || void 0,
+    maxStudents: section.maxStudents,
+    seatsLeft: Math.max(0, section.maxStudents - Number(row.registered_count || 0)),
+    schedule: section.schedule,
+    openingDate: section.openingDate,
+    numberOfSessions: section.numberOfSessions,
+    sessions: sessionRows.map((session) => ({
+      id: session.id,
+      topic: session.topic,
+      date: toDateText(session.date || session.session_date)
+    })).sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+  };
+}
+function enrollmentFromRow(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    studentId: row.student_id,
+    status: row.status,
+    enrolledAt: row.enrolled_at,
+    completedAt: row.completed_at || void 0,
+    requestedSectionId: row.requested_section_id || void 0,
+    crmDealId: row.crm_deal_id || void 0
+  };
+}
+function sessionMaterialFromRow(row) {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    sectionId: row.section_id || void 0,
+    courseId: row.course_id,
+    type: row.type,
+    title: row.title,
+    url: row.url || void 0,
+    fileName: row.file_name || void 0,
+    mimeType: row.mime_type || void 0,
+    sizeBytes: row.size_bytes === null || row.size_bytes === void 0 ? void 0 : Number(row.size_bytes),
+    sortOrder: Number(row.sort_order || 0),
+    createdBy: row.created_by || void 0,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+function lessonProgressFromRow(row) {
+  return {
+    id: row.id,
+    enrollmentId: row.enrollment_id,
+    lessonId: row.lesson_id,
+    completed: Boolean(row.completed),
+    completedAt: row.completed_at || void 0
+  };
+}
+function quizFromRow(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    lessonId: row.lesson_id || void 0,
+    sessionId: row.session_id || void 0,
+    title: row.title,
+    passingScore: Number(row.passing_score),
+    timeLimit: Number(row.time_limit),
+    maxAttempts: Number(row.max_attempts),
+    deadline: row.deadline || void 0,
+    attachmentUrl: row.attachment_url || void 0
+  };
+}
+function questionFromRow(row) {
+  return {
+    id: row.id,
+    quizId: row.quiz_id,
+    text: row.text,
+    type: row.type,
+    options: row.options_json ? JSON.parse(row.options_json) : [],
+    correctAnswer: row.correct_answer,
+    createdAt: row.created_at
+  };
+}
+function quizAttemptFromRow(row) {
+  return {
+    id: row.id,
+    quizId: row.quiz_id,
+    studentId: row.student_id,
+    answers: row.answers_json ? JSON.parse(row.answers_json) : {},
+    score: Number(row.score),
+    passed: Boolean(row.passed),
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at
+  };
+}
+function assignmentFromRow(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    sessionId: row.session_id || void 0,
+    title: row.title,
+    description: row.description,
+    deadline: row.deadline,
+    maxScore: Number(row.max_score),
+    attachmentUrl: row.attachment_url || void 0,
+    lessonId: row.lesson_id || void 0,
+    type: row.type || void 0
+  };
+}
+function submissionFromRow(row) {
+  return {
+    id: row.id,
+    assignmentId: row.assignment_id,
+    studentId: row.student_id,
+    content: row.content,
+    score: row.score !== null ? row.score : void 0,
+    feedback: row.feedback || void 0,
+    submittedAt: row.submitted_at,
+    gradedAt: row.graded_at || void 0,
+    attachmentUrl: row.attachment_url || void 0
+  };
+}
+function courseSectionFromRow(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    teacherId: row.teacher_id,
+    sectionCode: row.section_code,
+    maxStudents: Number(row.max_students),
+    schedule: parseSchedule(row),
+    status: row.status,
+    openingDate: row.opening_date || void 0,
+    numberOfSessions: row.number_of_sessions === null || row.number_of_sessions === void 0 ? void 0 : Number(row.number_of_sessions),
+    meetingUrl: row.meeting_url || void 0,
+    groupChatUrl: row.group_chat_url || void 0
+  };
+}
+function parseSchedule(row) {
+  const parsedSchedule = parseScheduleValue(row?.schedule);
+  if (parsedSchedule.length > 0) return parsedSchedule;
+  const parsedScheduleJson = parseScheduleValue(row?.schedule_json);
+  if (parsedScheduleJson.length > 0) return parsedScheduleJson;
+  return [];
+}
+var parseScheduleValue;
+var init_mappers = __esm({
+  "src/server/mappers.ts"() {
+    parseScheduleValue = (value) => {
+      if (Array.isArray(value)) return value;
+      if (value === null || value === void 0) return [];
+      if (typeof value !== "string") return [];
+      const trimmed = value.trim();
+      if (!trimmed || trimmed === "[]") return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
       }
     };
   }
@@ -1284,6 +1284,7 @@ var init_storeSnapshot = __esm({
 });
 
 // server.ts
+init_store();
 init_authHash();
 import express from "express";
 import path5 from "path";
@@ -1424,7 +1425,7 @@ async function safeRedis(operation, fallback) {
 
 // src/server/ids.ts
 import crypto from "crypto";
-function generateId(prefix) {
+function generateId2(prefix) {
   return `${prefix}_${crypto.randomBytes(6).toString("hex")}`;
 }
 
@@ -2645,7 +2646,7 @@ async function ensureCourseLessonsForSchedule(db, courseId2, count, schedule = [
     const seed = buildLessonSeed(order, schedule, openingDate || void 0);
     await db.query(
       "INSERT INTO lessons (id, course_id, title, content, video_url, lesson_order, duration) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-      [generateId("lesson"), courseId2, seed.title, seed.content, null, order, seed.duration]
+      [generateId2("lesson"), courseId2, seed.title, seed.content, null, order, seed.duration]
     );
   }
 }
@@ -2708,7 +2709,7 @@ async function ensureSectionAttendanceSessionsForSchedule(db, section, schedule 
       continue;
     }
     const insertColumns = ["id", "course_id", "teacher_id", "topic"];
-    const values = [generateId("ats"), section.course_id, section.teacher_id, seed.topic];
+    const values = [generateId2("ats"), section.course_id, section.teacher_id, seed.topic];
     const placeholders = values.map((_, index) => `$${index + 1}`);
     if (hasDate) {
       insertColumns.push("date");
@@ -2750,7 +2751,7 @@ async function getCourseSectionColumnSet(db) {
   return new Set(rows.map((row) => row.column_name));
 }
 async function upsertCourseSection(db, section) {
-  const id = section.id || generateId("section");
+  const id = section.id || generateId2("section");
   const scheduleJson = JSON.stringify(section.schedule || []);
   const columns = await getCourseSectionColumnSet(db);
   const insertColumns = ["id", "course_id", "teacher_id", "section_code", "max_students", "status"];
@@ -3129,7 +3130,7 @@ async function seedCoreLearningData(db) {
          ($1, $2, $3, $4, 'youtube', 'B\xE0i gi\u1EA3ng gi\u1EDBi thi\u1EC7u m\xF4n h\u1ECDc (Video m\u1EABu)', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', NULL, NULL, NULL, NULL, 0, NOW()),
          ($5, $2, $3, $4, 'link', 'T\xE0i li\u1EC7u h\u01B0\u1EDBng d\u1EABn tr\u1EF1c tuy\u1EBFn (Link t\xE0i li\u1EC7u)', 'https://docs.mcna.edu.vn', NULL, NULL, NULL, NULL, 1, NOW())
          ON CONFLICT (id) DO NOTHING`,
-        [generateId("mat"), firstSession.id, firstSession.section_id, firstSession.course_id, generateId("mat")]
+        [generateId2("mat"), firstSession.id, firstSession.section_id, firstSession.course_id, generateId2("mat")]
       ).catch(() => void 0);
     }
   }
@@ -3209,7 +3210,7 @@ var coursesRepository = {
     return row ? courseFromRow(row) : null;
   },
   async create(db, input) {
-    const course = { ...input, id: generateId("course"), createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const course = { ...input, id: generateId2("course"), createdAt: (/* @__PURE__ */ new Date()).toISOString() };
     await db.query(
       "INSERT INTO courses (id,title,description,teacher_id,status,category,thumbnail,price,level,tags_json,rejection_reason,created_at,opening_date,number_of_lessons,original_price) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)",
       [
@@ -3268,7 +3269,7 @@ var coursesRepository = {
     return row ? courseFromRow(row) : null;
   },
   async addLesson(db, input) {
-    const lesson = { ...input, id: generateId("lesson") };
+    const lesson = { ...input, id: generateId2("lesson") };
     await db.query(
       "INSERT INTO lessons (id, course_id, title, content, video_url, lesson_order, duration) VALUES ($1,$2,$3,$4,$5,$6,$7)",
       [lesson.id, lesson.courseId, lesson.title, lesson.content, lesson.videoUrl || null, lesson.order, lesson.duration]
@@ -3314,7 +3315,7 @@ var enrollmentsRepository = {
   },
   async register(db, studentId, courseId2, isPaidCourse, extra = {}) {
     const enrollment = {
-      id: generateId("enroll"),
+      id: generateId2("enroll"),
       courseId: courseId2,
       studentId,
       status: isPaidCourse ? "pending_payment" : "pending",
@@ -3353,7 +3354,7 @@ var enrollmentsRepository = {
       const row = (await db.query("UPDATE lesson_progress SET completed = $1, completed_at = $2 WHERE id = $3 RETURNING *", [completed, completedAt, existing.id])).rows[0];
       return { row: lessonProgressFromRow(row) };
     }
-    const progress = { id: generateId("prog"), enrollmentId, lessonId: lessonId2, completed: true, completedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const progress = { id: generateId2("prog"), enrollmentId, lessonId: lessonId2, completed: true, completedAt: (/* @__PURE__ */ new Date()).toISOString() };
     await db.query("INSERT INTO lesson_progress (id,enrollment_id,lesson_id,completed,completed_at) VALUES ($1,$2,$3,$4,$5)", [progress.id, enrollmentId, lessonId2, true, progress.completedAt]);
     return { row: progress };
   },
@@ -3648,13 +3649,20 @@ import os from "os";
 // src/server/repositories/audit.ts
 var auditRepository = {
   async log(db, userId, action, target, detail) {
-    await db.query(
-      "INSERT INTO audit_logs (id, user_id, action, target, detail, created_at) VALUES ($1,$2,$3,$4,$5,$6)",
-      [generateId("audit"), userId, action, target, detail, (/* @__PURE__ */ new Date()).toISOString()]
-    );
+    try {
+      await db.query(
+        "INSERT INTO audit_logs (id, user_id, action, target, detail, created_at) VALUES ($1,$2,$3,$4,$5,$6)",
+        [generateId2("audit"), userId, action, target, detail, (/* @__PURE__ */ new Date()).toISOString()]
+      );
+    } catch {
+    }
   },
   async listRecent(db, limit = 100) {
-    return (await db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1", [limit])).rows;
+    try {
+      return (await db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1", [limit])).rows;
+    } catch {
+      return [];
+    }
   }
 };
 
@@ -4249,7 +4257,7 @@ var notificationsRepository = {
   },
   async create(db, input) {
     const notification = {
-      id: generateId("noti"),
+      id: generateId2("noti"),
       userId: input.userId,
       type: input.type || "info",
       message: input.message,
@@ -4352,7 +4360,7 @@ async function notifyRole(db, role, message, meta = {}) {
 // src/server/repositories/quizzes.ts
 var quizzesRepository = {
   async create(db, input) {
-    const quiz = { ...input, id: generateId("quiz") };
+    const quiz = { ...input, id: generateId2("quiz") };
     await db.query(
       "INSERT INTO quizzes (id, course_id, lesson_id, session_id, title, passing_score, time_limit, max_attempts, deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
       [quiz.id, quiz.courseId, quiz.lessonId || null, quiz.sessionId || null, quiz.title, quiz.passingScore, quiz.timeLimit, quiz.maxAttempts, quiz.deadline || null]
@@ -4360,7 +4368,7 @@ var quizzesRepository = {
     return quiz;
   },
   async addQuestion(db, input) {
-    const question = { ...input, id: generateId("question"), createdAt: input.createdAt || (/* @__PURE__ */ new Date()).toISOString() };
+    const question = { ...input, id: generateId2("question"), createdAt: input.createdAt || (/* @__PURE__ */ new Date()).toISOString() };
     await db.query(
       "INSERT INTO questions (id, quiz_id, text, type, options_json, correct_answer, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
       [question.id, question.quizId, question.text, question.type, JSON.stringify(question.options || []), question.correctAnswer, question.createdAt]
@@ -4433,7 +4441,7 @@ var quizzesRepository = {
     }
     const score = Math.round(correctCount / (questions.length || 1) * 100);
     const passed = score >= quiz.passingScore;
-    const attempt = { id: generateId("attempt"), quizId, studentId, answers, score, passed, startedAt: startedAt || (/* @__PURE__ */ new Date()).toISOString(), submittedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const attempt = { id: generateId2("attempt"), quizId, studentId, answers, score, passed, startedAt: startedAt || (/* @__PURE__ */ new Date()).toISOString(), submittedAt: (/* @__PURE__ */ new Date()).toISOString() };
     await db.query(
       "INSERT INTO quiz_attempts (id,quiz_id,student_id,answers_json,score,passed,started_at,submitted_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
       [attempt.id, quizId, studentId, JSON.stringify(answers), score, passed ? 1 : 0, attempt.startedAt, attempt.submittedAt]
@@ -4472,7 +4480,7 @@ var quizzesRepository = {
 // src/server/repositories/assignments.ts
 var assignmentsRepository = {
   async create(db, input) {
-    const assignment = { ...input, id: generateId("assign") };
+    const assignment = { ...input, id: generateId2("assign") };
     await db.query(
       "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
       [
@@ -4516,7 +4524,7 @@ var assignmentsRepository = {
       )).rows[0];
       return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
     } else {
-      const submission = { id: generateId("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
+      const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
       await db.query(
         "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
         [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
@@ -4631,7 +4639,7 @@ var EventBus = class {
   }
   async emit(event, payload, pool2) {
     try {
-      const eventId = generateId("evt");
+      const eventId = generateId2("evt");
       const triggeredAt = (/* @__PURE__ */ new Date()).toISOString();
       const payloadJson = JSON.stringify(payload || {});
       await pool2.query(
@@ -4746,7 +4754,7 @@ var courseRegistrationsRepository = {
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
          VALUES ($1,$2,$3,$4,$5,$6,false)
          RETURNING *`,
-        [generateId("reg"), studentId, sectionId, status, (/* @__PURE__ */ new Date()).toISOString(), credits]
+        [generateId2("reg"), studentId, sectionId, status, (/* @__PURE__ */ new Date()).toISOString(), credits]
       )).rows[0];
       await client2.query("COMMIT");
       await notifyUsers(db, [section.teacher_id], { type: "info", message: `H\u1ECDc vi\xEAn \u0111\xE3 \u0111\u0103ng k\xFD v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n ${section.section_code}.`, relatedEntityType: "course_registration", relatedEntityId: row.id });
@@ -4912,7 +4920,7 @@ var attendanceRepository = {
 var forumRepository = {
   async createPost(db, input) {
     const post = {
-      id: generateId("post"),
+      id: generateId2("post"),
       courseId: input.courseId,
       sectionId: input.sectionId,
       authorId: input.authorId,
@@ -4930,7 +4938,7 @@ var forumRepository = {
   },
   async createReply(db, input) {
     const reply = {
-      id: generateId("reply"),
+      id: generateId2("reply"),
       postId: input.postId,
       authorId: input.authorId,
       content: input.content,
@@ -4949,7 +4957,7 @@ var forumRepository = {
 init_mappers();
 var sessionMaterialsRepository = {
   newId() {
-    return generateId("mat");
+    return generateId2("mat");
   },
   async listBySession(db, sessionId) {
     return (await db.query(
@@ -4969,7 +4977,7 @@ var sessionMaterialsRepository = {
                $12)
        RETURNING *`,
       [
-        input.id || generateId("mat"),
+        input.id || generateId2("mat"),
         input.sessionId,
         input.sectionId || null,
         input.courseId,
@@ -5102,7 +5110,7 @@ var MAX_ATTEMPTS = 10;
 var BATCH_SIZE = 20;
 var DELIVERY_TIMEOUT_MS = 1e4;
 async function enqueueCrmEvent(db, type, data, origin = "lms") {
-  const id = generateId("crmevt");
+  const id = generateId2("crmevt");
   const payload = { id, type, origin, occurredAt: (/* @__PURE__ */ new Date()).toISOString(), data };
   await db.query(
     "INSERT INTO crm_outbox (id, event_type, payload, created_at) VALUES ($1, $2, $3, clock_timestamp())",
@@ -5356,7 +5364,7 @@ async function requestEnrollment(input) {
     });
     let transactionId;
     if (isPaid) {
-      transactionId = generateId("tx");
+      transactionId = generateId2("tx");
       await client2.query(
         `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at)
          VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
@@ -5372,7 +5380,7 @@ async function requestEnrollment(input) {
     }
     let registrationId;
     if (section && !isPaid) {
-      registrationId = generateId("reg");
+      registrationId = generateId2("reg");
       await client2.query(
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
          VALUES ($1, $2, $3, 'waitlisted', $4, $5, false)`,
@@ -5447,7 +5455,7 @@ async function placeEnrollment(client2, enrollmentId, sectionId, origin) {
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
          VALUES ($1, $2, $3, 'registered', $4, $5, false)
          RETURNING *`,
-        [generateId("reg"), enrollment.student_id, sectionId, (/* @__PURE__ */ new Date()).toISOString(), DEFAULT_REGISTRATION_CREDITS2]
+        [generateId2("reg"), enrollment.student_id, sectionId, (/* @__PURE__ */ new Date()).toISOString(), DEFAULT_REGISTRATION_CREDITS2]
       )).rows[0];
     } else {
       registration = (await client2.query(
@@ -5488,7 +5496,7 @@ async function confirmCoursePayment(client2, enrollmentId, input, origin) {
     if ("error" in reviewed) return { error: reviewed.error, status: reviewed.status };
     transactionId = existing.id;
   } else {
-    transactionId = generateId("tx");
+    transactionId = generateId2("tx");
     const paidAt = input.paidAt || (/* @__PURE__ */ new Date()).toISOString();
     await client2.query(
       `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, processed_at, notes)
@@ -6006,7 +6014,7 @@ function asyncHandler(handler2) {
 async function createUserAccount(db, input, password) {
   const credential3 = hashPassword(password);
   const user = {
-    id: generateId("user"),
+    id: generateId2("user"),
     email: input.email.toLowerCase().trim(),
     passwordHash: credential3.hash,
     passwordSalt: credential3.salt,
@@ -6094,7 +6102,7 @@ async function issuePasswordResetToken(userId, createdBy) {
     await client2.query(
       `INSERT INTO password_reset_tokens (id, user_id, token_hash, created_by, expires_at)
        VALUES ($1, $2, $3, $4, $5)`,
-      [generateId("pwd_reset"), userId, sha256Hex2(resetToken), createdBy, expiresAt]
+      [generateId2("pwd_reset"), userId, sha256Hex2(resetToken), createdBy, expiresAt]
     );
     await client2.query("COMMIT");
   } catch (error) {
@@ -6480,7 +6488,7 @@ async function maybePostGradeEntry(db, studentId, sourceType, sourceId, score, m
         [score, maxScore, existing.rows[0].id]
       );
     } else {
-      const gradeId = generateId("grd");
+      const gradeId = generateId2("grd");
       const createdAt = (/* @__PURE__ */ new Date()).toISOString();
       await db.query(
         `INSERT INTO grades (id, student_id, course_id, source_type, source_id, score, max_score, created_at)
@@ -6835,10 +6843,27 @@ function dashboardFromStore(store, user) {
   }
   return scoped;
 }
+var isDevMockDb = false;
+var devMockStore = null;
 async function initializeDatabase() {
   registerEventHandlers();
   if (process.env.VERCEL) {
     return;
+  }
+  try {
+    const client2 = await pool.connect();
+    client2.release();
+  } catch (err) {
+    if (isLocalDb && process.env.NODE_ENV !== "production") {
+      console.warn("\n=======================================================");
+      console.warn("\u26A0\uFE0F  [DEV NOTICE] Khong the ket noi PostgreSQL cuc bo (127.0.0.1:5432).");
+      console.warn("\u{1F680} Kich hoat Dev In-Memory Mock Store de xem va trai nghiem day du giao dien ngay!");
+      console.warn("=======================================================\n");
+      isDevMockDb = true;
+      devMockStore = getInitialStore();
+      return;
+    }
+    throw err;
   }
   await runMigrations(pool);
   await usersRepository.normalizeLegacyRoles(pool);
@@ -6861,11 +6886,36 @@ app.post("/api/auth/force-logout", asyncHandler(async (req, res) => {
 }));
 app.use("/api", requireCsrf);
 app.get("/health", asyncHandler(async (_req, res) => {
+  if (isDevMockDb) {
+    return res.json({ ok: true, database: "mock_in_memory", uptime: process.uptime() });
+  }
   await pool.query("SELECT 1");
   res.json({ ok: true, database: "ok", uptime: process.uptime() });
 }));
 app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const cleanEmail = email.toLowerCase().trim();
+    const userItem = store.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!userItem || !verifyPassword(password, userItem.passwordHash, userItem.passwordSalt || void 0)) {
+      return res.status(401).json({ error: "Incorrect email or password." });
+    }
+    if (!userItem.isActive) return res.status(403).json({ error: "Account inactive." });
+    const user2 = {
+      id: userItem.id,
+      email: userItem.email,
+      passwordHash: "",
+      name: userItem.name,
+      role: userItem.role,
+      isActive: userItem.isActive,
+      createdAt: userItem.createdAt
+    };
+    setAuthCookie(res, signToken(user2));
+    const csrfToken2 = crypto4.randomBytes(24).toString("base64url");
+    setCsrfCookie(res, csrfToken2);
+    return res.json({ user: user2, csrfToken: csrfToken2 });
+  }
   const row = await usersRepository.findAuthByEmail(pool, email);
   if (!row || !verifyPassword(password, row.password_hash, row.password_salt || void 0)) return res.status(401).json({ error: "Incorrect email or password." });
   if (!row.is_active) return res.status(403).json({ error: "Account inactive." });
@@ -7002,6 +7052,11 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
 }));
 app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
   try {
+    if (isDevMockDb) {
+      const store = devMockStore || getInitialStore();
+      const limited2 = limitStoreForRole(store, req.user);
+      return res.json(limited2);
+    }
     const snapshot = await storeSnapshotFromDb(pool);
     const limited = limitStoreForRole(snapshot, req.user);
     res.json(limited);
@@ -7011,11 +7066,21 @@ app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
   }
 }));
 app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store2 = devMockStore || getInitialStore();
+    return res.json({ ...dashboardFromStore(store2, req.user), auditLogs: [] });
+  }
   const store = await storeSnapshotFromDb(pool);
   res.json({ ...dashboardFromStore(store, req.user), auditLogs: await auditRepository.listRecent(pool, 100) });
 }));
-app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user))));
-app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user))));
+app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => {
+  const store = isDevMockDb ? devMockStore || getInitialStore() : await storeSnapshotFromDb(pool);
+  res.json(dashboardFromStore(store, req.user));
+}));
+app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  const store = isDevMockDb ? devMockStore || getInitialStore() : await storeSnapshotFromDb(pool);
+  res.json(dashboardFromStore(store, req.user));
+}));
 var PUBLIC_COURSE_SELECT = `
   SELECT c.*, u.name AS teacher_name,
          (SELECT COUNT(*) FROM course_sections cs WHERE cs.course_id = c.id AND cs.status = 'open')::int AS open_section_count
@@ -7034,11 +7099,85 @@ async function listOpenSectionRows(courseIds) {
   )).rows;
 }
 app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json(store.courses.filter((c) => c.status === "published").map((c) => {
+      const teacher = (store.users || []).find((u) => u.id === c.teacherId);
+      const openSections = (store.courseSections || []).filter((s) => s.courseId === c.id && s.status !== "cancelled");
+      const lessonCount = (store.lessons || []).filter((l) => l.courseId === c.id).length;
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        price: c.price,
+        level: c.level,
+        thumbnail: c.thumbnail,
+        tags: c.tags,
+        teacherName: teacher?.name,
+        numberOfLessons: lessonCount,
+        openSectionCount: openSections.length
+      };
+    }));
+  }
   const rows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
   res.setHeader("Cache-Control", "public, max-age=30");
   res.json(rows.map(publicCourseFromRow));
 }));
 app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const course = store.courses.find((c) => c.id === req.params.id);
+    if (!course) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc." });
+    const teacher = (store.users || []).find((u) => u.id === course.teacherId);
+    const courseSections = (store.courseSections || []).filter((s) => s.courseId === course.id && s.status !== "cancelled");
+    const lessonRows2 = (store.lessons || []).filter((l) => l.courseId === course.id);
+    const toDateText = (value) => value instanceof Date ? value.toISOString() : value ? String(value) : void 0;
+    return res.json({
+      course: {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        category: course.category,
+        price: course.price,
+        level: course.level,
+        thumbnail: course.thumbnail,
+        tags: course.tags,
+        teacherName: teacher?.name,
+        numberOfLessons: lessonRows2.length,
+        openSectionCount: courseSections.length
+      },
+      sections: courseSections.map((s) => {
+        const regCount = (store.courseRegistrations || []).filter((r) => r.sectionId === s.id && r.status === "registered").length;
+        const maxStudents = typeof s.maxStudents === "number" ? s.maxStudents : 30;
+        const sectionSessions = (store.attendanceSessions || []).filter(
+          (sess) => sess.sectionId && sess.sectionId === s.id || !sess.sectionId && sess.courseId === course.id
+        );
+        const secTeacher = s.teacherName || (s.teacherId ? (store.users || []).find((u) => u.id === s.teacherId)?.name : teacher?.name);
+        return {
+          id: s.id,
+          sectionCode: s.sectionCode,
+          teacherName: secTeacher,
+          maxStudents,
+          seatsLeft: Math.max(0, maxStudents - regCount),
+          schedule: s.schedule || [],
+          openingDate: s.openingDate,
+          numberOfSessions: s.numberOfSessions || sectionSessions.length,
+          sessions: sectionSessions.map((sess) => ({
+            id: sess.id,
+            topic: sess.topic || sess.title || "Bu\u1ED5i h\u1ECDc",
+            date: toDateText(sess.date)
+          }))
+        };
+      }),
+      lessons: lessonRows2.map((l, idx) => ({
+        id: l.id,
+        title: l.title,
+        duration: l.duration || "45m",
+        order: l.lesson_order ?? l.order ?? idx + 1
+      }))
+    });
+  }
   const courseRow = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [req.params.id])).rows[0];
   if (!courseRow) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc." });
   const sectionRows = await listOpenSectionRows([courseRow.id]);
@@ -7587,7 +7726,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
             errors.push({ index, error: "Payment must be confirmed before class placement." });
             continue;
           }
-          enrollmentId = generateId("enroll");
+          enrollmentId = generateId2("enroll");
           await client2.query(
             "INSERT INTO enrollments (id, course_id, student_id, status, enrolled_at) VALUES ($1, $2, $3, 'active', $4)",
             [enrollmentId, section.course_id, studentId, (/* @__PURE__ */ new Date()).toISOString()]
@@ -7632,7 +7771,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         await client2.query(
           `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
            VALUES ($1, $2, $3, 'registered', $4, $5, false)`,
-          [generateId("reg"), studentId, sectionId, (/* @__PURE__ */ new Date()).toISOString(), 3]
+          [generateId2("reg"), studentId, sectionId, (/* @__PURE__ */ new Date()).toISOString(), 3]
         );
       } else {
         await client2.query(
@@ -7698,7 +7837,7 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       `INSERT INTO certificates (id, enrollment_id, student_id, course_id, issued_at, certificate_code)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [generateId("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode]
+      [generateId2("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode]
     )).rows[0];
     await client2.query(
       "UPDATE enrollments SET status = 'completed', completed_at = $1 WHERE id = $2",
@@ -8560,6 +8699,19 @@ async function validateAttendanceSectionAccess(courseId2, sectionId, user) {
   return { section };
 }
 async function findSessionWithOwners(sessionId) {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const s = (store.attendanceSessions || []).find((sess) => sess.id === sessionId);
+    if (!s) return null;
+    const sec = (store.courseSections || []).find((sec2) => sec2.id === s.sectionId);
+    return {
+      id: s.id,
+      course_id: s.courseId,
+      section_id: s.sectionId || null,
+      course_teacher_id: "user_teacher",
+      section_teacher_id: sec?.teacherId || "user_teacher"
+    };
+  }
   return (await pool.query(
     `SELECT s.id, s.course_id, s.section_id, c.teacher_id AS course_teacher_id, cs.teacher_id AS section_teacher_id
      FROM attendance_sessions s
@@ -8612,12 +8764,37 @@ async function generatedSessionsWithMaterialsBeyond(db, sectionId, targetCount) 
   return rows.map((row) => generatedSessionOrder(row.topic)).filter((order) => order !== null && order > targetCount).sort((a, b) => a - b).map((order) => `Bu\u1ED5i ${order}`);
 }
 app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const mats = (store.sessionMaterials || []).filter((m) => m.sessionId === req.params.sessionId);
+    return res.json(mats);
+  }
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
   if (!await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
   res.json(await sessionMaterialsRepository.listBySession(pool, session.id));
 }));
 app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin", "super_admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (!store.sessionMaterials) store.sessionMaterials = [];
+    const type2 = req.body.type;
+    const fileName = req.file ? Buffer.from(req.file.originalname, "latin1").toString("utf8") : void 0;
+    const ext = fileName ? path5.extname(fileName).toLowerCase() : "";
+    const newMat = {
+      id: "mat_" + Date.now(),
+      sessionId: req.params.sessionId,
+      type: type2,
+      title: req.body.title || (fileName ? path5.basename(fileName, path5.extname(fileName)) : type2 === "youtube" ? "Video b\xE0i gi\u1EA3ng" : "T\xE0i li\u1EC7u"),
+      url: req.file ? `/uploads/${req.file.filename}` : type2 === "youtube" || type2 === "link" ? resolveMaterialUrl(type2, req.body.url) : req.body.url || "",
+      fileName,
+      sizeBytes: req.file ? req.file.size : void 0,
+      mimeType: ext ? MATERIAL_MIME_BY_EXT[ext] || "application/octet-stream" : void 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    store.sessionMaterials.push(newMat);
+    return res.status(201).json(newMat);
+  }
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
   if (!canManageSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied for this class session." });
@@ -8670,6 +8847,20 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
   res.status(201).json(material);
 }));
 app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const ids = req.body.materialIds || [];
+    if (store.sessionMaterials) {
+      store.sessionMaterials.sort((a, b) => {
+        const ai = ids.indexOf(a.id);
+        const bi = ids.indexOf(b.id);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    }
+    return res.json((store.sessionMaterials || []).filter((m) => m.sessionId === req.params.sessionId));
+  }
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
   if (!canManageSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied for this class session." });
@@ -8678,6 +8869,14 @@ app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["t
   res.json(materials);
 }));
 app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const mat = (store.sessionMaterials || []).find((m) => m.id === req.params.id);
+    if (!mat) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\xE0i li\u1EC7u." });
+    if (req.body.title) mat.title = req.body.title;
+    if (req.body.url) mat.url = req.body.url;
+    return res.json(mat);
+  }
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\xE0i li\u1EC7u." });
   const session = await findSessionWithOwners(row.session_id);
@@ -8694,6 +8893,13 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "s
   res.json(material);
 }));
 app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (store.sessionMaterials) {
+      store.sessionMaterials = store.sessionMaterials.filter((m) => m.id !== req.params.id);
+    }
+    return res.status(204).send();
+  }
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\xE0i li\u1EC7u." });
   const session = await findSessionWithOwners(row.session_id);
@@ -8736,7 +8942,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
   const sectionValidation = await validateAttendanceSectionAccess(req.body.courseId, req.body.sectionId, req.user);
   if (sectionValidation.error) return res.status(sectionValidation.status).json({ error: sectionValidation.error });
   const session = {
-    id: generateId("ats"),
+    id: generateId2("ats"),
     courseId: req.body.courseId,
     sectionId: req.body.sectionId,
     teacherId: req.user.role === "teacher" ? req.user.id : course.teacherId,
@@ -8744,7 +8950,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     topic: req.body.topic
   };
   const records = (req.body.records || []).map((record) => ({
-    id: generateId("atr"),
+    id: generateId2("atr"),
     sessionId: session.id,
     studentId: record.studentId,
     status: record.status,
@@ -8780,7 +8986,7 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
     [req.body.sessionId, req.body.studentId]
   )).rows[0];
   const record = {
-    id: existing?.id || generateId("atr"),
+    id: existing?.id || generateId2("atr"),
     sessionId: req.body.sessionId,
     studentId: req.body.studentId,
     status: req.body.status,
@@ -8803,7 +9009,7 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
   const code = crypto4.randomBytes(3).toString("hex").toUpperCase();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1e3).toISOString();
   const session = {
-    id: generateId("ats"),
+    id: generateId2("ats"),
     courseId: courseId2,
     sectionId,
     teacherId: req.user.role === "teacher" ? req.user.id : course.teacherId,
@@ -8948,7 +9154,7 @@ app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), 
     [sessionId, req.user.id]
   )).rows[0];
   const record = {
-    id: existing?.id || generateId("atr"),
+    id: existing?.id || generateId2("atr"),
     sessionId,
     studentId: req.user.id,
     status: "present",
@@ -9001,7 +9207,7 @@ app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]
     return res.status(400).json({ error: "Gi\u1EA3ng vi\xEAn \u0111\xE3 \u0111i\u1EC3m danh cho ca h\u1ECDc n\xE0y r\u1ED3i!" });
   }
   const record = {
-    id: generateId("tat"),
+    id: generateId2("tat"),
     teacherId,
     courseId: courseId2,
     sectionId,
@@ -9055,6 +9261,10 @@ app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin", "sup
   res.json({ ok: true });
 }));
 app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "manager"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    devMockStore = { ...devMockStore || getInitialStore(), ...req.body || {} };
+    return res.json({ ok: true, mode: "dev-mock-synchronized" });
+  }
   await syncClientStoreToDb(req.body || {});
   invalidateStoreCache();
   await audit(req, "store_sync", "store", "Client store changes synchronized into Postgres.");

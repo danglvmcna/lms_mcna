@@ -106,13 +106,13 @@ export default function ForumDiscussion({
       case "super_admin":
       case "admin":
       case "manager":
-        return "bg-red-500/20 text-red-300 border border-red-500/30";
+        return "bg-rose-50 text-rose-700 border border-rose-200";
       case "teacher":
-        return "bg-amber-500/20 text-amber-300 border border-amber-500/30";
+        return "bg-amber-50 text-amber-700 border border-amber-200";
       case "student":
-        return "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
+        return "bg-indigo-50 text-indigo-700 border border-indigo-200";
       default:
-        return "bg-gray-500/20 text-gray-300 border border-gray-500/30";
+        return "bg-slate-100 text-slate-600 border border-slate-200";
     }
   };
 
@@ -137,10 +137,10 @@ export default function ForumDiscussion({
 
   if (!sectionId) {
     return (
-      <div className="w-full bg-white/5 border border-white/10 rounded-3xl p-8 text-center text-white/50 space-y-3 flex flex-col items-center justify-center min-h-[250px]">
-        <MessageSquare className="w-10 h-10 text-indigo-400/60 mx-auto animate-bounce" />
-        <h5 className="font-bold text-white text-sm">Bạn chưa được xếp lớp học phần cụ thể</h5>
-        <p className="text-xs text-white/60 max-w-md mx-auto leading-relaxed">
+      <div className="w-full bg-white border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-500 space-y-3 flex flex-col items-center justify-center min-h-[250px]">
+        <MessageSquare className="w-10 h-10 text-indigo-600 mx-auto animate-bounce" />
+        <h5 className="font-bold text-slate-900 text-sm">Bạn chưa được xếp lớp học phần cụ thể</h5>
+        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
           Diễn đàn thảo luận được tổ chức riêng biệt cho từng lớp học. Bạn cần được Giáo vụ xếp vào lớp học phần cụ thể của môn học này để tham gia thảo luận.
         </p>
       </div>
@@ -148,34 +148,34 @@ export default function ForumDiscussion({
   }
 
   return (
-    <div className="w-full bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-2xl text-white">
+    <div className="w-full bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs text-slate-900">
       {selectedPost ? (
         // Detailed Post view
         <div className="space-y-6">
           <button
             onClick={() => setSelectedPostId(null)}
-            className="flex items-center gap-2 text-white/60 hover:text-white transition duration-200 focus:outline-none"
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 text-xs font-semibold transition duration-150 focus:outline-none cursor-pointer"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
             <span>Quay lại danh sách</span>
           </button>
 
           {/* Original Post */}
-          <div className="bg-white/5 border border-white/10 rounded-xl p-5 space-y-4">
+          <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-5 space-y-4">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white tracking-wide">{selectedPost.title}</h2>
-                <div className="flex items-center gap-3 mt-2 text-sm text-white/50">
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">{selectedPost.title}</h2>
+                <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <User className="w-4 h-4" />
-                    <span className="font-semibold text-white/80">
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="font-semibold text-slate-800">
                       {getAuthorDetails(selectedPost.authorId).name}
                     </span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${getRoleBadgeColor(getAuthorDetails(selectedPost.authorId).role)}`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getRoleBadgeColor(getAuthorDetails(selectedPost.authorId).role)}`}>
                       {getRoleLabel(getAuthorDetails(selectedPost.authorId).role)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 text-slate-400">
                     <Clock className="w-3.5 h-3.5" />
                     <span>{new Date(selectedPost.createdAt).toLocaleString("vi-VN")}</span>
                   </div>
@@ -183,15 +183,15 @@ export default function ForumDiscussion({
               </div>
             </div>
 
-            <p className="text-white/80 whitespace-pre-wrap leading-relaxed text-base">
+            <p className="text-slate-700 whitespace-pre-wrap leading-relaxed text-sm">
               {selectedPost.content}
             </p>
           </div>
 
           {/* Replies Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-white/80">
-              <MessageSquare className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-sm font-bold flex items-center gap-2 text-slate-800">
+              <MessageSquare className="w-4 h-4 text-indigo-600" />
               <span>Thảo luận ({selectedPost.replies?.length || 0})</span>
             </h3>
 
@@ -200,26 +200,26 @@ export default function ForumDiscussion({
                 selectedPost.replies.map((reply: any) => {
                   const replyAuthor = getAuthorDetails(reply.authorId);
                   return (
-                    <div key={reply.id} className="bg-white/5 border border-white/5 rounded-xl p-4 space-y-2">
-                      <div className="flex items-center justify-between text-sm flex-wrap gap-2">
+                    <div key={reply.id} className="bg-white border border-slate-200/80 rounded-xl p-4 space-y-2 shadow-xs">
+                      <div className="flex items-center justify-between text-xs flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-white/95">{replyAuthor.name}</span>
-                          <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${getRoleBadgeColor(replyAuthor.role)}`}>
+                          <span className="font-semibold text-slate-900">{replyAuthor.name}</span>
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-medium ${getRoleBadgeColor(replyAuthor.role)}`}>
                             {getRoleLabel(replyAuthor.role)}
                           </span>
                         </div>
-                        <span className="text-white/40 text-xs">
+                        <span className="text-slate-400 text-[11px]">
                           {new Date(reply.createdAt).toLocaleString("vi-VN")}
                         </span>
                       </div>
-                      <p className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed">
+                      <p className="text-slate-700 text-xs whitespace-pre-wrap leading-relaxed">
                         {reply.content}
                       </p>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center py-6 text-white/40 bg-white/5 rounded-xl border border-dashed border-white/10">
+                <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs">
                   Chưa có bình luận nào cho bài viết này. Hãy là người đầu tiên thảo luận!
                 </div>
               )}
@@ -233,21 +233,21 @@ export default function ForumDiscussion({
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
                 placeholder="Nhập nội dung trả lời thảo luận..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition duration-200 text-white placeholder-white/40 resize-none h-24"
+                className="w-full bg-white border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-900 placeholder-slate-400 resize-none h-24 shadow-xs"
               />
               <div className="flex justify-end">
                 <button
                   type="submit"
                   disabled={isSubmitting || !replyContent.trim()}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition duration-200 focus:outline-none cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-xs transition duration-150 focus:outline-none cursor-pointer"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5" />
                   <span>{isSubmitting ? "Đang gửi..." : "Gửi câu trả lời"}</span>
                 </button>
               </div>
             </form>
           ) : (
-            <div className="text-center py-3 text-white/50 bg-white/5 border border-white/10 rounded-xl text-sm italic">
+            <div className="text-center py-3 text-slate-500 bg-slate-50 border border-slate-200 rounded-xl text-xs italic">
               Bạn đang ở chế độ xem (Chỉ đọc). Phụ huynh không thể gửi thảo luận.
             </div>
           )}
@@ -256,10 +256,10 @@ export default function ForumDiscussion({
         // Create Post Form view
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-wide">Tạo bài thảo luận mới</h2>
+            <h2 className="text-lg font-bold text-slate-900">Tạo bài thảo luận mới</h2>
             <button
               onClick={() => setIsCreatingPost(false)}
-              className="text-white/60 hover:text-white transition focus:outline-none"
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition focus:outline-none cursor-pointer"
             >
               Hủy bỏ
             </button>
@@ -267,23 +267,23 @@ export default function ForumDiscussion({
 
           <form onSubmit={handleCreatePost} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-white/80">Tiêu đề bài viết</label>
+              <label className="text-xs font-semibold text-slate-700">Tiêu đề bài viết</label>
               <input
                 type="text"
                 value={newPostTitle}
                 onChange={(e) => setNewPostTitle(e.target.value)}
                 placeholder="Nhập tiêu đề ngắn gọn, rõ ràng..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition duration-200 text-white placeholder-white/40"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-900 placeholder-slate-400 shadow-xs"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-white/80">Nội dung chi tiết</label>
+              <label className="text-xs font-semibold text-slate-700">Nội dung chi tiết</label>
               <textarea
                 value={newPostContent}
                 onChange={(e) => setNewPostContent(e.target.value)}
                 placeholder="Mô tả chi tiết câu hỏi hoặc chủ đề thảo luận của bạn..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition duration-200 text-white placeholder-white/40 resize-none h-44"
+                className="w-full bg-white border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-900 placeholder-slate-400 resize-none h-44 shadow-xs"
               />
             </div>
 
@@ -291,16 +291,16 @@ export default function ForumDiscussion({
               <button
                 type="button"
                 onClick={() => setIsCreatingPost(false)}
-                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl font-semibold border border-white/10 transition duration-200 active:scale-95 cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || !newPostTitle.trim() || !newPostContent.trim()}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition duration-200 cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
               >
-                <Plus className="w-4.5 h-4.5" />
+                <Plus className="w-4 h-4" />
                 <span>{isSubmitting ? "Đang đăng..." : "Đăng bài thảo luận"}</span>
               </button>
             </div>
@@ -312,15 +312,15 @@ export default function ForumDiscussion({
           {/* Header & New Post button */}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h2 className="text-xl font-bold tracking-wide">Diễn đàn thảo luận {currentSection ? `lớp ${currentSection.sectionCode}` : "khóa học"}</h2>
-              <p className="text-sm text-white/50 mt-1">Nơi trao đổi câu hỏi, kiến thức học tập giữa lớp học</p>
+              <h2 className="text-lg font-bold text-slate-900">Diễn đàn thảo luận {currentSection ? `lớp ${currentSection.sectionCode}` : "khóa học"}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Nơi trao đổi câu hỏi, kiến thức học tập giữa lớp học</p>
             </div>
             {!isReadOnly && (
               <button
                 onClick={() => setIsCreatingPost(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl font-semibold shadow-lg hover:shadow-indigo-500/20 transition duration-200 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
               >
-                <Plus className="w-4.5 h-4.5" />
+                <Plus className="w-4 h-4" />
                 <span>Tạo thảo luận mới</span>
               </button>
             )}
@@ -328,18 +328,18 @@ export default function ForumDiscussion({
 
           {/* Search bar */}
           <div className="relative">
-            <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-white/40" />
+            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm kiếm bài viết, thảo luận..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition duration-200 text-white placeholder-white/40"
+              className="w-full bg-white border border-slate-200/80 rounded-xl pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-indigo-500 text-slate-900 placeholder-slate-400 shadow-xs"
             />
           </div>
 
           {/* Posts List */}
-          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
             {filteredPosts.length > 0 ? (
               filteredPosts.map((post: any) => {
                 const author = getAuthorDetails(post.authorId);
@@ -347,31 +347,31 @@ export default function ForumDiscussion({
                   <div
                     key={post.id}
                     onClick={() => setSelectedPostId(post.id)}
-                    className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl p-5 cursor-pointer transition duration-300 transform hover:-translate-y-0.5 space-y-3 group"
+                    className="bg-white hover:bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 cursor-pointer transition shadow-xs space-y-2.5 group"
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition duration-200">
+                      <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition">
                         {post.title}
                       </h3>
-                      <div className="flex items-center gap-1.5 text-xs text-white/60 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">
-                        <MessageCircle className="w-3.5 h-3.5 text-indigo-400" />
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full shrink-0 font-medium">
+                        <MessageCircle className="w-3.5 h-3.5 text-indigo-600" />
                         <span>{post.replies?.length || 0} phản hồi</span>
                       </div>
                     </div>
 
-                    <p className="text-white/60 text-sm line-clamp-2 leading-relaxed">
+                    <p className="text-slate-600 text-xs line-clamp-2 leading-relaxed">
                       {post.content}
                     </p>
 
-                    <div className="flex items-center justify-between text-xs text-white/40 pt-1 border-t border-white/5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white/70">{author.name}</span>
-                        <span className={`text-[9px] px-1.5 py-0.1 rounded-full ${getRoleBadgeColor(author.role)}`}>
+                        <span className="font-semibold text-slate-700">{author.name}</span>
+                        <span className={`text-[9px] px-1.5 py-0.1 rounded-full font-medium ${getRoleBadgeColor(author.role)}`}>
                           {getRoleLabel(author.role)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-3 h-3" />
                         <span>{new Date(post.createdAt).toLocaleDateString("vi-VN")}</span>
                       </div>
                     </div>
@@ -379,7 +379,7 @@ export default function ForumDiscussion({
                 );
               })
             ) : (
-              <div className="text-center py-12 text-white/40 bg-white/5 rounded-xl border border-dashed border-white/10">
+              <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
                 {searchTerm ? "Không tìm thấy bài thảo luận nào phù hợp." : "Chưa có cuộc thảo luận nào trong môn học này."}
               </div>
             )}

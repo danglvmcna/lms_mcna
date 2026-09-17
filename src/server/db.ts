@@ -13,7 +13,7 @@ if (dbUrl.includes("pooler.supabase.com:5432")) {
   }
 }
 
-const isLocalDb = Boolean(
+export const isLocalDb = Boolean(
   dbUrl.includes("localhost") || 
   dbUrl.includes("127.0.0.1")
 );

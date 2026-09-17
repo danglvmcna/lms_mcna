@@ -23,234 +23,36 @@ html {
   scroll-behavior: smooth;
 }
 
-.mcna-on-dark {
-  color: #ffffff !important;
-}
-
-/* --- Premium Light Mode Overrides Layer --- */
-
 body, html {
-  background-color: #f8fafc !important;
-  background-image: none !important;
-  color: #0f172a !important;
+  background-color: #f8fafc;
+  color: #0f172a;
+  min-height: 100vh;
 }
 
-/* Override dark background container utilities */
-.bg-\[\#0f172a\], .bg-slate-950 {
-  background-color: #f8fafc !important;
-  background-image: none !important;
+/* Refined custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.bg-slate-900 {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-}
-
-/* Overrides for semi-transparent dark layers (glass containers) */
-.bg-white\/5, .bg-white\/3, .bg-white\/2, .bg-white\/8, .bg-black\/20, .bg-black\/25, .bg-black\/35 {
-  background-color: #ffffff !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid #cbd5e1 !important;
-}
-
-/* Active sidebar link highlight overlay */
-.bg-white\/10 {
-  background-color: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-}
-
-/* Borders override */
-.border-white\/10, .border-white\/15, .border-white\/5, .border-white\/20, .border-white\/8, .border-b-white\/5, .border-r-white\/15, .border-t-white\/5,
-[class*="border-white/"] {
-  border-color: #cbd5e1 !important;
-}
-
-/* High Contrast Text Overrides for Light Mode */
-.text-white, 
-.text-slate-50, .text-slate-100, .text-slate-200, .text-slate-300, 
-.text-gray-50, .text-gray-100, .text-gray-200, .text-gray-300,
-.text-zinc-50, .text-zinc-100, .text-zinc-200, .text-zinc-300,
-.text-neutral-50, .text-neutral-100, .text-neutral-200, .text-neutral-300,
-[class*="text-white/"], 
-[class*="text-slate-50/"], [class*="text-slate-100/"], [class*="text-slate-200/"], [class*="text-slate-300/"],
-[class*="text-gray-50/"], [class*="text-gray-100/"], [class*="text-gray-200/"], [class*="text-gray-300/"],
-[class*="text-zinc-50/"], [class*="text-zinc-100/"], [class*="text-zinc-200/"], [class*="text-zinc-300/"],
-[class*="text-neutral-50/"], [class*="text-neutral-100/"], [class*="text-neutral-200/"], [class*="text-neutral-300/"] {
-  color: #1e293b !important; /* slate-800 for high readability */
-}
-
-/* Secondary / Lower contrast text color overrides */
-.text-white\/60, .text-white\/50, .text-white\/40, .text-white\/30, 
-.text-slate-400, .text-zinc-400, .text-gray-400,
-[class*="text-white/60"], [class*="text-white/50"], [class*="text-white/40"], [class*="text-white/30"],
-[class*="text-slate-400/"], [class*="text-zinc-400/"], [class*="text-gray-400/"] {
-  color: #64748b !important; /* slate-500 for secondary details */
-}
-
-.text-white\/20, .text-white\/15, .text-white\/10,
-[class*="text-white/20"], [class*="text-white/15"], [class*="text-white/10"] {
-  color: #94a3b8 !important; /* slate-400 for disabled/muted indicators */
-}
-
-/* Color-based light contrast texts (indigo, emerald, amber, red, blue, etc. - make them dark/vibrant in light mode) */
-.text-indigo-50, .text-indigo-100, .text-indigo-200, .text-indigo-300, .text-indigo-400,
-[class*="text-indigo-100/"], [class*="text-indigo-200/"], [class*="text-indigo-300/"] {
-  color: #4338ca !important; /* indigo-700 */
-}
-.text-emerald-50, .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400,
-[class*="text-emerald-100/"], [class*="text-emerald-200/"], [class*="text-emerald-300/"] {
-  color: #047857 !important; /* emerald-700 */
-}
-.text-amber-50, .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400, .text-amber-500, 
-.text-yellow-300, .text-yellow-400, .text-yellow-500,
-[class*="text-amber-100/"], [class*="text-amber-200/"], [class*="text-amber-300/"] {
-  color: #b45309 !important; /* amber-700 */
-}
-.text-red-50, .text-red-100, .text-red-200, .text-red-300, .text-red-400, 
-.text-rose-50, .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400,
-[class*="text-red-100/"], [class*="text-red-200/"], [class*="text-red-300/"],
-[class*="text-rose-100/"], [class*="text-rose-200/"], [class*="text-rose-300/"] {
-  color: #b91c1c !important; /* red-700 */
-}
-.text-blue-50, .text-blue-100, .text-blue-200, .text-blue-300, .text-blue-400,
-[class*="text-blue-100/"], [class*="text-blue-200/"], [class*="text-blue-300/"] {
-  color: #1d4ed8 !important; /* blue-700 */
-}
-.text-sky-50, .text-sky-100, .text-sky-200, .text-sky-300, .text-sky-400, 
-.text-cyan-50, .text-cyan-100, .text-cyan-200, .text-cyan-300, .text-cyan-400, 
-.text-teal-50, .text-teal-100, .text-teal-200, .text-teal-300, .text-teal-400,
-[class*="text-sky-100/"], [class*="text-sky-200/"], [class*="text-sky-300/"],
-[class*="text-cyan-100/"], [class*="text-cyan-200/"], [class*="text-cyan-300/"] {
-  color: #0369a1 !important; /* sky-700 */
-}
-.text-violet-50, .text-violet-100, .text-violet-200, .text-violet-300, .text-violet-400,
-[class*="text-violet-100/"], [class*="text-violet-200/"], [class*="text-violet-300/"] {
-  color: #6d28d9 !important; /* violet-700 */
-}
-
-/* Hover variants overrides to prevent text from turning white/washed-out */
-.hover\:text-white:hover {
-  color: #0f172a !important; /* slate-900 */
-}
-.hover\:text-indigo-100:hover, .hover\:text-indigo-200:hover, .hover\:text-indigo-300:hover, .hover\:text-indigo-400:hover {
-  color: #312e81 !important; /* indigo-900 */
-}
-.hover\:text-cyan-100:hover, .hover\:text-cyan-200:hover, .hover\:text-cyan-300:hover, .hover\:text-cyan-400:hover {
-  color: #0c4a6e !important; /* sky-900 */
-}
-.hover\:text-emerald-300:hover, .hover\:text-emerald-400:hover {
-  color: #064e3b !important; /* emerald-900 */
-}
-.hover\:text-amber-300:hover, .hover\:text-amber-400:hover {
-  color: #78350f !important; /* amber-900 */
-}
-.hover\:text-red-300:hover, .hover\:text-red-400:hover {
-  color: #7f1d1d !important; /* red-900 */
-}
-
-/* Group hover text color adjustments */
-.group:hover .group-hover\:text-white {
-  color: #0f172a !important;
-}
-.group:hover .group-hover\:text-indigo-100, .group:hover .group-hover\:text-indigo-200, .group:hover .group-hover\:text-indigo-300, .group:hover .group-hover\:text-indigo-400 {
-  color: #312e81 !important;
-}
-.group:hover .group-hover\:text-emerald-300, .group:hover .group-hover\:text-emerald-400 {
-  color: #064e3b !important;
-}
-.group:hover .group-hover\:text-amber-300, .group:hover .group-hover\:text-amber-400 {
-  color: #78350f !important;
-}
-.group:hover .group-hover\:text-red-300, .group:hover .group-hover\:text-red-400 {
-  color: #7f1d1d !important;
-}
-.group:hover .group-hover\:text-blue-100, .group:hover .group-hover\:text-blue-200, .group:hover .group-hover\:text-blue-300 {
-  color: #1e3a8a !important; /* blue-900 */
-}
-.group:hover .group-hover\:text-sky-100, .group:hover .group-hover\:text-sky-200, .group:hover .group-hover\:text-sky-300, .group:hover .group-hover\:text-cyan-100, .group:hover .group-hover\:text-cyan-200, .group:hover .group-hover\:text-cyan-300 {
-  color: #0c4a6e !important; /* sky-900 */
-}
-.group:hover .group-hover\:text-rose-100, .group:hover .group-hover\:text-rose-200, .group:hover .group-hover\:text-rose-300 {
-  color: #4c0519 !important; /* rose-900 */
-}
-.group:hover .group-hover\:text-gray-300, .group:hover .group-hover\:text-slate-300 {
-  color: #1e293b !important; /* slate-800 */
-}
-
-/* Semi-transparent dark background overrides to render light theme friendly */
-.bg-indigo-950\/40, .bg-indigo-950\/30, .bg-indigo-950\/20, .bg-slate-900\/40, .bg-slate-900\/50, .bg-slate-900\/60, .bg-slate-950\/40, .bg-slate-950\/30, .bg-slate-950\/20, .bg-slate-950\/50, .bg-slate-950\/60, .bg-indigo-900\/20 {
-  background-color: #f1f5f9 !important; /* slate-100 */
-  border-color: #cbd5e1 !important; /* slate-300 */
-}
-
-/* Card background override for gradient card style in light mode */
-.from-indigo-950\/40.to-slate-900 {
-  background-image: linear-gradient(to bottom right, #f1f5f9, #ffffff) !important;
-  border-color: #cbd5e1 !important;
-}
-
-/* Fix for inputs, selects, and textareas */
+/* Clean input & form element defaults */
 input, select, textarea {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-}
-input::placeholder {
-  color: #94a3b8 !important;
-}
-input:focus, select:focus, textarea:focus {
-  border-color: #4f46e5 !important;
-  outline: none !important;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1) !important;
+  accent-color: #4f46e5;
 }
 
-/* Specific fix for white primary buttons like standard "Tải Standalone HTML" or "Đăng xuất" */
-.bg-white.text-indigo-950, .bg-white.text-indigo-900 {
-  background-color: #4f46e5 !important;
-  color: #ffffff !important;
-  border: 1px solid #4338ca !important;
-}
-.bg-white.text-indigo-950:hover, .bg-white.text-indigo-900:hover {
-  background-color: #4338ca !important;
-}
-
-/* Demo login and course card badge text styling fixes */
-.bg-indigo-500\/10, .bg-emerald-500\/10, .bg-amber-500\/10, .bg-red-500\/10, .bg-blue-500\/10, .bg-sky-500\/10, .bg-violet-500\/10, .bg-rose-500\/10 {
-  color: inherit !important;
-}
-.bg-indigo-500\/10 *, .bg-emerald-500\/10 *, .bg-amber-500\/10 *, .bg-red-500\/10 *, .bg-blue-500\/10 *, .bg-sky-500\/10 *, .bg-violet-500\/10 *, .bg-rose-500\/10 * {
-  color: inherit !important;
-}
-
-/* Retain white text on active buttons and badges (Must be last to override high contrast texts) */
-.bg-indigo-600, .bg-indigo-500, .bg-indigo-700, .bg-indigo-800,
-.bg-emerald-600, .bg-emerald-500, .bg-emerald-700, .bg-emerald-800,
-.bg-red-600, .bg-red-500, .bg-red-700, .bg-red-800,
-.bg-amber-600, .bg-amber-500, .bg-amber-700, .bg-amber-800,
-.bg-blue-600, .bg-blue-500, .bg-blue-700, .bg-blue-800,
-.bg-sky-600, .bg-sky-500, .bg-sky-700, .bg-sky-800,
-.bg-violet-600, .bg-violet-500, .bg-violet-700, .bg-violet-800,
-.bg-rose-600, .bg-rose-500, .bg-rose-700, .bg-rose-800 {
-  color: #ffffff !important;
-}
-
-.bg-indigo-600 *, .bg-indigo-500 *, .bg-indigo-700 *, .bg-indigo-800 *,
-.bg-emerald-600 *, .bg-emerald-500 *, .bg-emerald-700 *, .bg-emerald-800 *,
-.bg-red-600 *, .bg-red-500 *, .bg-red-700 *, .bg-red-800 *,
-.bg-amber-600 *, .bg-amber-500 *, .bg-amber-700 *, .bg-amber-800 *,
-.bg-blue-600 *, .bg-blue-500 *, .bg-blue-700 *, .bg-blue-800 *,
-.bg-sky-600 *, .bg-sky-500 *, .bg-sky-700 *, .bg-sky-800 *,
-.bg-violet-600 *, .bg-violet-500 *, .bg-violet-700 *, .bg-violet-800 *,
-.bg-rose-600 *, .bg-rose-500 *, .bg-rose-700 *, .bg-rose-800 * {
-  color: #ffffff !important;
-}
-
-button:disabled {
-  background-color: #f1f5f9 !important;
-  color: #334155 !important;
-  border-color: #cbd5e1 !important;
-}
-
-button:disabled * {
-  color: inherit !important;
+/* Subtle transitions for interactive elements */
+button, a, input, select {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }

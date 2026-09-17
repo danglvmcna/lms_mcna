@@ -183,19 +183,19 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
   return (
     <div className="space-y-6">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 border border-white/20 text-white text-xs px-4 py-3 rounded-2xl shadow-2xl">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-800 text-white text-xs px-4 py-3 rounded-2xl shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-200">
           {toastMessage}
         </div>
       )}
 
       {/* Header block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
         <div>
-          <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
-            <Award className="h-5.5 w-5.5 text-indigo-400" />
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Award className="h-5 w-5 text-indigo-600" />
             Duyệt & Xác thực Chứng chỉ Tốt nghiệp
           </h3>
-          <p className="text-xs text-white/50 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Xem xét kết quả trắc nghiệm và tiến độ học bài của học viên, phê duyệt phát hành văn bằng số hóa độc bản bảo mật.
           </p>
         </div>
@@ -203,60 +203,60 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-white/10 p-5 rounded-3xl relative overflow-hidden space-y-1">
-          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest font-mono">
+        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs space-y-1">
+          <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider font-mono block">
             Chờ xét duyệt chứng chỉ
           </span>
-          <h4 className="text-3xl font-mono font-black text-white">{getEligiblePendingStudents().length} Học viên</h4>
-          <p className="text-[10px] text-white/40">Học viên đã học xong 100% & thi đạt điểm quiz.</p>
+          <h4 className="text-2xl font-mono font-bold text-slate-900">{getEligiblePendingStudents().length} Học viên</h4>
+          <p className="text-[11px] text-slate-500">Học viên đã học xong 100% & thi đạt điểm quiz.</p>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-white/10 p-5 rounded-3xl relative overflow-hidden space-y-1">
-          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest font-mono">
+        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs space-y-1">
+          <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider font-mono block">
             Tổng chứng chỉ đã cấp
           </span>
-          <h4 className="text-3xl font-mono font-black text-emerald-400">
+          <h4 className="text-2xl font-mono font-bold text-emerald-600">
             {(store.certificates || []).length} Văn bằng
           </h4>
-          <p className="text-[10px] text-white/40">Văn bằng số hóa đang lưu hành trong hệ thống.</p>
+          <p className="text-[11px] text-slate-500">Văn bằng số hóa đang lưu hành trong hệ thống.</p>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-white/10 p-5 rounded-3xl relative overflow-hidden space-y-1">
-          <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest font-mono">
+        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs space-y-1">
+          <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider font-mono block">
             Tỷ lệ tốt nghiệp trung bình
           </span>
-          <h4 className="text-3xl font-mono font-black text-amber-400">
+          <h4 className="text-2xl font-mono font-bold text-amber-600">
             {store.enrollments && store.enrollments.length > 0 
               ? Math.round(((store.certificates || []).length / store.enrollments.length) * 100) 
               : 0}%
           </h4>
-          <p className="text-[10px] text-white/40">Số chứng chỉ cấp / Tổng số lượt đăng ký môn.</p>
+          <p className="text-[11px] text-slate-500">Số chứng chỉ cấp / Tổng số lượt đăng ký môn.</p>
         </div>
       </div>
 
       {/* Tab Select and filter bar */}
-      <div className="space-y-3 bg-white/5 p-3 rounded-2xl border border-white/10">
+      <div className="space-y-3 bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex flex-wrap gap-1 w-full">
           <button
             onClick={() => setActiveTab("pending")}
-            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              activeTab === "pending" ? "bg-indigo-600 text-white shadow-md" : "text-white/60 hover:text-white"
+            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl transition cursor-pointer ${
+              activeTab === "pending" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
             Chờ cấp chứng nhận ({getEligiblePendingStudents().length})
           </button>
           <button
             onClick={() => setActiveTab("lookup")}
-            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              activeTab === "lookup" ? "bg-indigo-600 text-white shadow-md" : "text-white/60 hover:text-white"
+            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl transition cursor-pointer ${
+              activeTab === "lookup" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
             Xác thực Mã (Verify Code)
           </button>
           <button
             onClick={() => setActiveTab("registry")}
-            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              activeTab === "registry" ? "bg-indigo-600 text-white shadow-md" : "text-white/60 hover:text-white"
+            className={`flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl transition cursor-pointer ${
+              activeTab === "registry" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
             Sổ Chứng Chỉ ({ (store.certificates || []).length })
@@ -264,15 +264,15 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
         </div>
 
         {activeTab !== "lookup" && (
-          <div className="relative w-full max-w-none">
+          <div className="relative w-full">
             <input
               type="text"
               placeholder="Tìm theo tên học viên, môn học, mã..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-1.5 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+              className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-xl py-2 px-3 pl-8 text-xs outline-none focus:border-indigo-500 placeholder-slate-400 shadow-2xs transition"
             />
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-white/30" />
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           </div>
         )}
       </div>
@@ -280,16 +280,16 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
       {/* TAB CONTENT: LOOKUP / VERIFY CODE */}
       {activeTab === "lookup" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <form onSubmit={handleLookupCode} className="lg:col-span-5 bg-white/3 border border-white/5 p-6 rounded-3xl space-y-4">
-            <h5 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5 text-indigo-400">
+          <form onSubmit={handleLookupCode} className="lg:col-span-5 bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs space-y-4">
+            <h5 className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-indigo-600">
               <ShieldCheck className="h-4.5 w-4.5" /> Tra cứu văn bằng chính thống
             </h5>
-            <p className="text-[11.5px] text-white/60 leading-relaxed font-sans">
+            <p className="text-xs text-slate-500 leading-relaxed">
               Mỗi chứng chỉ phát ra từ MCNA LMS đều mang một mã kiểm định số hóa duy nhất. Nhập mã này để kiểm tra xem văn bằng đó có hợp pháp và chính chủ hay không.
             </p>
 
-            <div className="space-y-1">
-              <label className="text-white/50 block font-bold">Mã số chứng nhận cần xác thực</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700 block">Mã số chứng nhận cần xác thực</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -297,11 +297,11 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
                   placeholder="Ví dụ: MCNA-XXXX-XXXX"
                   value={verifyCode}
                   onChange={(e) => setVerifyCode(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-black/25 border border-white/10 text-white font-mono uppercase rounded-xl focus:outline-none"
+                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-900 font-mono uppercase text-xs rounded-xl focus:outline-none focus:border-indigo-500 shadow-2xs"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-white text-indigo-950 hover:bg-slate-50 font-bold rounded-xl cursor-pointer text-xs"
+                  className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 font-medium rounded-xl cursor-pointer text-xs shadow-xs transition"
                 >
                   Kiểm tra
                 </button>
@@ -313,65 +313,65 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
             {searchHasRun && (
               searchedCertificate ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl text-xs flex items-center gap-3">
-                    <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-3 shadow-2xs">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0" />
                     <div>
-                      <span className="font-black text-white uppercase text-[10px] tracking-wide block">Xác thực thành công!</span>
-                      <p className="text-emerald-300">Chứng nhận là hợp lệ, được lưu ký chính chủ tại Cổng Học vụ MCNA.</p>
+                      <span className="font-bold text-emerald-900 uppercase text-[10px] tracking-wide block">Xác thực thành công!</span>
+                      <p className="text-emerald-700 text-xs mt-0.5">Chứng nhận là hợp lệ, được lưu ký chính chủ tại Cổng Học vụ MCNA.</p>
                     </div>
                   </div>
 
                   {/* VISUAL CERTIFICATE PREVIEW CARD */}
-                  <div className="relative overflow-hidden bg-slate-950 border-2 border-amber-500/40 rounded-3xl p-8 shadow-2xl backdrop-blur-md font-sans">
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/5 rounded-full filter blur-2xl" />
+                  <div className="relative overflow-hidden bg-gradient-to-b from-amber-50/40 to-white border-2 border-amber-300/80 rounded-3xl p-8 shadow-md font-sans">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-amber-400/10 rounded-full filter blur-3xl pointer-events-none" />
                     
                     <div className="space-y-5 text-center relative z-10">
-                      <div className="flex justify-between items-start border-b border-amber-500/20 pb-3">
-                        <Award className="h-10 w-10 text-amber-400 mx-auto" />
+                      <div className="flex justify-between items-start border-b border-amber-200/70 pb-3">
+                        <Award className="h-10 w-10 text-amber-600 mx-auto" />
                       </div>
 
                       <div className="space-y-2">
-                        <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase block">HỆ THỐNG ĐÀO TẠO MCNA LMS</span>
-                        <h4 className="font-display font-black text-white text-xl leading-tight tracking-tight uppercase">CHỨNG CHỈ TỐT NGHIỆP</h4>
-                        <p className="text-xs text-white/40 italic font-serif leading-relaxed">Được trân trọng trao tặng cho học viên:</p>
+                        <span className="text-[10px] font-mono text-slate-400 tracking-widest uppercase block font-semibold">HỆ THỐNG ĐÀO TẠO MCNA LMS</span>
+                        <h4 className="font-bold text-slate-900 text-xl leading-tight tracking-tight uppercase">CHỨNG CHỈ TỐT NGHIỆP</h4>
+                        <p className="text-xs text-slate-500 italic font-serif leading-relaxed">Được trân trọng trao tặng cho học viên:</p>
                         
-                        <h3 className="text-lg font-black text-white tracking-wide border-b border-white/5 pb-2 max-w-sm mx-auto">
+                        <h3 className="text-lg font-bold text-indigo-900 tracking-wide border-b border-amber-200 pb-2 max-w-sm mx-auto">
                           {store.users.find(u => u.id === searchedCertificate.studentId)?.name || "Học viên MCNA"}
                         </h3>
 
-                        <p className="text-xs text-white/60 font-sans leading-relaxed max-w-md mx-auto pt-2">
+                        <p className="text-xs text-slate-600 font-sans leading-relaxed max-w-md mx-auto pt-2">
                           Vì đã xuất sắc hoàn thành toàn diện lộ trình đào tạo, tích lũy đủ tín chỉ và vượt qua kỳ thi sát hạch cuối khóa của môn học chuyên đề học phần:
                         </p>
-                        <h5 className="font-bold text-amber-300 text-sm">{store.courses.find(c => c.id === searchedCertificate.courseId)?.title || "Khóa đào tạo"}</h5>
+                        <h5 className="font-bold text-amber-800 text-sm">{store.courses.find(c => c.id === searchedCertificate.courseId)?.title || "Khóa đào tạo"}</h5>
                       </div>
 
-                      <div className="pt-6 border-t border-white/5 flex items-center justify-between gap-4 text-[10.5px] font-mono text-white/40 text-left max-w-md mx-auto">
+                      <div className="pt-6 border-t border-amber-200/80 flex items-center justify-between gap-4 text-[10.5px] font-mono text-slate-500 text-left max-w-md mx-auto">
                         <div>
-                          <span className="block uppercase text-[8.5px]">Ngày phê duyệt</span>
-                          <span className="text-white/80 font-bold">{new Date(searchedCertificate.issuedAt).toLocaleDateString("vi-VN")}</span>
+                          <span className="block uppercase text-[8.5px] text-slate-400 font-semibold">Ngày phê duyệt</span>
+                          <span className="text-slate-800 font-bold">{new Date(searchedCertificate.issuedAt).toLocaleDateString("vi-VN")}</span>
                         </div>
                         <div className="text-right">
-                          <span className="block uppercase text-[8.5px]">Mã kiểm định độc bản</span>
-                          <span className="text-amber-400 font-bold tracking-widest font-mono uppercase">{searchedCertificate.certificateCode}</span>
+                          <span className="block uppercase text-[8.5px] text-slate-400 font-semibold">Mã kiểm định độc bản</span>
+                          <span className="text-amber-800 font-bold tracking-widest font-mono uppercase bg-amber-100/70 border border-amber-200 px-2 py-0.5 rounded-md">{searchedCertificate.certificateCode}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="p-6 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl text-xs flex items-center gap-3">
-                  <XCircle className="h-6 w-6 text-red-500 shrink-0" />
+                <div className="p-5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-3 shadow-2xs">
+                  <XCircle className="h-6 w-6 text-rose-600 shrink-0" />
                   <div>
-                    <span className="font-black text-white uppercase text-[10px] tracking-wide block">Xác thực thất bại!</span>
-                    <p className="text-red-300">Không tìm thấy mã chứng chỉ này trong hệ thống. Vui lòng kiểm tra lại ký tự hoa thường và dấu gạch ngang.</p>
+                    <span className="font-bold text-rose-900 uppercase text-[10px] tracking-wide block">Xác thực thất bại!</span>
+                    <p className="text-rose-700 text-xs mt-0.5">Không tìm thấy mã chứng chỉ này trong hệ thống. Vui lòng kiểm tra lại ký tự hoa thường và dấu gạch ngang.</p>
                   </div>
                 </div>
               )
             )}
 
             {!searchHasRun && (
-              <div className="flex flex-col items-center justify-center p-12 text-center text-white/30 border border-dashed border-white/5 rounded-3xl">
-                <HelpCircle className="h-10 w-10 text-white/10 mb-2" />
+              <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                <HelpCircle className="h-10 w-10 text-slate-300 mb-2" />
                 <span className="text-xs font-sans">Nhập mã xác thực ở khung bên trái để bắt đầu tra cứu kiểm định văn bằng số.</span>
               </div>
             )}
@@ -381,106 +381,110 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
 
       {/* TAB CONTENT: ELIGIBLE PENDING STUDENTS FOR CERTIFICATES */}
       {activeTab === "pending" && (
-        <div className="bg-slate-900 border border-white/10 rounded-3xl p-5 overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                <th className="py-3">Học viên đủ điều kiện</th>
-                <th className="py-3">Môn học học thuật</th>
-                <th className="py-3 text-center">Tiến độ bài học</th>
-                <th className="py-3 text-center">Điểm thi trắc nghiệm</th>
-                <th className="py-3 text-right">Phê duyệt cấp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-xs text-white/85">
-              {pendingList.map((item, idx) => (
-                <tr key={idx} className="hover:bg-white/2 transition">
-                  <td className="py-3.5">
-                    <div className="font-bold text-white">{item.studentName}</div>
-                    <div className="text-[10px] text-white/40 font-mono">{item.studentEmail}</div>
-                  </td>
-                  <td className="py-3.5 font-semibold text-white/90">{item.courseTitle}</td>
-                  <td className="py-3.5 text-center font-mono font-bold text-indigo-300">
-                    {item.lessonsCompleted} / {item.lessonsTotal} bài
-                  </td>
-                  <td className="py-3.5 text-center">
-                    <span className="px-2.5 py-0.5 bg-emerald-600 text-white border border-emerald-300/50 font-mono font-bold rounded text-[10px] shadow-sm shadow-emerald-900/30">
-                      {item.quizScore}% (Đậu)
-                    </span>
-                  </td>
-                  <td className="py-3.5 text-right">
-                    <button
-                      onClick={() => handleIssueCertificate(item)}
-                      className="px-3.5 py-1.5 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer text-[10.5px] inline-flex items-center gap-1"
-                    >
-                      <FileCheck className="h-3.5 w-3.5" /> Duyệt & Cấp bằng
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {pendingList.length === 0 && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-mono text-[10px] uppercase font-semibold tracking-wider">
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-white/30 italic">
-                    Hiện chưa ghi nhận thêm học viên mới nào thi đậu & hoàn tất khóa học chờ xét cấp chứng chỉ.
-                  </td>
+                  <th className="px-4 py-3 font-semibold">Học viên đủ điều kiện</th>
+                  <th className="px-4 py-3 font-semibold">Môn học học thuật</th>
+                  <th className="px-4 py-3 font-semibold text-center">Tiến độ bài học</th>
+                  <th className="px-4 py-3 font-semibold text-center">Điểm thi trắc nghiệm</th>
+                  <th className="px-4 py-3 font-semibold text-right">Phê duyệt cấp</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                {pendingList.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/60 transition">
+                    <td className="px-4 py-3.5">
+                      <div className="font-semibold text-slate-900">{item.studentName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{item.studentEmail}</div>
+                    </td>
+                    <td className="px-4 py-3.5 font-medium text-slate-800">{item.courseTitle}</td>
+                    <td className="px-4 py-3.5 text-center font-mono font-semibold text-indigo-600">
+                      {item.lessonsCompleted} / {item.lessonsTotal} bài
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono font-semibold rounded-md text-[10px] shadow-2xs">
+                        {item.quizScore}% (Đậu)
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        onClick={() => handleIssueCertificate(item)}
+                        className="px-3.5 py-1.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition cursor-pointer text-[11px] inline-flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <FileCheck className="h-3.5 w-3.5" /> Duyệt & Cấp bằng
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {pendingList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-slate-400 italic">
+                      Hiện chưa ghi nhận thêm học viên mới nào thi đậu & hoàn tất khóa học chờ xét cấp chứng chỉ.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* TAB CONTENT: CENTRAL CERTIFICATES REGISTRY */}
       {activeTab === "registry" && (
-        <div className="bg-slate-900 border border-white/10 rounded-3xl p-5 overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                <th className="py-3">Học viên sở hữu</th>
-                <th className="py-3">Môn học tốt nghiệp</th>
-                <th className="py-3">Mã kiểm định độc bản</th>
-                <th className="py-3">Ngày phát hành</th>
-                <th className="py-3 text-right">Hủy bỏ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-xs text-white/85">
-              {registryList.map((item, idx) => (
-                <tr key={idx} className="hover:bg-white/2 transition">
-                  <td className="py-3.5">
-                    <div className="font-bold text-white">{item.studentName}</div>
-                    <div className="text-[10px] text-white/40 font-mono">{item.studentEmail}</div>
-                  </td>
-                  <td className="py-3.5 font-semibold text-white/90">{item.courseTitle}</td>
-                  <td className="py-3.5">
-                    <span className="font-mono font-bold text-amber-400 tracking-wider text-[11px]">
-                      {item.certificateCode}
-                    </span>
-                  </td>
-                  <td className="py-3.5 font-mono text-indigo-300">
-                    {new Date(item.issuedAt).toLocaleDateString("vi-VN")}
-                  </td>
-                  <td className="py-3.5 text-right">
-                    <button
-                      onClick={() => handleRevokeCertificate(item.id, item.certificateCode, item.studentName)}
-                      className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer text-xs flex items-center gap-1 font-semibold justify-end self-end ml-auto"
-                      title="Thu hồi / Hủy chứng chỉ"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Thu hồi
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {registryList.length === 0 && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-mono text-[10px] uppercase font-semibold tracking-wider">
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-white/30 italic">
-                    Sổ lưu ký chứng chỉ hiện đang trống hoặc từ khóa tìm kiếm không chính xác.
-                  </td>
+                  <th className="px-4 py-3 font-semibold">Học viên sở hữu</th>
+                  <th className="px-4 py-3 font-semibold">Môn học tốt nghiệp</th>
+                  <th className="px-4 py-3 font-semibold">Mã kiểm định độc bản</th>
+                  <th className="px-4 py-3 font-semibold">Ngày phát hành</th>
+                  <th className="px-4 py-3 font-semibold text-right">Hủy bỏ</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                {registryList.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/60 transition">
+                    <td className="px-4 py-3.5">
+                      <div className="font-semibold text-slate-900">{item.studentName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{item.studentEmail}</div>
+                    </td>
+                    <td className="px-4 py-3.5 font-medium text-slate-800">{item.courseTitle}</td>
+                    <td className="px-4 py-3.5">
+                      <span className="font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md tracking-wider text-[11px]">
+                        {item.certificateCode}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-slate-600">
+                      {new Date(item.issuedAt).toLocaleDateString("vi-VN")}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        onClick={() => handleRevokeCertificate(item.id, item.certificateCode, item.studentName)}
+                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl transition cursor-pointer text-xs inline-flex items-center gap-1 font-medium shadow-2xs"
+                        title="Thu hồi / Hủy chứng chỉ"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Thu hồi
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {registryList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-slate-400 italic">
+                      Sổ lưu ký chứng chỉ hiện đang trống hoặc từ khóa tìm kiếm không chính xác.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

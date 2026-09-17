@@ -446,13 +446,13 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
   // Render Schedule Helper
   const renderSchedule = (slots: any[]) => {
-    if (!slots || slots.length === 0) return <span className="text-amber-400">Chưa xếp lịch</span>;
+    if (!slots || slots.length === 0) return <span className="text-amber-600 font-medium">Chưa xếp lịch</span>;
     return slots.map((slot, index) => (
-      <div key={index} className="flex items-center gap-1.5 text-[11px] text-white/70">
-        <Clock className="h-3.5 w-3.5 text-indigo-300" />
+      <div key={index} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+        <Clock className="h-3.5 w-3.5 text-indigo-600" />
         <span>{slot.dayOfWeek} ({slot.startTime} - {slot.endTime})</span>
-        <span className="text-white/20">|</span>
-        <MapPin className="h-3.5 w-3.5 text-indigo-300" />
+        <span className="text-slate-300">|</span>
+        <MapPin className="h-3.5 w-3.5 text-indigo-600" />
         <span>{slot.room || "Trực tuyến"}</span>
       </div>
     ));
@@ -466,30 +466,30 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     <div className="space-y-6">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed top-4 right-4 bg-slate-900 border border-white/20 text-white px-4 py-2.5 rounded-xl z-50 shadow-2xl flex items-center gap-2 font-sans text-xs animate-in fade-in duration-150">
+        <div className="fixed top-4 right-4 bg-slate-900 border border-slate-800 text-white px-4 py-2.5 rounded-xl z-50 shadow-2xl flex items-center gap-2 font-sans text-xs animate-in fade-in duration-150">
           <Info className="h-4 w-4 text-indigo-400" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div>
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-indigo-400" /> Quản lý Khóa học & Lớp học phần
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-indigo-600" /> Quản lý Khóa học & Lớp học phần
           </h3>
-          <p className="text-xs text-white/50">Khởi tạo và thiết lập giáo trình khóa học, lên lịch thời khóa biểu cho từng lớp học phần.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Khởi tạo và thiết lập giáo trình khóa học, lên lịch thời khóa biểu cho từng lớp học phần.</p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleOpenCreateCourse}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="h-4 w-4" /> Khởi tạo Khóa học
           </button>
           <button
             onClick={handleOpenCreateSection}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="h-4 w-4" /> Thêm Lớp học phần
           </button>
@@ -497,27 +497,27 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       </div>
 
       {/* Tabs navigation */}
-      <div className="flex border-b border-white/10 gap-6 pb-0.5">
+      <div className="flex border-b border-slate-200 gap-6 pb-0.5">
         <button
           onClick={() => setActiveTab("courses")}
-          className={`pb-3 text-xs font-bold transition cursor-pointer relative ${
-            activeTab === "courses" ? "text-indigo-400 font-sans" : "text-white/60 hover:text-white font-sans"
+          className={`pb-3 text-xs font-semibold transition cursor-pointer relative ${
+            activeTab === "courses" ? "text-indigo-600 font-sans" : "text-slate-500 hover:text-slate-900 font-sans"
           }`}
         >
           Danh sách Khóa học
           {activeTab === "courses" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
           )}
         </button>
         <button
           onClick={() => setActiveTab("sections")}
-          className={`pb-3 text-xs font-bold transition cursor-pointer relative ${
-            activeTab === "sections" ? "text-indigo-400 font-sans" : "text-white/60 hover:text-white font-sans"
+          className={`pb-3 text-xs font-semibold transition cursor-pointer relative ${
+            activeTab === "sections" ? "text-indigo-600 font-sans" : "text-slate-500 hover:text-slate-900 font-sans"
           }`}
         >
           Danh sách Lớp học phần
           {activeTab === "sections" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
           )}
         </button>
       </div>
@@ -525,14 +525,14 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Course List Tab */}
       {activeTab === "courses" && (
         <div className="space-y-4 font-sans">
-          <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
-            <Search className="h-4 w-4 text-white/30 self-center" />
+          <div className="flex items-center gap-2.5 bg-white border border-slate-200/80 px-3 py-2 rounded-xl text-xs max-w-md shadow-xs">
+            <Search className="h-4 w-4 text-slate-400 self-center shrink-0" />
             <input
               type="text"
               placeholder="Tìm kiếm khóa học theo tiêu đề, danh mục..."
               value={courseSearch}
               onChange={(e) => setCourseSearch(e.target.value)}
-              className="w-full bg-transparent text-white placeholder-white/30 border-none focus:outline-none"
+              className="w-full bg-transparent text-slate-900 placeholder-slate-400 border-none focus:outline-none text-xs"
             />
           </div>
 
@@ -549,10 +549,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 const courseSectionsList = (store.courseSections || []).filter((s: any) => s.courseId === c.id);
 
                 return (
-                  <div key={c.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-white/20 transition duration-150 group">
+                  <div key={c.id} className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-md transition duration-150 group shadow-xs">
                     <div>
                       {c.thumbnail ? (
-                        <div className="h-32 w-full overflow-hidden bg-slate-900 border-b border-white/5 relative">
+                        <div className="h-32 w-full overflow-hidden bg-slate-100 border-b border-slate-200/80 relative">
                           <img
                             src={c.thumbnail}
                             alt={c.title}
@@ -562,10 +562,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                             }}
                           />
                           <div className="absolute top-2.5 right-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md shadow-sm ${
-                              c.status === "published" ? "bg-emerald-500/80 text-white border border-emerald-400/40" :
-                              c.status === "pending" ? "bg-amber-500/80 text-white border border-amber-400/40" :
-                              "bg-slate-900/80 text-white/70 border border-white/10"
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase backdrop-blur-md shadow-xs ${
+                              c.status === "published" ? "bg-emerald-600 text-white" :
+                              c.status === "pending" ? "bg-amber-500 text-white" :
+                              "bg-slate-700 text-white"
                             }`}>
                               {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
                             </span>
@@ -574,14 +574,14 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       ) : null}
                       <div className="p-5 space-y-3">
                         <div className="flex justify-between items-start">
-                          <span className="px-2 py-0.5 bg-indigo-600/20 text-indigo-300 font-bold rounded text-[9px] uppercase tracking-wider">
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-semibold rounded text-[10px] uppercase tracking-wider border border-indigo-200/60">
                             {c.category}
                           </span>
                           {!c.thumbnail && (
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                              c.status === "published" ? "bg-emerald-500/20 text-emerald-400" :
-                              c.status === "pending" ? "bg-amber-500/20 text-amber-400" :
-                              "bg-white/10 text-white/55"
+                              c.status === "published" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                              c.status === "pending" ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                              "bg-slate-100 text-slate-600 border border-slate-200"
                             }`}>
                               {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
                             </span>
@@ -589,36 +589,36 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         </div>
 
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-white leading-snug line-clamp-1">{c.title}</h4>
-                        <p className="text-xs text-white/60 line-clamp-2 leading-relaxed">{c.description}</p>
+                        <h4 className="text-sm font-bold text-slate-900 leading-snug line-clamp-1">{c.title}</h4>
+                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{c.description}</p>
                       </div>
 
-                      <div className="text-[11px] text-white/45 space-y-1 pt-1 font-sans">
-                        <div>Số buổi học: <span className="text-white font-mono font-medium">{c.numberOfLessons || 10}</span></div>
+                      <div className="text-[11px] text-slate-500 space-y-1 pt-1 font-sans">
+                        <div>Số buổi học: <span className="text-slate-800 font-mono font-semibold">{c.numberOfLessons || 10}</span></div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4 text-xs">
-                      <span className="text-white/40">{courseSectionsList.length} lớp học phần</span>
-                      <div className="flex gap-2">
+                  <div className="flex items-center justify-between p-5 pt-3 border-t border-slate-100 mt-2 text-xs">
+                      <span className="text-slate-400 font-medium">{courseSectionsList.length} lớp học phần</span>
+                      <div className="flex gap-1.5">
                         <button
                           onClick={() => handleOpenManageLessons(c)}
-                          className="p-1.5 hover:bg-white/10 text-indigo-300 rounded-lg cursor-pointer"
+                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 rounded-lg cursor-pointer transition"
                           title="Quản lý bài học"
                         >
                           <BookOpen className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleOpenEditCourse(c)}
-                          className="p-1.5 hover:bg-white/10 text-indigo-300 rounded-lg cursor-pointer"
+                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 rounded-lg cursor-pointer transition"
                           title="Chỉnh sửa khóa học"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteCourse(c.id, c.title)}
-                          className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg cursor-pointer"
+                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
                           title="Xóa khóa học"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -635,20 +635,20 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Class Section List Tab */}
       {activeTab === "sections" && (
         <div className="space-y-4 font-sans">
-          <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
-            <Search className="h-4 w-4 text-white/30 self-center" />
+          <div className="flex items-center gap-2.5 bg-white border border-slate-200/80 px-3 py-2 rounded-xl text-xs max-w-md shadow-xs">
+            <Search className="h-4 w-4 text-slate-400 self-center shrink-0" />
             <input
               type="text"
               placeholder="Tìm lớp học phần theo mã lớp..."
               value={sectionSearch}
               onChange={(e) => setSectionSearch(e.target.value)}
-              className="w-full bg-transparent text-white placeholder-white/30 border-none focus:outline-none"
+              className="w-full bg-transparent text-slate-900 placeholder-slate-400 border-none focus:outline-none text-xs"
             />
           </div>
 
-          <div className="overflow-x-auto bg-white/3 border border-white/10 rounded-2xl">
-            <table className="w-full text-xs text-left text-white font-sans">
-              <thead className="bg-white/5 text-[10px] text-white/50 uppercase tracking-wider border-b border-white/10">
+          <div className="overflow-x-auto bg-white border border-slate-200/80 rounded-2xl shadow-xs">
+            <table className="w-full text-xs text-left text-slate-700 font-sans">
+              <thead className="bg-slate-50/80 text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-mono border-b border-slate-200">
                 <tr>
                   <th className="px-5 py-3.5">Mã Lớp</th>
                   <th className="px-5 py-3.5">Khóa học</th>
@@ -660,7 +660,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   <th className="px-5 py-3.5 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-slate-100 bg-white">
                 {(store.courseSections || [])
                   .filter((sec: CourseSection) => {
                     return !sectionSearch || sec.sectionCode.toLowerCase().includes(sectionSearch.toLowerCase());
@@ -671,35 +671,35 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     const currentCount = getSectionRegisteredCount(sec.id);
 
                     return (
-                      <tr key={sec.id} className="hover:bg-white/2 transition duration-75">
+                      <tr key={sec.id} className="hover:bg-slate-50/60 transition duration-75">
                         <td className="px-5 py-4 font-mono font-bold">
                           <button
                             onClick={() => {
                               setSelectedSectionForStudents(sec);
                               setShowStudentsModal(true);
                             }}
-                            className="text-indigo-300 hover:text-indigo-200 hover:underline cursor-pointer focus:outline-none text-left"
+                            className="text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer focus:outline-none text-left"
                             title="Xem danh sách học viên"
                           >
                             {sec.sectionCode}
                           </button>
                         </td>
-                        <td className="px-5 py-4 font-semibold">{course.title}</td>
-                        <td className="px-5 py-4">{teacherName}</td>
+                        <td className="px-5 py-4 font-semibold text-slate-900">{course.title}</td>
+                        <td className="px-5 py-4 text-slate-700">{teacherName}</td>
                         <td className="px-5 py-4 font-mono">
                           <button
                             onClick={() => {
                               setSelectedSectionForStudents(sec);
                               setShowStudentsModal(true);
                             }}
-                            className="text-indigo-300 hover:text-indigo-200 hover:underline flex items-center gap-1 cursor-pointer focus:outline-none"
+                            className="text-slate-700 hover:text-indigo-600 hover:underline flex items-center gap-1.5 cursor-pointer focus:outline-none font-medium"
                             title="Xem danh sách học viên"
                           >
-                            <Users className="h-3.5 w-3.5" />
+                            <Users className="h-3.5 w-3.5 text-slate-400" />
                             {currentCount}/{sec.maxStudents}
                           </button>
                         </td>
-                        <td className="px-5 py-4">{sec.openingDate ? new Date(sec.openingDate).toLocaleDateString("vi-VN") : "Chưa đặt"}</td>
+                        <td className="px-5 py-4 text-slate-600">{sec.openingDate ? new Date(sec.openingDate).toLocaleDateString("vi-VN") : "Chưa đặt"}</td>
                         <td className="px-5 py-4 space-y-1">
                           {renderSchedule(sec.schedule)}
                           <div className="flex flex-wrap gap-1.5 pt-1">
@@ -708,7 +708,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                 href={sec.meetingUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 rounded-full font-sans transition"
+                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-sans transition border border-indigo-200/60 font-medium"
                                 title={sec.meetingUrl}
                               >
                                 <Video className="h-3 w-3" /> Zoom/Meet
@@ -719,7 +719,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                 href={sec.groupChatUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded-full font-sans transition"
+                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-md font-sans transition border border-emerald-200/60 font-medium"
                                 title={sec.groupChatUrl}
                               >
                                 <MessageCircle className="h-3 w-3" /> Nhóm Zalo
@@ -728,10 +728,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                            sec.status === "open" ? "bg-emerald-500/20 text-emerald-400" :
-                            sec.status === "pending" ? "bg-amber-500/20 text-amber-400" :
-                            sec.status === "closed" ? "bg-red-500/20 text-red-400" : "bg-white/10 text-white/50"
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                            sec.status === "open" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                            sec.status === "pending" ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                            sec.status === "closed" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-slate-100 text-slate-600 border border-slate-200"
                           }`}>
                             {sec.status === "open" ? "Mở tuyển" :
                              sec.status === "pending" ? "Chờ mở" :
@@ -739,27 +739,27 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           </span>
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex gap-1.5 justify-end">
                             <button
                               onClick={() => {
                                 setSelectedSectionForForum(sec);
                                 setShowForumModal(true);
                               }}
-                              className="p-1 hover:bg-white/10 text-indigo-300 rounded cursor-pointer"
+                              className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg cursor-pointer transition"
                               title="Xem thảo luận lớp học"
                             >
                               <MessageSquare className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleOpenEditSection(sec)}
-                              className="p-1 hover:bg-white/10 text-indigo-300 rounded cursor-pointer"
+                              className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg cursor-pointer transition"
                               title="Sửa lớp học"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteSection(sec.id, sec.sectionCode)}
-                              className="p-1 hover:bg-red-500/10 text-red-400 rounded cursor-pointer"
+                              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
                               title="Xóa lớp học"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -778,17 +778,17 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Modal 1: CREATE/EDIT COURSE */}
       {showCourseModal && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className={`bg-slate-900 border border-white/20 rounded-3xl p-6 w-full shadow-2xl relative text-xs text-white transition-all duration-300 ${courseModalMode === "edit" ? "max-w-4xl" : "max-w-lg"}`}>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className={`bg-white border border-slate-200 rounded-2xl p-6 w-full shadow-2xl relative text-xs text-slate-900 transition-all duration-300 ${courseModalMode === "edit" ? "max-w-4xl" : "max-w-lg"}`}>
               <button 
                 onClick={() => setShowCourseModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60 cursor-pointer"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
-              <h3 className="text-base font-bold text-white mb-4 flex items-center gap-1.5 border-b border-white/10 pb-3">
-                <BookOpen className="h-5 w-5 text-indigo-400" />
+              <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                <BookOpen className="h-5 w-5 text-indigo-600" />
                 {courseModalMode === "create" ? "Khởi tạo Khóa học mới" : "Chỉnh sửa thông tin Khóa học"}
               </h3>
 
@@ -796,36 +796,36 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 {/* COLUMN 1: Edit course metadata form */}
                 <form onSubmit={handleSaveCourse} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70 font-sans">Tên khóa học *</label>
+                    <label className="text-xs font-semibold text-slate-700 font-sans">Tên khóa học *</label>
                     <input
                       type="text"
                       required
                       placeholder="Ví dụ: Lập trình Node.js & React nâng cao"
                       value={courseTitle}
                       onChange={(e) => setCourseTitle(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70 font-sans">Mô tả tóm tắt *</label>
+                    <label className="text-xs font-semibold text-slate-700 font-sans">Mô tả tóm tắt *</label>
                     <textarea
                       required
                       rows={3}
                       placeholder="Nhập mô tả chi tiết chương trình đào tạo..."
                       value={courseDesc}
                       onChange={(e) => setCourseDesc(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Danh mục</label>
+                      <label className="text-xs font-semibold text-slate-700 font-sans">Danh mục</label>
                       <select
                         value={courseCategory}
                         onChange={(e) => setCourseCategory(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                        className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                       >
                         <option value="Web Development">Lập trình Web</option>
                         <option value="Mobile App">Lập trình Di động</option>
@@ -836,11 +836,11 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Trình độ</label>
+                      <label className="text-xs font-semibold text-slate-700 font-sans">Trình độ</label>
                       <select
                         value={courseLevel}
                         onChange={(e) => setCourseLevel(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                        className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                       >
                         <option value="Cơ bản">Cơ bản</option>
                         <option value="Trung cấp">Trung cấp</option>
@@ -851,51 +851,51 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Học phí bán (VND)</label>
+                      <label className="text-xs font-semibold text-slate-700 font-sans">Học phí bán (VND)</label>
                       <input
                         type="number"
                         min={0}
                         value={coursePrice}
                         onChange={(e) => setCoursePrice(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                        className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Giá gốc (gạch ngang)</label>
+                      <label className="text-xs font-semibold text-slate-700 font-sans">Giá gốc (gạch ngang)</label>
                       <input
                         type="number"
                         min={0}
                         placeholder="Để trống nếu không có"
                         value={courseOriginalPrice}
                         onChange={(e) => setCourseOriginalPrice(e.target.value === "" ? "" : Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                        className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-white/70 font-sans">Số buổi học</label>
+                      <label className="text-xs font-semibold text-slate-700 font-sans">Số buổi học</label>
                       <input
                         type="number"
                         min={1}
                         value={courseLessonsCount}
                         onChange={(e) => setCourseLessonsCount(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                        className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-white/70 font-sans">Ảnh Thumbnail (URL)</label>
+                    <label className="text-xs font-semibold text-slate-700 font-sans">Ảnh Thumbnail (URL)</label>
                     <input
                       type="url"
                       placeholder="https://mcna.vn/... hoặc đường dẫn ảnh"
                       value={courseThumb}
                       onChange={(e) => setCourseThumb(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     />
                     {courseThumb.trim() && (
-                      <div className="mt-2 h-24 w-40 rounded-xl overflow-hidden border border-white/10 relative bg-slate-950">
+                      <div className="mt-2 h-24 w-40 rounded-xl overflow-hidden border border-slate-200 relative bg-slate-100">
                         <img
                           src={courseThumb}
                           alt="Preview"
@@ -909,27 +909,27 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70 font-sans">Từ khóa (Tags - phân tách bằng dấu phẩy)</label>
+                    <label className="text-xs font-semibold text-slate-700 font-sans">Từ khóa (Tags - phân tách bằng dấu phẩy)</label>
                     <input
                       type="text"
                       placeholder="ví dụ: react, javascript, frontend"
                       value={courseTags}
                       onChange={(e) => setCourseTags(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     />
                   </div>
 
-                  <div className="pt-4 flex justify-end gap-3 border-t border-white/10 font-sans">
+                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100 font-sans">
                     <button
                       type="button"
                       onClick={() => setShowCourseModal(false)}
-                      className="px-4 py-2 bg-transparent text-white/60 hover:text-white cursor-pointer font-sans"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium cursor-pointer font-sans transition"
                     >
                       Hủy bỏ
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer font-sans"
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer font-sans shadow-xs"
                     >
                       Lưu thông tin
                     </button>
@@ -938,11 +938,11 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                 {/* COLUMN 2: Class Sections and Timetables List (only in edit mode) */}
                 {courseModalMode === "edit" && editingCourseId && (
-                  <div className="space-y-4 border-t md:border-t-0 md:border-l md:pl-8 border-white/10 pt-4 md:pt-0 font-sans">
-                    <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                  <div className="space-y-4 border-t md:border-t-0 md:border-l md:pl-8 border-slate-200 pt-4 md:pt-0 font-sans">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                       <div>
-                        <h4 className="text-xs font-bold text-white tracking-wide uppercase font-sans">Các lớp học phần tương ứng</h4>
-                        <p className="text-[10px] text-white/50 font-sans">Thời khóa biểu, phòng học và giảng viên</p>
+                        <h4 className="text-xs font-bold text-slate-900 tracking-wide uppercase font-sans">Các lớp học phần tương ứng</h4>
+                        <p className="text-[10px] text-slate-400 font-sans">Thời khóa biểu, phòng học và giảng viên</p>
                       </div>
                       <button
                         type="button"
@@ -950,7 +950,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           setSectionCourseId(editingCourseId);
                           handleOpenCreateSection();
                         }}
-                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded-lg transition cursor-pointer flex items-center gap-1 font-sans"
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] rounded-lg transition cursor-pointer flex items-center gap-1 font-sans shadow-xs"
                       >
                         <Plus className="h-3 w-3" /> Thêm lớp
                       </button>
@@ -964,11 +964,11 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                           const currentCount = getSectionRegisteredCount(sec.id);
 
                           return (
-                            <div key={sec.id} className="bg-white/5 border border-white/10 rounded-2xl p-3.5 space-y-2.5 relative group font-sans">
+                            <div key={sec.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5 relative group font-sans">
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <span className="font-mono font-bold text-indigo-300 text-xs block">{sec.sectionCode}</span>
-                                  <span className="text-[10px] text-white/40 font-sans">Sĩ số: {currentCount}/{sec.maxStudents}</span>
+                                  <span className="font-mono font-bold text-indigo-700 text-xs block">{sec.sectionCode}</span>
+                                  <span className="text-[10px] text-slate-400 font-sans">Sĩ số: {currentCount}/{sec.maxStudents}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <button
@@ -977,7 +977,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                       setSelectedSectionForForum(sec);
                                       setShowForumModal(true);
                                     }}
-                                    className="p-1 hover:bg-white/10 text-indigo-300 rounded cursor-pointer"
+                                    className="p-1 hover:bg-slate-200 text-slate-500 hover:text-indigo-600 rounded cursor-pointer transition"
                                     title="Xem thảo luận lớp học"
                                   >
                                     <MessageSquare className="h-3.5 w-3.5" />
@@ -985,7 +985,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditSection(sec)}
-                                    className="p-1 hover:bg-white/10 text-indigo-300 rounded cursor-pointer"
+                                    className="p-1 hover:bg-slate-200 text-slate-500 hover:text-indigo-600 rounded cursor-pointer transition"
                                     title="Sửa ca học"
                                   >
                                     <Edit className="h-3.5 w-3.5" />
@@ -993,7 +993,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteSection(sec.id, sec.sectionCode)}
-                                    className="p-1 hover:bg-red-500/10 text-red-400 rounded cursor-pointer"
+                                    className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded cursor-pointer transition"
                                     title="Xóa lớp học"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -1001,8 +1001,8 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                 </div>
                               </div>
 
-                              <div className="text-[11px] text-white/50 font-sans space-y-1">
-                                <div>Giảng viên: <span className="text-white font-medium">{teacherName}</span></div>
+                              <div className="text-[11px] text-slate-500 font-sans space-y-1">
+                                <div>Giảng viên: <span className="text-slate-800 font-medium">{teacherName}</span></div>
                                 <div className="space-y-0.5">{renderSchedule(sec.schedule)}</div>
                                 {(sec.meetingUrl || sec.groupChatUrl) && (
                                   <div className="flex flex-wrap gap-1.5 pt-1">
@@ -1011,7 +1011,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                         href={sec.meetingUrl}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 rounded-full font-sans transition"
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-sans transition border border-indigo-200/60 font-medium"
                                       >
                                         <Video className="h-3 w-3" /> Zoom/Meet
                                       </a>
@@ -1021,7 +1021,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                         href={sec.groupChatUrl}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded-full font-sans transition"
+                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-md font-sans transition border border-emerald-200/60 font-medium"
                                       >
                                         <MessageCircle className="h-3 w-3" /> Nhóm Zalo
                                       </a>
@@ -1034,7 +1034,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         })}
 
                       {(store.courseSections || []).filter((sec: CourseSection) => sec.courseId === editingCourseId).length === 0 && (
-                        <div className="text-center py-10 bg-black/20 rounded-2xl border border-dashed border-white/10 text-white/40 font-sans">
+                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 font-sans">
                           Chưa có lớp học phần nào được tạo cho môn học này.
                         </div>
                       )}
@@ -1050,29 +1050,29 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Modal 2: CREATE/EDIT SECTION */}
       {showSectionModal && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-white">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-slate-900">
               <button 
                 onClick={() => setShowSectionModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
-              <h3 className="text-base font-bold text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3">
-                <Calendar className="h-5 w-5 text-indigo-400" />
+              <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                <Calendar className="h-5 w-5 text-indigo-600" />
                 {sectionModalMode === "create" ? "Tạo Lớp học phần mới" : "Chỉnh sửa ca học lớp"}
               </h3>
 
               <form onSubmit={handleSaveSection} className="space-y-4">
                 {sectionModalMode === "create" ? (
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Môn học tương ứng *</label>
+                    <label className="text-xs font-semibold text-slate-700">Môn học tương ứng *</label>
                     <select
                       required
                       value={sectionCourseId}
                       onChange={(e) => setSectionCourseId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     >
                       <option value="" disabled>-- Chọn môn học --</option>
                       {store.courses.map((c: any) => (
@@ -1082,32 +1082,32 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70 block">Môn học</label>
-                    <div className="px-3 py-2 bg-black/20 rounded-xl text-white/70 font-semibold border border-white/5">
+                    <label className="text-xs font-semibold text-slate-700 block">Môn học</label>
+                    <div className="px-3 py-2 bg-slate-100 rounded-xl text-slate-700 font-semibold border border-slate-200">
                       {(store.courses || []).find((c: any) => c.id === sectionCourseId)?.title || "Môn học"}
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Mã Lớp học *</label>
+                  <label className="text-xs font-semibold text-slate-700">Mã Lớp học *</label>
                   <input
                     type="text"
                     required
                     placeholder="ví dụ: AI01-01"
                     value={sectionCode}
                     onChange={(e) => setSectionCode(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Giảng viên phụ trách</label>
+                    <label className="text-xs font-semibold text-slate-700">Giảng viên phụ trách</label>
                     <select
                       value={sectionTeacherId}
                       onChange={(e) => setSectionTeacherId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     >
                       <option value="">-- Chưa phân công --</option>
                       {teachers.map((t: any) => (
@@ -1117,7 +1117,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Sĩ số tối đa</label>
+                    <label className="text-xs font-semibold text-slate-700">Sĩ số tối đa</label>
                     <input
                       type="number"
                       required
@@ -1125,24 +1125,24 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       max={100}
                       value={sectionMaxStudents}
                       onChange={(e) => setSectionMaxStudents(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs text-xs"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Ngày khai giảng</label>
+                    <label className="text-xs font-semibold text-slate-700">Ngày khai giảng</label>
                     <input
                       type="date"
                       value={sectionOpeningDate}
                       onChange={(e) => setSectionOpeningDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs text-xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Số buổi học</label>
+                    <label className="text-xs font-semibold text-slate-700">Số buổi học</label>
                     <input
                       type="number"
                       required
@@ -1150,16 +1150,16 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       max={200}
                       value={sectionSessionsCount}
                       onChange={(e) => setSectionSessionsCount(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs text-xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Trạng thái lớp</label>
+                    <label className="text-xs font-semibold text-slate-700">Trạng thái lớp</label>
                     <select
                       value={sectionStatus}
                       onChange={(e) => setSectionStatus(e.target.value as any)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     >
                       <option value="pending">Chờ mở lớp (Pending)</option>
                       <option value="open">Đang mở tuyển (Open)</option>
@@ -1171,36 +1171,36 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Link phòng học online (Zoom / Google Meet)</label>
+                    <label className="text-xs font-semibold text-slate-700">Link phòng học online (Zoom / Google Meet)</label>
                     <input
                       type="url"
                       placeholder="https://meet.google.com/xyz hoặc https://zoom.us/j/..."
                       value={sectionMeetingUrl}
                       onChange={(e) => setSectionMeetingUrl(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs shadow-xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Link nhóm thảo luận (Zalo / Discord)</label>
+                    <label className="text-xs font-semibold text-slate-700">Link nhóm thảo luận (Zalo / Discord)</label>
                     <input
                       type="url"
                       placeholder="https://zalo.me/g/... hoặc https://discord.gg/..."
                       value={sectionGroupChatUrl}
                       onChange={(e) => setSectionGroupChatUrl(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs shadow-xs"
                     />
                   </div>
                 </div>
 
                 {/* Local slots schedule editor */}
-                <div className="space-y-2 border-t border-white/10 pt-3">
+                <div className="space-y-2 border-t border-slate-100 pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-white/70">Thời khóa biểu ca học</span>
+                    <span className="text-xs font-semibold text-slate-700">Thời khóa biểu ca học</span>
                     <button
                       type="button"
                       onClick={() => setSectionSlots([...sectionSlots, { dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }])}
-                      className="text-[10px] text-indigo-300 font-bold hover:underline cursor-pointer"
+                      className="text-[11px] text-indigo-600 font-semibold hover:underline cursor-pointer"
                     >
                       + Thêm ca học
                     </button>
@@ -1208,7 +1208,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                   <div className="space-y-2.5 max-h-36 overflow-y-auto pr-1">
                     {sectionSlots.map((slot, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-black/25 p-2 rounded-xl border border-white/5">
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200/80">
                         <div className="col-span-3">
                           <select
                             value={slot.dayOfWeek}
@@ -1217,7 +1217,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               newSlots[idx].dayOfWeek = e.target.value;
                               setSectionSlots(newSlots);
                             }}
-                            className="w-full px-1.5 py-1 bg-slate-950 text-white border border-white/10 rounded-lg focus:outline-none font-sans text-[11px]"
+                            className="w-full px-2 py-1 bg-white text-slate-900 border border-slate-200 rounded-lg focus:outline-none font-sans text-[11px]"
                           >
                             {DAYS_OF_WEEK.map(d => (
                               <option key={d} value={d}>{d}</option>
@@ -1234,7 +1234,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               newSlots[idx].startTime = e.target.value;
                               setSectionSlots(newSlots);
                             }}
-                            className="w-full px-1.5 py-1 bg-slate-950 text-white border border-white/10 rounded-lg text-center font-mono text-[11px]"
+                            className="w-full px-2 py-1 bg-white text-slate-900 border border-slate-200 rounded-lg text-center font-mono text-[11px]"
                           />
                         </div>
                         <div className="col-span-2">
@@ -1247,7 +1247,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               newSlots[idx].endTime = e.target.value;
                               setSectionSlots(newSlots);
                             }}
-                            className="w-full px-1.5 py-1 bg-slate-950 text-white border border-white/10 rounded-lg text-center font-mono text-[11px]"
+                            className="w-full px-2 py-1 bg-white text-slate-900 border border-slate-200 rounded-lg text-center font-mono text-[11px]"
                           />
                         </div>
                         <div className="col-span-4">
@@ -1260,7 +1260,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               newSlots[idx].room = e.target.value;
                               setSectionSlots(newSlots);
                             }}
-                            className="w-full px-1.5 py-1 bg-slate-950 text-white border border-white/10 rounded-lg text-center text-[11px]"
+                            className="w-full px-2 py-1 bg-white text-slate-900 border border-slate-200 rounded-lg text-center text-[11px]"
                           />
                         </div>
                         <div className="col-span-1 text-center">
@@ -1268,7 +1268,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                             type="button"
                             disabled={sectionSlots.length === 1}
                             onClick={() => setSectionSlots(sectionSlots.filter((_, sIdx) => sIdx !== idx))}
-                            className="p-1 hover:bg-red-500/20 text-red-400 rounded disabled:opacity-40 cursor-pointer"
+                            className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded disabled:opacity-40 cursor-pointer transition"
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -1278,7 +1278,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
 
                   {formConflicts.length > 0 && (
-                    <div className="mt-3 bg-red-500/15 border border-red-500/25 rounded-xl p-3 text-[11px] text-red-200 space-y-1 leading-relaxed max-h-24 overflow-y-auto">
+                    <div className="mt-3 bg-rose-50 border border-rose-200 rounded-xl p-3 text-[11px] text-rose-700 space-y-1 leading-relaxed max-h-24 overflow-y-auto">
                       <div className="font-bold flex items-center gap-1"><Info className="h-3.5 w-3.5" /> Trùng lịch giảng dạy hoặc phòng học:</div>
                       {formConflicts.map((c, cIdx) => (
                         <div key={cIdx}>- {c}</div>
@@ -1287,17 +1287,17 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   )}
                 </div>
 
-                <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowSectionModal(false)}
-                    className="px-4 py-2 bg-transparent text-white/60 hover:text-white cursor-pointer"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium cursor-pointer transition"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-xs"
                   >
                     Lưu ca học
                   </button>
@@ -1311,26 +1311,26 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Modal 3: MANAGE LESSONS LIST */}
       {showLessonsModal && selectedCourseForLessons && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative text-xs text-white">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-2xl shadow-2xl relative text-xs text-slate-900">
               <button 
                 onClick={() => setShowLessonsModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60 cursor-pointer"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
-              <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-3 pr-8">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3 pr-8">
                 <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-1.5 font-sans">
-                    <BookOpen className="h-5 w-5 text-indigo-400 font-sans" />
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5 font-sans">
+                    <BookOpen className="h-5 w-5 text-indigo-600 font-sans" />
                     Quản lý bài học: {selectedCourseForLessons.title}
                   </h3>
-                  <p className="text-[11px] text-white/50 font-sans">Xem và cập nhật khung chương trình từng buổi học của môn học.</p>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">Xem và cập nhật khung chương trình từng buổi học của môn học.</p>
                 </div>
                 <button
                   onClick={handleOpenCreateLesson}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition cursor-pointer flex items-center gap-1 font-sans"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition cursor-pointer flex items-center gap-1 font-sans shadow-xs"
                 >
                   <Plus className="h-3.5 w-3.5" /> Thêm Bài học
                 </button>
@@ -1341,27 +1341,27 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   .filter((l: any) => l.courseId === selectedCourseForLessons.id)
                   .sort((a: any, b: any) => a.order - b.order)
                   .map((lesson: any) => (
-                    <div key={lesson.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-4">
+                    <div key={lesson.id} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-12 h-7 rounded-lg bg-indigo-500/20 border border-indigo-400/20 text-indigo-300 font-mono text-[10px] flex items-center justify-center flex-shrink-0">
+                        <div className="w-12 h-7 rounded-lg bg-indigo-50 border border-indigo-200/60 text-indigo-700 font-mono text-[10px] font-semibold flex items-center justify-center flex-shrink-0">
                           Buổi {lesson.order}
                         </div>
                         <div className="min-w-0">
-                          <h5 className="font-semibold text-white truncate text-xs font-sans">{lesson.title}</h5>
-                          <p className="text-[10px] text-white/40 truncate font-sans">{lesson.duration || "15 phút"}{lesson.videoUrl ? ` | ${lesson.videoUrl}` : ""}</p>
+                          <h5 className="font-semibold text-slate-900 truncate text-xs font-sans">{lesson.title}</h5>
+                          <p className="text-[11px] text-slate-500 truncate font-sans">{lesson.duration || "15 phút"}{lesson.videoUrl ? ` | ${lesson.videoUrl}` : ""}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleOpenEditLesson(lesson)}
-                          className="p-1.5 hover:bg-white/10 text-indigo-300 rounded-lg cursor-pointer"
+                          className="p-1.5 hover:bg-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg cursor-pointer transition"
                           title="Chỉnh sửa bài học"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
-                          className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg cursor-pointer"
+                          className="p-1.5 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
                           title="Xóa bài học"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1371,16 +1371,16 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   ))}
 
                 {(store.lessons || []).filter((l: any) => l.courseId === selectedCourseForLessons.id).length === 0 && (
-                  <div className="text-center py-8 bg-black/20 rounded-xl border border-dashed border-white/10 text-white/40 font-sans">
+                  <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 font-sans">
                     Chưa có bài học nào được tạo cho khóa học này.
                   </div>
                 )}
               </div>
 
-              <div className="pt-4 mt-4 border-t border-white/10 flex justify-end">
+              <div className="pt-4 mt-4 border-t border-slate-100 flex justify-end">
                 <button
                   onClick={() => setShowLessonsModal(false)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer font-sans"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer font-sans shadow-xs"
                 >
                   Hoàn tất
                 </button>
@@ -1393,61 +1393,61 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Modal 4: CREATE/EDIT LESSON FORM */}
       {showLessonFormModal && selectedCourseForLessons && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-white">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-slate-900">
               <button 
                 onClick={() => setShowLessonFormModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60 cursor-pointer"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
-              <h3 className="text-base font-bold text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3 font-sans">
-                <BookOpen className="h-5 w-5 text-indigo-400 font-sans" />
+              <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-1.5 border-b border-slate-100 pb-3 font-sans">
+                <BookOpen className="h-5 w-5 text-indigo-600 font-sans" />
                 {lessonFormMode === "create" ? "Thêm bài học mới" : "Chỉnh sửa bài học"}
               </h3>
 
               <form onSubmit={handleSaveLesson} className="space-y-4 font-sans">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Tiêu đề bài học *</label>
+                  <label className="text-xs font-semibold text-slate-700">Tiêu đề bài học *</label>
                   <input
                     type="text"
                     required
                     placeholder="Nhập tiêu đề bài học..."
                     value={lessonTitle}
                     onChange={(e) => setLessonTitle(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Buổi số *</label>
+                    <label className="text-xs font-semibold text-slate-700">Buổi số *</label>
                     <input
                       type="number"
                       required
                       min={1}
                       value={lessonOrder}
                       onChange={(e) => setLessonOrder(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-white/70">Thời lượng bài học *</label>
+                    <label className="text-xs font-semibold text-slate-700">Thời lượng bài học *</label>
                     <input
                       type="text"
                       required
                       placeholder="ví dụ: 15 mins, 2 giờ..."
                       value={lessonDuration}
                       onChange={(e) => setLessonDuration(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white/70 block">Đường dẫn hoặc Tải lên video bài giảng (nếu có)</label>
+                  <label className="text-xs font-semibold text-slate-700 block">Đường dẫn hoặc Tải lên video bài giảng (nếu có)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -1455,9 +1455,9 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       value={lessonVideoUrl}
                       onChange={(e) => setLessonVideoUrl(e.target.value)}
                       disabled={isVideoUploading}
-                      className="flex-1 px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                      className="flex-1 px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs shadow-xs"
                     />
-                    <label className={`px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer text-xs font-bold text-white flex items-center justify-center min-w-[110px] transition ${isVideoUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
+                    <label className={`px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl cursor-pointer text-xs font-semibold text-slate-700 flex items-center justify-center min-w-[110px] transition ${isVideoUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
                       {isVideoUploading ? "Đang tải..." : "Tải tệp video"}
                       <input
                         type="file"
@@ -1469,35 +1469,35 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     </label>
                   </div>
                   {isVideoUploading && (
-                    <div className="text-[10px] text-indigo-300 animate-pulse font-sans">
+                    <div className="text-[10px] text-indigo-600 animate-pulse font-sans">
                       ⏳ Đang tải video bài giảng lên máy chủ (Giới hạn tối đa 10GB). Vui lòng không đóng trình duyệt...
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/70">Nội dung bài học lý thuyết / hướng dẫn *</label>
+                  <label className="text-xs font-semibold text-slate-700">Nội dung bài học lý thuyết / hướng dẫn *</label>
                   <textarea
                     required
                     rows={6}
                     placeholder="Nhập nội dung bài học lý thuyết, tài liệu hướng dẫn học viên..."
                     value={lessonContent}
                     onChange={(e) => setLessonContent(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 font-sans leading-relaxed text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans leading-relaxed text-xs shadow-xs"
                   />
                 </div>
 
-                <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowLessonFormModal(false)}
-                    className="px-4 py-2 bg-transparent text-white/60 hover:text-white cursor-pointer font-sans"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium cursor-pointer font-sans transition"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer font-sans"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer font-sans shadow-xs"
                   >
                     Lưu bài học
                   </button>
@@ -1511,23 +1511,23 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Student List Modal */}
       {showStudentsModal && selectedSectionForStudents && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative text-xs text-white max-h-[85vh] flex flex-col">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative text-xs text-slate-900 max-h-[85vh] flex flex-col">
               <button 
                 onClick={() => setShowStudentsModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60 cursor-pointer"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
               {/* Modal Header */}
-              <div className="border-b border-white/10 pb-4 mb-4">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Users className="h-5 w-5 text-indigo-400" />
+              <div className="border-b border-slate-100 pb-4 mb-4">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-600" />
                   Danh sách Học viên — Lớp {selectedSectionForStudents.sectionCode}
                 </h3>
-                <p className="text-xs text-white/50 mt-1">
-                  Môn học: <strong className="text-white font-semibold">{(store.courses || []).find((c: any) => c.id === selectedSectionForStudents.courseId)?.title || "Không rõ"}</strong>
+                <p className="text-xs text-slate-500 mt-1">
+                  Môn học: <strong className="text-slate-800 font-semibold">{(store.courses || []).find((c: any) => c.id === selectedSectionForStudents.courseId)?.title || "Không rõ"}</strong>
                 </p>
               </div>
 
@@ -1540,7 +1540,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                   if (sectionRegs.length === 0) {
                     return (
-                      <div className="py-12 text-center text-white/30 italic">
+                      <div className="py-12 text-center text-slate-400 italic">
                         Hiện chưa có học viên nào được xếp vào lớp này.
                       </div>
                     );
@@ -1549,31 +1549,31 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   return (
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
-                        <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                          <th className="py-2.5 px-3">Họ và Tên</th>
-                          <th className="py-2.5 px-3">Email</th>
-                          <th className="py-2.5 px-3">Số điện thoại</th>
-                          <th className="py-2.5 px-3">Trạng thái</th>
+                        <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-semibold font-mono bg-slate-50">
+                          <th className="py-3 px-3">Họ và Tên</th>
+                          <th className="py-3 px-3">Email</th>
+                          <th className="py-3 px-3">Số điện thoại</th>
+                          <th className="py-3 px-3">Trạng thái</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5">
+                      <tbody className="divide-y divide-slate-100 bg-white">
                         {sectionRegs.map((reg: any) => {
                           const studentUser = (store.users || []).find((u: any) => u.id === reg.studentId);
                           if (!studentUser) return null;
 
                           return (
-                            <tr key={reg.id} className="hover:bg-white/2 transition">
-                              <td className="py-3 px-3 font-semibold text-white">
+                            <tr key={reg.id} className="hover:bg-slate-50/60 transition">
+                              <td className="py-3 px-3 font-semibold text-slate-900">
                                 {studentUser.name}
                               </td>
-                              <td className="py-3 px-3 font-mono text-white/60">
+                              <td className="py-3 px-3 font-mono text-slate-600">
                                 {studentUser.email}
                               </td>
-                              <td className="py-3 px-3 font-mono text-white/60">
+                              <td className="py-3 px-3 font-mono text-slate-600">
                                 {studentUser.phone || "—"}
                               </td>
                               <td className="py-3 px-3">
-                                <span className="inline-block px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 font-mono text-[9px] rounded border border-indigo-500/20">
+                                <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono text-[10px] font-semibold rounded-md border border-indigo-200/60">
                                   {reg.status === "registered" ? "Đang học" : reg.status}
                                 </span>
                               </td>
@@ -1587,10 +1587,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
               </div>
 
               {/* Modal Footer */}
-              <div className="border-t border-white/10 pt-4 mt-4 flex justify-end">
+              <div className="border-t border-slate-100 pt-4 mt-4 flex justify-end">
                 <button
                   onClick={() => setShowStudentsModal(false)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition cursor-pointer"
                 >
                   Đóng
                 </button>
@@ -1603,23 +1603,23 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
       {/* Forum Discussion Modal */}
       {showForumModal && selectedSectionForForum && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative text-xs text-white max-h-[85vh] flex flex-col">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative text-xs text-slate-900 max-h-[85vh] flex flex-col">
               <button 
                 onClick={() => setShowForumModal(false)}
-                className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60 cursor-pointer"
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
               {/* Modal Header */}
-              <div className="border-b border-white/10 pb-4 mb-4">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-indigo-400" />
+              <div className="border-b border-slate-100 pb-4 mb-4">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-indigo-600" />
                   Diễn đàn Thảo luận — Lớp {selectedSectionForForum.sectionCode}
                 </h3>
-                <p className="text-xs text-white/50 mt-1 font-sans">
-                  Môn học: <strong className="text-white font-semibold">{(store.courses || []).find((c: any) => c.id === selectedSectionForForum.courseId)?.title || "Không rõ"}</strong>
+                <p className="text-xs text-slate-500 mt-1 font-sans">
+                  Môn học: <strong className="text-slate-800 font-semibold">{(store.courses || []).find((c: any) => c.id === selectedSectionForForum.courseId)?.title || "Không rõ"}</strong>
                 </p>
               </div>
 

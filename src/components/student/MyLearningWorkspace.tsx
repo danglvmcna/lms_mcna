@@ -162,7 +162,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <span className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-widest">Thông tin buổi học</span>
-          <h5 className="text-base md:text-lg font-display font-extrabold text-slate-900 leading-tight">
+          <h5 className="text-base md:text-lg font-display font-bold text-slate-900 leading-tight">
             {session.title}{session.topic ? ` - ${session.topic}` : ""}
           </h5>
         </div>
@@ -181,21 +181,21 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     </div>
   ) : null;
   const renderVideoStage = (videoUrl: string, title: string) => (
-    <div className="bg-black border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
-      <div className="aspect-video w-full bg-black flex items-center justify-center">
+    <div className="bg-slate-950 border border-slate-200 rounded-2xl overflow-hidden shadow-sm relative">
+      <div className="aspect-video w-full bg-slate-950 flex items-center justify-center">
         <video
           controls
           src={videoUrl}
           className="w-full h-full object-contain"
         />
       </div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 md:px-5 py-3 bg-slate-950/95 border-t border-white/10">
-        <span className="text-xs md:text-sm font-bold text-white truncate">{title}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 md:px-5 py-3 bg-white border-t border-slate-200">
+        <span className="text-xs md:text-sm font-semibold text-slate-800 truncate">{title}</span>
         <a
           href={videoUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-[10px] font-mono font-bold text-cyan-300 hover:text-cyan-200 transition shrink-0"
+          className="text-[10px] font-mono font-semibold text-indigo-600 hover:text-indigo-700 transition shrink-0"
         >
           Mở video trong tab mới ↗
         </a>
@@ -245,7 +245,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                     {itemCount} mục
                   </span>
                 </div>
-                <h3 className="text-xl md:text-2xl font-display font-extrabold text-slate-900 leading-tight">
+                <h3 className="text-xl md:text-2xl font-display font-bold text-slate-900 leading-tight">
                   {session.title}{session.topic ? ` - ${session.topic}` : ""}
                 </h3>
               </div>
@@ -447,7 +447,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
-          <h4 className="text-lg font-display font-extrabold text-slate-950 flex items-center gap-2">
+          <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
             <Folder className="h-5 w-5 text-indigo-600" />
             Tổng quan chương trình
           </h4>
@@ -613,15 +613,15 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         {/* Tab 2: Registered Courses checklist (My Learning) */}
         {activeSubTab === "learning" && !learningCourseId && (
           <div className="space-y-6">
-            <h4 className="text-base font-display font-semibold text-white">Khóa học Đào tạo của tôi</h4>
+            <h4 className="text-base font-display font-bold text-slate-900">Khóa học Đào tạo của tôi</h4>
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/35" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 value={myClassSearch}
                 onChange={(event) => setMyClassSearch(event.target.value)}
                 placeholder="Tìm lớp học theo tên môn, mã lớp, trạng thái..."
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-black/25 border border-white/10 text-sm text-white placeholder-white/35 focus:outline-none focus:border-indigo-400"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-xs"
               />
             </div>
 
@@ -639,47 +639,49 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 
                 return (
-                  <div key={enroll.id} className="bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 hover:border-white/20 rounded-2xl flex flex-col justify-between transition-all duration-300 shadow-xl group overflow-hidden">
+                  <div key={enroll.id} className="bg-white border border-slate-200/90 hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md rounded-2xl flex flex-col justify-between transition-all duration-200 shadow-xs group overflow-hidden">
                     {course.thumbnail ? (
-                      <div className="h-32 w-full overflow-hidden">
-                        <img src={course.thumbnail} alt="" className="w-full h-full object-cover" />
+                      <div className="h-36 w-full overflow-hidden border-b border-slate-100">
+                        <img src={course.thumbnail} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                       </div>
                     ) : (
-                      <div className="h-20 w-full bg-gradient-to-br from-indigo-600/30 to-slate-800/50 flex items-center justify-center">
-                        <BookOpen className="h-8 w-8 text-white/30" />
+                      <div className="h-24 w-full bg-gradient-to-br from-indigo-50 to-slate-100 flex items-center justify-center border-b border-slate-100">
+                        <BookOpen className="h-8 w-8 text-indigo-400" />
                       </div>
                     )}
                     <div className="p-6 flex flex-col justify-between flex-1">
                     <div className="space-y-3.5">
-                      <div className="flex justify-between items-start gap-3">
-                        <span className="text-[10px] font-mono text-indigo-300 uppercase bg-indigo-500/10 py-1 px-2.5 rounded-full border border-indigo-500/20 font-bold">
-                          {course.category}
-                        </span>
-                        {section && (
-                          <span className="text-[10px] font-mono text-cyan-200 uppercase bg-cyan-500/10 py-1 px-2.5 rounded-full border border-cyan-500/20 font-bold">
-                            {section.sectionCode}
+                      <div className="flex justify-between items-start gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-mono text-indigo-700 uppercase bg-indigo-50 py-1 px-2.5 rounded-full border border-indigo-100 font-bold">
+                            {course.category}
                           </span>
-                        )}
+                          {section && (
+                            <span className="text-[10px] font-mono text-slate-700 uppercase bg-slate-100 py-1 px-2.5 rounded-full border border-slate-200 font-bold">
+                              {section.sectionCode}
+                            </span>
+                          )}
+                        </div>
                         
                         <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-mono font-bold border ${
-                          enroll.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                          enroll.status === "pending" ? "bg-violet-500/10 text-violet-300 border-violet-500/20 font-bold" :
-                          enroll.status === "pending_payment" ? "bg-amber-500/10 text-amber-300 border-amber-500/20 font-bold" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                          enroll.status === "completed" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          enroll.status === "pending" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                          enroll.status === "pending_payment" ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
                         }`}>
                           {enroll.status === "pending" ? "Chờ xếp lớp" : enroll.status === "pending_payment" ? "Chờ xác nhận thanh toán" : enroll.status === "active" ? "Đang học" : "Đã hoàn thành"}
                         </span>
                       </div>
 
-                      <h5 className="font-display font-bold text-white text-base leading-tight group-hover:text-indigo-200 transition-colors">{course.title}</h5>
+                      <h5 className="font-display font-bold text-slate-900 text-base leading-snug group-hover:text-indigo-600 transition-colors">{course.title}</h5>
                       
                       {section && (
-                        <div className="space-y-1 text-xs pt-1">
-                          <div className="text-white/60 flex items-center gap-1.5 font-sans">
-                            <Calendar className="h-3.5 w-3.5 text-indigo-400" />
-                            <span>Khai giảng: <strong className="text-emerald-400">{section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Chưa xác định"}</strong></span>
+                        <div className="space-y-1 text-xs pt-1 text-slate-600">
+                          <div className="flex items-center gap-1.5 font-sans">
+                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                            <span>Khai giảng: <strong className="text-emerald-700 font-semibold">{section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Chưa xác định"}</strong></span>
                           </div>
-                          <div className="text-white/60 flex items-start gap-1.5 font-sans">
-                            <Clock className="h-3.5 w-3.5 text-indigo-400 mt-0.5" />
+                          <div className="flex items-start gap-1.5 font-sans">
+                            <Clock className="h-3.5 w-3.5 text-slate-400 mt-0.5" />
                             <span className="leading-tight">
                               Lịch học: <strong>{section.schedule.map((slot: any) => `${slot.dayOfWeek} (${slot.startTime}-${slot.endTime})`).join(", ")}</strong>
                             </span>
@@ -690,13 +692,13 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       {/* Interactive Progress Tracking */}
                       {enroll.status !== "pending_payment" && enroll.status !== "pending" && (
                         <div className="space-y-2 pt-2">
-                          <div className="flex justify-between text-[11px] text-white/50 font-mono">
+                          <div className="flex justify-between text-[11px] text-slate-500 font-mono">
                             <span>Tiến độ học tập</span>
                             <span>{completedProgress}/{totalLessonsCount} bài đã đạt ({percentage}%)</span>
                           </div>
-                          <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 p-[1px]">
+                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                             <div 
-                              className="bg-indigo-500 h-full rounded-full transition-all duration-500 shadow-md shadow-indigo-500/50"
+                              className="bg-indigo-600 h-full rounded-full transition-all duration-500"
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -704,23 +706,23 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       )}
 
                       {workspaceReady && section && (nextSession || section.meetingUrl) && (
-                        <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 p-3.5 space-y-2.5">
+                        <div className="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3.5 space-y-2.5">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-cyan-300">Buổi học tiếp theo</span>
-                              <p className="mt-1 text-xs font-bold text-white line-clamp-1">{nextSession?.topic || nextSession?.content || "Lớp học trực tuyến MCNA"}</p>
-                              <p className="mt-0.5 text-[10px] text-white/55">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-800">Buổi học tiếp theo</span>
+                              <p className="mt-0.5 text-xs font-bold text-slate-900 line-clamp-1">{nextSession?.topic || nextSession?.content || "Lớp học trực tuyến MCNA"}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-500">
                                 {nextSession?.date ? new Date(nextSession.date).toLocaleString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "Thời gian theo lịch lớp đã công bố"}
                               </p>
                             </div>
-                            <Calendar className="h-5 w-5 text-cyan-400 shrink-0" />
+                            <Calendar className="h-5 w-5 text-cyan-600 shrink-0" />
                           </div>
                           {section.meetingUrl && (
                             <a
                               href={section.meetingUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-500"
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white shadow-xs transition hover:bg-emerald-700"
                             >
                               <Video className="h-3.5 w-3.5" /> Vào phòng Zoom / Google Meet <ExternalLink className="h-3 w-3" />
                             </a>
@@ -729,42 +731,42 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       )}
 
                       {enroll.status === "pending_payment" && (
-                        <div className="bg-amber-500/5 border border-amber-500/10 p-3.5 rounded-xl text-[11px] text-amber-300/80 leading-relaxed font-sans shadow-inner">
+                        <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-[11px] text-amber-800 leading-relaxed font-sans">
                           Giao dịch học phí đang chờ bên xử lý thanh toán xác nhận. Bạn sẽ nhận được thông báo ngay khi trạng thái được cập nhật.
                         </div>
                       )}
                       {enroll.status === "pending" && (
-                        <div className="bg-violet-500/5 border border-violet-500/10 p-3.5 rounded-xl text-[11px] text-violet-200/80 leading-relaxed font-sans shadow-inner">
+                        <div className="bg-violet-50 border border-violet-200 p-3.5 rounded-xl text-[11px] text-violet-800 leading-relaxed font-sans">
                           Yêu cầu đăng ký đã được ghi nhận và đang chờ quản lý xếp lớp học phần.
                         </div>
                       )}
                     </div>
 
-                    <div className="pt-4 border-t border-white/5 mt-5 flex justify-between items-center text-xs">
+                    <div className="pt-4 border-t border-slate-100 mt-5 flex justify-between items-center text-xs">
                       {enroll.status === "pending_payment" ? (
                         <>
-                          <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-amber-400/80">Chờ xác nhận thanh toán</span>
+                          <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-amber-800">Chờ xác nhận thanh toán</span>
                           <button
                             onClick={() => {
                               const foundTx = store.transactions.find(t => t.studentId === currentUser.id && t.courseId === course.id);
                               if (foundTx) setPaymentGuideTx(foundTx);
                             }}
-                            className="p-1.5 px-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold border border-amber-500/20 rounded-xl transition-all duration-200 cursor-pointer text-[10px]"
+                            className="p-1.5 px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold border border-amber-200 rounded-xl transition cursor-pointer text-[10px] shadow-xs"
                           >
                             Hướng dẫn thanh toán
                           </button>
                         </>
                       ) : (enroll.status === "pending" || !workspaceReady) ? (
                         <>
-                          <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-violet-300/80">Chờ xếp lớp</span>
-                          <span className="text-[10px] text-white/40">Chờ xác nhận xếp lớp bởi admin</span>
+                          <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-violet-700">Chờ xếp lớp</span>
+                          <span className="text-[10px] text-slate-400">Chờ xác nhận xếp lớp bởi admin</span>
                         </>
                       ) : (
                         <>
                           <span></span>
                           <button
                             onClick={() => { setLearningCourseId(course.id); setActiveLessonId(null); }}
-                            className="p-2 px-4.5 bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 cursor-pointer"
+                            className="p-2 px-4.5 bg-indigo-600 hover:bg-indigo-700 text-xs text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                           >
                             Vào lớp học <ArrowRight className="h-3.5 w-3.5" />
                           </button>
@@ -777,10 +779,8 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               })}
 
               {filteredMyEnrollments.length === 0 && (
-                <div className="col-span-full text-center py-16 bg-black/10 border border-dashed border-white/5 rounded-2xl text-[0] text-transparent">
-                  <span className="text-xs text-white/45">
-                    {myEnrollments.length === 0 ? "Bạn chưa đăng ký lớp học nào." : "Không tìm thấy lớp học phù hợp với từ khóa."}
-                  </span>
+                <div className="col-span-full text-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
+                  {myEnrollments.length === 0 ? "Bạn chưa đăng ký lớp học nào." : "Không tìm thấy lớp học phù hợp với từ khóa."}
                 </div>
               )}
             </div>
@@ -794,18 +794,18 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           const isAccessGranted = enroll && hasWorkspaceAccess(enroll, section);
           if (!isAccessGranted) {
             return (
-              <div className="py-16 px-6 text-center bg-slate-900/60 border border-white/10 rounded-3xl max-w-xl mx-auto space-y-5 font-sans mt-10 shadow-2xl">
-                <div className="w-16 h-16 bg-rose-500/15 border border-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner animate-pulse">
+              <div className="py-16 px-6 text-center bg-white border border-slate-200/80 rounded-2xl max-w-xl mx-auto space-y-5 font-sans mt-10 shadow-xs">
+                <div className="w-16 h-16 bg-rose-50 border border-rose-200 text-rose-600 rounded-full flex items-center justify-center mx-auto text-2xl shadow-2xs">
                   🔒
                 </div>
-                <h3 className="text-lg font-bold text-white uppercase tracking-wider">Không có quyền truy cập lớp học</h3>
-                <p className="text-xs text-white/50 leading-relaxed max-w-md mx-auto">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">Không có quyền truy cập lớp học</h3>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
                   Bạn chưa thanh toán học phí hoặc chưa được quản lý lớp xác nhận xếp lớp vào học phần này. Vui lòng hoàn tất thủ tục hoặc liên hệ quản trị viên để được hỗ trợ xếp lớp học phần.
                 </p>
-                <div className="pt-4">
+                <div className="pt-2">
                   <button
                     onClick={() => setLearningCourseId(null)}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition text-xs cursor-pointer shadow-lg font-sans"
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition text-xs cursor-pointer shadow-xs font-sans"
                   >
                     Quay lại danh sách khóa học
                   </button>
@@ -829,7 +829,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   <div className="min-w-0 flex-1">
                     <span className="text-[11px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">LỚP HỌC TRỰC TUYẾN</span>
                      <div className="space-y-2 mt-0.5 min-w-0">
-                       <h4 className="text-xl md:text-2xl font-display font-extrabold text-slate-950 leading-tight break-words line-clamp-2 min-w-0">
+                       <h4 className="text-xl md:text-2xl font-display font-bold text-slate-900 leading-tight break-words line-clamp-2 min-w-0">
                         {currentLearningCourse.title}
                       </h4>
                     {(() => {
@@ -934,7 +934,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-5 gap-3">
                           <div className="space-y-1">
                             <span className="text-xs font-mono font-bold text-indigo-700 uppercase tracking-widest">BÀI TẬP TỰ LUẬN</span>
-                            <h5 className="text-lg md:text-xl font-display font-extrabold text-slate-900 leading-tight flex items-center gap-2">
+                            <h5 className="text-lg md:text-xl font-display font-bold text-slate-900 leading-tight flex items-center gap-2">
                               <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
                               {assignObj.title}
                             </h5>
@@ -948,7 +948,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800 flex items-start gap-2 shadow-sm">
                             <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <span className="font-extrabold block text-sm uppercase tracking-wide">Thời hạn nộp bài đã kết thúc</span>
+                              <span className="font-bold block text-sm uppercase tracking-wide">Thời hạn nộp bài đã kết thúc</span>
                               <p className="text-slate-600">
                                 Hạn chót nộp bài là <span className="text-slate-900 font-semibold">{new Date(assignObj.deadline).toLocaleDateString("vi-VN")}</span> lúc <span className="text-slate-900 font-semibold">{new Date(assignObj.deadline).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}</span>. Bạn không thể nộp hoặc chỉnh sửa bài làm sau khi hết hạn.
                               </p>
@@ -1071,7 +1071,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                       <div className="space-y-3 relative z-10">
                         <span className="text-xs font-mono font-bold text-indigo-700 uppercase tracking-widest">BÀI HỌC CHI TIẾT</span>
-                        <h5 className="text-xl md:text-2xl font-display font-extrabold text-slate-900 leading-tight">{currentLessonContentObj.title}</h5>
+                        <h5 className="text-xl md:text-2xl font-display font-bold text-slate-900 leading-tight">{currentLessonContentObj.title}</h5>
 
                         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-b border-slate-200 pb-4">
                           <span className="flex items-center gap-1.5"><User className="h-4 w-4 text-indigo-600" /> Học viện Công nghệ MCNA</span>
@@ -1119,21 +1119,21 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           .filter(Boolean);
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-white font-sans">
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200/80 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 font-sans">
               {/* Header Modal */}
-              <div className="flex justify-between items-center bg-white/3 px-6 py-4 border-b border-white/5">
+              <div className="flex justify-between items-center bg-slate-50/80 px-6 py-4 border-b border-slate-200/80">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-300 font-mono font-bold rounded-lg border border-indigo-500/20 text-xs">
+                  <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-mono font-bold rounded-lg border border-indigo-200 text-xs">
                     {section.sectionCode}
                   </span>
-                  <h4 className="font-display font-bold text-white text-sm">
+                  <h4 className="font-bold text-slate-900 text-sm">
                     Chi tiết Lớp học phần
                   </h4>
                 </div>
                 <button
                   onClick={() => setShowSectionDetailModal(false)}
-                  className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1142,45 +1142,45 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               {/* Content Modal */}
               <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto pr-2 scrollbar-thin">
                 <div className="space-y-1">
-                  <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold">MÔN HỌC</span>
-                  <h3 className="text-lg font-bold text-white leading-snug">{course?.title || "Không rõ môn học"}</h3>
-                  <p className="text-xs text-white/50 whitespace-pre-line">
+                  <span className="text-[10px] text-indigo-600 uppercase tracking-widest font-mono font-bold">MÔN HỌC</span>
+                  <h3 className="text-lg font-bold text-slate-900 leading-snug">{course?.title || "Không rõ môn học"}</h3>
+                  <div className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
                     {course?.description ? <LinkedText text={course.description} /> : "Không có mô tả chi tiết môn học."}
-                  </p>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/60 border border-slate-200/80 p-4 rounded-2xl">
                   <div className="space-y-1">
-                    <span className="text-[10px] text-white/40 block">Giảng viên phụ trách</span>
-                    <span className="font-bold text-white text-xs block">{teacher?.name || "Chưa phân công"}</span>
-                    <span className="text-white/50 text-[10px] block font-mono">{teacher?.email || ""}</span>
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block">Giảng viên phụ trách</span>
+                    <span className="font-semibold text-slate-800 text-xs block">{teacher?.name || "Chưa phân công"}</span>
+                    <span className="text-slate-500 text-[10px] block font-mono">{teacher?.email || ""}</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[10px] text-white/40 block">Khai giảng</span>
-                    <span className="font-bold text-white text-xs block">{section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Đang cập nhật"}</span>
-                    <span className="text-white/50 text-[10px] block font-mono">
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block">Khai giảng</span>
+                    <span className="font-semibold text-slate-800 text-xs block">{section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Đang cập nhật"}</span>
+                    <span className="text-slate-500 text-[10px] block font-mono">
                       {section.numberOfSessions ? `${section.numberOfSessions} buổi học` : ""}
                     </span>
                   </div>
-                  <div className="space-y-1 pt-2 border-t border-white/5 md:border-none">
-                    <span className="text-[10px] text-white/40 block">Sĩ số lớp</span>
-                    <span className="font-bold text-white text-xs block">
+                  <div className="space-y-1 pt-2 border-t border-slate-200/60 md:border-none">
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block">Sĩ số lớp</span>
+                    <span className="font-semibold text-slate-800 text-xs block">
                       {registrations.length} / {section.maxStudents} Học viên
                     </span>
                   </div>
-                  <div className="space-y-1 pt-2 border-t border-white/5 md:border-none">
-                    <span className="text-[10px] text-white/40 block">Ngày khai giảng</span>
-                    <span className="font-bold text-emerald-400 text-xs block">
+                  <div className="space-y-1 pt-2 border-t border-slate-200/60 md:border-none">
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block">Ngày khai giảng</span>
+                    <span className="font-semibold text-emerald-600 text-xs block">
                       {section.openingDate ? new Date(section.openingDate).toLocaleDateString("vi-VN") : "Chưa xác định"}
                     </span>
                   </div>
-                  <div className="space-y-1 pt-2 border-t border-white/5 md:border-none col-span-1 md:col-span-2">
-                    <span className="text-[10px] text-white/40 block">Trạng thái lớp</span>
-                    <span className={`inline-block font-bold text-[10px] uppercase px-2 py-0.5 rounded-md mt-0.5 border ${
-                      section.status === "open" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" :
-                      section.status === "closed" ? "bg-red-500/10 text-red-400 border-red-500/25" :
-                      section.status === "pending" ? "bg-amber-500/10 text-amber-400 border-amber-500/25" :
-                      "bg-slate-500/10 text-slate-400 border-slate-500/25"
+                  <div className="space-y-1 pt-2 border-t border-slate-200/60 md:border-none col-span-1 md:col-span-2">
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider block">Trạng thái lớp</span>
+                    <span className={`inline-block font-semibold text-[10px] uppercase px-2.5 py-0.5 rounded-md mt-0.5 border ${
+                      section.status === "open" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                      section.status === "closed" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                      section.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                      "bg-slate-100 text-slate-600 border-slate-200"
                     }`}>
                       {section.status === "open" ? "Đang mở đăng ký" :
                        section.status === "closed" ? "Đã khóa sĩ số" :
@@ -1191,17 +1191,17 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                 {/* Section Online Channels (Zoom/Meet, Zalo/Discord) */}
                 {(section.meetingUrl || section.groupChatUrl) && (
-                  <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl space-y-2">
-                    <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold block">Kênh lớp học trực tuyến</span>
+                  <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2.5">
+                    <span className="text-[10px] text-indigo-700 uppercase tracking-widest font-mono font-bold block">Kênh lớp học trực tuyến</span>
                     <div className="flex flex-wrap gap-2.5">
                       {section.meetingUrl && (
                         <a
                           href={section.meetingUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
                         >
-                          <Video className="h-3.5 w-3.5 text-emerald-400" /> Vào phòng Zoom/Meet
+                          <Video className="h-3.5 w-3.5 text-emerald-600" /> Vào phòng Zoom/Meet
                           <ExternalLink className="h-3 w-3 opacity-60" />
                         </a>
                       )}
@@ -1210,9 +1210,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           href={section.groupChatUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
                         >
-                          <MessageSquare className="h-3.5 w-3.5 text-blue-400" /> Tham gia nhóm Zalo lớp
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-600" /> Tham gia nhóm Zalo lớp
                           <ExternalLink className="h-3 w-3 opacity-60" />
                         </a>
                       )}
@@ -1222,25 +1222,25 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                 {/* Section Schedule slots */}
                 <div className="space-y-2.5">
-                  <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold block">Lịch học hàng tuần</span>
+                  <span className="text-[10px] text-indigo-600 uppercase tracking-widest font-mono font-bold block">Lịch học hàng tuần</span>
                   <div className="grid grid-cols-1 gap-2.5">
                     {section.schedule.map((slot: any, sIdx: number) => (
-                      <div key={sIdx} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center justify-between gap-4">
+                      <div key={sIdx} className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2.5 text-xs">
-                          <div className="p-2 bg-indigo-500/10 text-indigo-300 rounded-lg font-bold text-center min-w-16">
+                          <div className="p-2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg font-bold text-center min-w-16">
                             {slot.dayOfWeek}
                           </div>
                           <div className="space-y-0.5">
-                            <span className="font-semibold text-white flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5 text-indigo-400" /> {slot.startTime} - {slot.endTime}
+                            <span className="font-semibold text-slate-800 flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5 text-indigo-500" /> {slot.startTime} - {slot.endTime}
                             </span>
-                            <span className="text-white/50 text-[10.5px] flex items-center gap-1">
-                              <MapPin className="h-3.5 w-3.5 text-indigo-400" /> Phòng: {slot.room || "Trực tuyến"}
+                            <span className="text-slate-500 text-[10.5px] flex items-center gap-1">
+                              <MapPin className="h-3.5 w-3.5 text-indigo-500" /> Phòng: {slot.room || "Trực tuyến"}
                             </span>
                           </div>
                         </div>
                         {slot.specificDate && (
-                          <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md">
+                          <span className="text-[10px] font-mono font-bold text-cyan-700 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded-md">
                             {slot.specificDate}
                           </span>
                         )}
@@ -1251,25 +1251,25 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                 {/* Class Roster / Classmates list */}
                 <div className="space-y-2.5">
-                  <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-mono font-bold flex items-center gap-1">
+                  <span className="text-[10px] text-indigo-600 uppercase tracking-widest font-mono font-bold flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" /> Bạn học cùng lớp ({classmates.length})
                   </span>
                   {classmates.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1.5 scrollbar-thin">
                       {classmates.map((student: any, sIdx: number) => (
-                        <div key={sIdx} className="p-2 px-3 bg-white/[0.02] border border-white/5 rounded-xl flex items-center gap-2">
-                          <div className="w-7 h-7 bg-indigo-500/10 rounded-full flex items-center justify-center font-bold text-xs text-indigo-300 font-mono">
+                        <div key={sIdx} className="p-2 px-3 bg-slate-50/80 border border-slate-200/80 rounded-xl flex items-center gap-2.5">
+                          <div className="w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs font-mono">
                             {student.name.slice(0, 2).toUpperCase()}
                           </div>
                           <div className="space-y-0.5 truncate text-[11px]">
-                            <span className="font-semibold text-white block truncate">{student.name}</span>
-                            <span className="text-white/40 block truncate font-mono text-[9.5px]">{student.email}</span>
+                            <span className="font-semibold text-slate-800 block truncate">{student.name}</span>
+                            <span className="text-slate-400 block truncate font-mono text-[9.5px]">{student.email}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-4 bg-black/10 border border-dashed border-white/5 rounded-xl text-xs text-white/40">
+                    <div className="text-center py-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
                       Chưa có học viên nào đăng ký lớp học này.
                     </div>
                   )}
@@ -1277,10 +1277,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               </div>
 
               {/* Footer Modal Actions */}
-              <div className="bg-white/3 px-6 py-3 border-t border-white/5 flex justify-end">
+              <div className="bg-slate-50/80 px-6 py-3 border-t border-slate-200/80 flex justify-end">
                 <button
                   onClick={() => setShowSectionDetailModal(false)}
-                  className="px-5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition text-xs cursor-pointer"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition text-xs shadow-xs cursor-pointer"
                 >
                   Đóng
                 </button>

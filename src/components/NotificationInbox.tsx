@@ -42,16 +42,16 @@ const translateType = (type: string) => {
 const typeClasses = (type: string) => {
   switch (type) {
     case "success":
-      return "bg-emerald-500/15 text-emerald-700 border-emerald-400/30 dark:text-emerald-400";
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "warning":
-      return "bg-amber-500/15 text-amber-700 border-amber-300/30 dark:text-amber-400";
+      return "bg-amber-50 text-amber-700 border-amber-200";
     case "danger":
     case "error":
-      return "bg-red-500/15 text-red-700 border-red-300/30 dark:text-red-400";
+      return "bg-rose-50 text-rose-700 border-rose-200";
     case "attendance_link":
-      return "bg-indigo-500/15 text-indigo-700 border-indigo-300/30 dark:text-indigo-400";
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
     default:
-      return "bg-cyan-500/15 text-cyan-700 border-cyan-300/30 dark:text-cyan-400";
+      return "bg-slate-100 text-slate-700 border-slate-200";
   }
 };
 
@@ -162,23 +162,23 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-cyan-500 dark:text-cyan-300" />
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white">{title}</h3>
+            <Bell className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-base font-bold text-slate-900">{title}</h3>
             {totalUnreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500 text-white dark:bg-cyan-300 dark:text-slate-950 text-[10px] font-black">
+              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-semibold">
                 {totalUnreadCount} mới
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 dark:text-white/55 mt-1">Theo dõi thông báo hệ thống dành riêng cho tài khoản của bạn.</p>
+          <p className="text-xs text-slate-500 mt-1">Theo dõi thông báo hệ thống dành riêng cho tài khoản của bạn.</p>
         </div>
         <button
           onClick={markAllRead}
           disabled={totalUnreadCount === 0 || busyId === "all"}
-          className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition cursor-pointer"
+          className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 shadow-xs transition cursor-pointer"
         >
           <CheckCheck className="h-4 w-4" />
           Đánh dấu tất cả đã đọc
@@ -188,29 +188,29 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
         {/* All/Unread Tabs */}
-        <div className="flex border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 p-1 rounded-xl w-fit">
+        <div className="flex border border-slate-200 bg-slate-100/80 p-1 rounded-xl w-fit shadow-2xs">
           <button
             onClick={() => setFilter("all")}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
               filter === "all"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-500 dark:text-white/60 hover:text-slate-800 dark:hover:text-white"
+                ? "bg-indigo-600 text-white shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             Tất cả
           </button>
           <button
             onClick={() => setFilter("unread")}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
               filter === "unread"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-500 dark:text-white/60 hover:text-slate-800 dark:hover:text-white"
+                ? "bg-indigo-600 text-white shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             Chưa đọc
             {totalUnreadCount > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] ${
-                filter === "unread" ? "bg-white text-indigo-700" : "bg-indigo-500/20 text-indigo-700 dark:text-indigo-300"
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-semibold ${
+                filter === "unread" ? "bg-white text-indigo-700" : "bg-indigo-100 text-indigo-800"
               }`}>
                 {totalUnreadCount}
               </span>
@@ -220,23 +220,23 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
 
         {/* Search input */}
         <div className="relative flex-1 max-w-xs sm:max-w-md">
-          <Search className="h-4 w-4 text-slate-400 dark:text-white/35 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Tìm thông báo..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-black/25 border border-slate-200 dark:border-white/10 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/35 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs transition"
           />
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-300/30 bg-red-500/15 px-3 py-2 text-xs text-red-700 dark:text-red-100">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs text-rose-700 font-medium">
           {error}
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {notifications.map(note => {
           const isNoteRead = note.isRead || locallyMarkedReadIds.has(note.id);
           return (
@@ -249,24 +249,24 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
               }}
               className={`w-full text-left rounded-2xl border p-4 transition cursor-pointer ${
                 isNoteRead
-                  ? "bg-white/50 border-slate-100 dark:bg-white/[0.03] dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06]"
-                  : "bg-cyan-500/5 border-cyan-300/20 shadow-sm dark:bg-cyan-500/10 dark:border-cyan-300/30 dark:shadow-lg dark:shadow-cyan-950/20 hover:bg-cyan-500/10 dark:hover:bg-cyan-500/15"
+                  ? "bg-white border-slate-200/80 hover:bg-slate-50/80 shadow-2xs"
+                  : "bg-indigo-50/40 border-indigo-200/80 shadow-xs hover:bg-indigo-50/60"
               }`}
               disabled={busyId === note.id}
             >
-              <div className="flex items-start gap-3">
-                <div className={`mt-0.5 h-9 w-9 rounded-xl border flex items-center justify-center ${typeClasses(note.type)}`}>
+              <div className="flex items-start gap-3.5">
+                <div className={`mt-0.5 h-8 w-8 rounded-xl border flex items-center justify-center shrink-0 ${typeClasses(note.type)}`}>
                   <Bell className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black uppercase ${typeClasses(note.type)}`}>
+                    <span className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase ${typeClasses(note.type)}`}>
                       {translateType(note.type)}
                     </span>
-                    <span className="text-[11px] text-slate-400 dark:text-white/45">{formatNotificationTime(note.createdAt)}</span>
-                    {!isNoteRead && <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-200">Chưa đọc</span>}
+                    <span className="text-[11px] text-slate-400">{formatNotificationTime(note.createdAt)}</span>
+                    {!isNoteRead && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">Chưa đọc</span>}
                   </div>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-white/85 leading-relaxed">{note.message}</p>
+                  <p className="mt-1.5 text-xs text-slate-700 leading-relaxed font-sans">{note.message}</p>
 
                 {/* Inline checkin form for students directly in their notifications */}
                 {note.type === "attendance_link" && note.relatedEntityId && (() => {
@@ -278,7 +278,7 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                   
                   if (hasCheckedIn || checkinSuccess[note.relatedEntityId]) {
                     return (
-                      <div className="mt-2.5 p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl font-bold flex items-center gap-1.5 w-fit font-sans text-xs">
+                      <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-medium flex items-center gap-1.5 w-fit font-sans text-xs">
                         <span>✅ Bạn đã xác nhận điểm danh thành công!</span>
                       </div>
                     );
@@ -287,7 +287,7 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                   return (
                     <div 
                       onClick={(e) => e.stopPropagation()} 
-                      className="mt-2.5 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center gap-2 max-w-sm"
+                      className="mt-2.5 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center gap-2 max-w-sm shadow-2xs"
                     >
                       <input
                         type="text"
@@ -295,12 +295,12 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                         value={checkinCodes[note.id] || ""}
                         onChange={(e) => setCheckinCodes(prev => ({ ...prev, [note.id]: e.target.value }))}
                         maxLength={6}
-                        className="w-32 px-2.5 py-1.5 bg-white dark:bg-black/45 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 text-center font-mono font-bold uppercase placeholder-slate-400 dark:placeholder-white/20 text-xs"
+                        className="w-32 px-2.5 py-1.5 bg-white text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-center font-mono font-bold uppercase placeholder-slate-400 text-xs shadow-2xs"
                       />
                       <button
                         onClick={() => handleSelfCheckinSubmit(note.relatedEntityId!, checkinCodes[note.id] || "", note.id)}
                         disabled={checkinLoading[note.id]}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition duration-150 text-xs shrink-0 cursor-pointer disabled:opacity-50"
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-150 text-xs shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
                       >
                         {checkinLoading[note.id] ? "Đang xử lý..." : "Xác nhận Có mặt ✍️"}
                       </button>
@@ -314,9 +314,9 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
         )})}
 
         {notifications.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/15 bg-slate-50 dark:bg-white/[0.03] p-10 text-center">
-            <Inbox className="h-8 w-8 text-slate-300 dark:text-white/30 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-500 dark:text-white/65">Không có thông báo phù hợp.</p>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-10 text-center">
+            <Inbox className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-xs font-medium text-slate-500">Không có thông báo phù hợp.</p>
           </div>
         )}
       </div>

@@ -25,7 +25,7 @@ export default function LinkedText({ text, className }: { text?: string | null; 
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2 break-all transition"
+              className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2 break-all transition"
             >
               {href}
             </a>

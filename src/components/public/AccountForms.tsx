@@ -3,9 +3,9 @@ import { CheckCircle, Lock, LogOut } from "lucide-react";
 import { EnrollIntent } from "../../enrollIntent";
 import { User } from "../../types";
 
-const inputClass = "w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/25 h-10";
-const primaryButtonClass = "w-full py-2.5 bg-white text-indigo-950 hover:bg-white/95 disabled:opacity-60 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider uppercase font-display";
-const secondaryButtonClass = "w-full py-2.5 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-bold rounded-xl transition cursor-pointer";
+const inputClass = "w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10 text-xs transition shadow-2xs";
+const primaryButtonClass = "w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-60 text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs tracking-wide";
+const secondaryButtonClass = "w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition cursor-pointer";
 
 async function postJson(url: string, body: unknown) {
   const response = await fetch(url, {
@@ -19,7 +19,7 @@ async function postJson(url: string, body: unknown) {
 }
 
 function ErrorBox({ message }: { message: string }) {
-  return <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs">{message}</div>;
+  return <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs font-medium">{message}</div>;
 }
 
 interface SignUpFormProps {
@@ -64,17 +64,17 @@ export function SignUpForm({ intent, onGoToLogin }: SignUpFormProps) {
   if (result) {
     return (
       <div className="space-y-4 text-xs font-sans">
-        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 p-4 rounded-xl space-y-2">
-          <div className="flex items-center gap-2 font-bold">
-            <CheckCircle className="h-4 w-4 shrink-0" /> Đã gửi yêu cầu tạo tài khoản
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl space-y-2 shadow-2xs">
+          <div className="flex items-center gap-2 font-bold text-emerald-900">
+            <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" /> Đã gửi yêu cầu tạo tài khoản
           </div>
           <p className="leading-relaxed">{result.message}</p>
           <p className="leading-relaxed">
-            Đăng nhập bằng <strong className="font-mono">{result.email}</strong> và mật khẩu tạm trong email. Bạn sẽ được yêu cầu đổi mật khẩu ngay sau đó
+            Đăng nhập bằng <strong className="font-mono text-emerald-950 font-bold">{result.email}</strong> và mật khẩu tạm trong email. Bạn sẽ được yêu cầu đổi mật khẩu ngay sau đó
             {intent ? ", rồi hệ thống tự gửi đăng ký lớp bạn đã chọn." : "."}
           </p>
           {result.devTemporaryPassword && (
-            <p className="font-mono bg-black/30 rounded-lg px-2.5 py-1.5 text-amber-200">
+            <p className="font-mono bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-2.5 py-1.5 font-medium">
               Môi trường thử nghiệm – mật khẩu tạm: {result.devTemporaryPassword}
             </p>
           )}
@@ -90,18 +90,18 @@ export function SignUpForm({ intent, onGoToLogin }: SignUpFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
       {error && <ErrorBox message={error} />}
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-white/70 block">Họ và tên</label>
+        <label className="text-xs font-semibold text-slate-700 block">Họ và tên</label>
         <input required value={name} onChange={e => setName(e.target.value)} placeholder="Nguyễn Văn A" autoComplete="name" className={inputClass} />
       </div>
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-white/70 block">Email cá nhân</label>
+        <label className="text-xs font-semibold text-slate-700 block">Email cá nhân</label>
         <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ban@gmail.com" autoComplete="email" className={inputClass} />
       </div>
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-white/70 block">Số điện thoại</label>
+        <label className="text-xs font-semibold text-slate-700 block">Số điện thoại</label>
         <input required type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0912 345 678" autoComplete="tel" className={inputClass} />
       </div>
-      <p className="text-[11px] text-white/45 leading-relaxed">
+      <p className="text-[11px] text-slate-500 leading-relaxed">
         Mật khẩu tạm thời sẽ được gửi tới email trên. Thông tin liên hệ được chuyển tới bộ phận tư vấn của MCNA để hỗ trợ bạn đăng ký học.
       </p>
       <button type="submit" disabled={submitting} className={primaryButtonClass}>
@@ -143,11 +143,11 @@ export function ForgotPasswordForm({ onGoToLogin }: { onGoToLogin: () => void })
     <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
       {error && <ErrorBox message={error} />}
       {message ? (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 p-3 rounded-xl leading-relaxed">{message}</div>
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-xl leading-relaxed font-medium">{message}</div>
       ) : (
         <>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-white/70 block">Email đăng nhập</label>
+            <label className="text-xs font-semibold text-slate-700 block">Email đăng nhập</label>
             <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ban@gmail.com" autoComplete="email" className={inputClass} />
           </div>
           <button type="submit" disabled={submitting} className={primaryButtonClass}>
@@ -206,38 +206,38 @@ export function ForcedPasswordChange({ user, onChanged, onLogout }: ForcedPasswo
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-10 relative z-20">
-      <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl text-left">
-        <div className="flex items-center gap-3 pb-4 border-b border-white/5">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-400/20 flex items-center justify-center shrink-0">
-            <Lock className="h-5 w-5 text-amber-400" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10 relative z-20">
+      <div className="bg-white border border-slate-200/80 w-full max-w-md rounded-3xl p-6 sm:p-8 space-y-5 shadow-xl text-left">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+          <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+            <Lock className="h-5 w-5 text-amber-600" />
           </div>
           <div className="min-w-0">
-            <h4 className="font-display font-black text-white text-base leading-tight uppercase tracking-widest">Đặt mật khẩu mới</h4>
-            <p className="text-[11px] text-white/50 mt-1 truncate">{user.email}</p>
+            <h4 className="font-bold text-slate-900 text-base leading-tight uppercase tracking-wider">Đặt mật khẩu mới</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">{user.email}</p>
           </div>
         </div>
-        <p className="text-xs text-white/60 leading-relaxed">
+        <p className="text-xs text-slate-600 leading-relaxed">
           Bạn đang dùng mật khẩu tạm thời được gửi qua email. Hãy đặt mật khẩu của riêng bạn để tiếp tục sử dụng LMS.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
           {error && <ErrorBox message={error} />}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-white/70 block">Mật khẩu tạm thời (trong email)</label>
+            <label className="text-xs font-semibold text-slate-700 block">Mật khẩu tạm thời (trong email)</label>
             <input required type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} autoComplete="current-password" className={inputClass} />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-white/70 block">Mật khẩu mới</label>
+            <label className="text-xs font-semibold text-slate-700 block">Mật khẩu mới</label>
             <input required type="password" minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Tối thiểu 8 ký tự" autoComplete="new-password" className={inputClass} />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-white/70 block">Nhập lại mật khẩu mới</label>
+            <label className="text-xs font-semibold text-slate-700 block">Nhập lại mật khẩu mới</label>
             <input required type="password" minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" className={inputClass} />
           </div>
           <button type="submit" disabled={submitting} className={primaryButtonClass}>
             {submitting ? "Đang lưu..." : "Lưu mật khẩu và tiếp tục"}
           </button>
-          <button type="button" onClick={onLogout} className={`${secondaryButtonClass} inline-flex items-center justify-center gap-1.5`}>
+          <button type="button" onClick={onLogout} className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs">
             <LogOut className="h-3.5 w-3.5" /> Đăng xuất
           </button>
         </form>
