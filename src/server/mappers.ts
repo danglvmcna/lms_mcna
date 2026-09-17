@@ -140,7 +140,7 @@ export function sessionMaterialFromRow(row: any): SessionMaterial {
     sizeBytes: row.size_bytes === null || row.size_bytes === undefined ? undefined : Number(row.size_bytes),
     sortOrder: Number(row.sort_order || 0),
     createdBy: row.created_by || undefined,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+    createdAt: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at)) : new Date().toISOString()
   };
 }
 
