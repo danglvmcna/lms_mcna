@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Clock, Download, ExternalLink, Pencil, Play, Presentation, FileText, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Clock, Download, ExternalLink, FileSpreadsheet, FileText, Pencil, Play, Presentation, Trash2, X } from "lucide-react";
 import { api } from "../api";
 import { SessionMaterial } from "../types";
 import { extractYoutubeVideoId } from "../utils";
@@ -138,9 +138,9 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
           <Presentation className="h-4 w-4" /> Tải slide (PPT/PDF)
           <input type="file" accept=".ppt,.pptx,.pdf" className="hidden" onChange={handleUpload("slide")} disabled={busy} />
         </label>
-        <label className={`${uploadButtonClass} bg-sky-600 hover:bg-sky-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
-          <FileText className="h-4 w-4" /> Tải file Word/PDF
-          <input type="file" accept=".doc,.docx,.pdf" className="hidden" onChange={handleUpload("document")} disabled={busy} />
+        <label className={`${uploadButtonClass} bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <FileSpreadsheet className="h-4 w-4" /> Tải tài liệu & Data (Excel/PBIX/Word/ZIP)
+          <input type="file" accept=".doc,.docx,.pdf,.xlsx,.xls,.csv,.pbix,.zip,.rar" className="hidden" onChange={handleUpload("document")} disabled={busy} />
         </label>
       </div>
 

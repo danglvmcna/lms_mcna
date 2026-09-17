@@ -6052,14 +6052,20 @@ var MATERIAL_MIME_BY_EXT = {
   ".ppt": "application/vnd.ms-powerpoint",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".csv": "text/csv",
+  ".pbix": "application/octet-stream",
+  ".zip": "application/zip",
+  ".rar": "application/x-rar-compressed"
 };
 var materialUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
     const ext = path5.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
     if (MATERIAL_MIME_BY_EXT[ext]) return cb(null, true);
-    const err = new Error("T\xE0i li\u1EC7u bu\u1ED5i h\u1ECDc ch\u1EC9 nh\u1EADn t\u1EC7p .ppt, .pptx, .pdf, .doc, .docx.");
+    const err = new Error("T\xE0i li\u1EC7u bu\u1ED5i h\u1ECDc ch\u1EC9 nh\u1EADn t\u1EC7p .ppt, .pptx, .pdf, .doc, .docx, .xlsx, .xls, .csv, .pbix, .zip, .rar.");
     err.status = 400;
     cb(err);
   },
@@ -6067,7 +6073,7 @@ var materialUpload = multer({
 });
 var MATERIAL_FILE_EXTENSIONS = {
   slide: /* @__PURE__ */ new Set([".ppt", ".pptx", ".pdf"]),
-  document: /* @__PURE__ */ new Set([".doc", ".docx", ".pdf"])
+  document: /* @__PURE__ */ new Set([".doc", ".docx", ".pdf", ".xlsx", ".xls", ".csv", ".pbix", ".zip", ".rar"])
 };
 dotenv2.config();
 var app = express();
@@ -8935,7 +8941,7 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
     const ext = path5.extname(fileName).toLowerCase();
     if (!MATERIAL_FILE_EXTENSIONS[type].has(ext)) {
       return res.status(400).json({
-        error: type === "slide" ? "Slide ph\u1EA3i l\xE0 t\u1EC7p .ppt, .pptx ho\u1EB7c .pdf." : "T\xE0i li\u1EC7u ph\u1EA3i l\xE0 t\u1EC7p .doc, .docx ho\u1EB7c .pdf."
+        error: type === "slide" ? "Slide ph\u1EA3i l\xE0 t\u1EC7p .ppt, .pptx ho\u1EB7c .pdf." : "T\xE0i li\u1EC7u/d\u1EEF li\u1EC7u th\u1EF1c h\xE0nh ph\u1EA3i l\xE0 t\u1EC7p .doc, .docx, .pdf, .xlsx, .xls, .csv, .pbix, .zip, .rar."
       });
     }
     const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;

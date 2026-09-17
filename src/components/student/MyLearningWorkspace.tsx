@@ -252,8 +252,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             </div>
 
             {session.date && (
-              <span className="shrink-0 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
-                ⏰ {new Date(session.date).toLocaleString("vi-VN")}
+              <span className="shrink-0 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-2xs">
+                <Clock className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                {new Date(session.date).toLocaleString("vi-VN")}
               </span>
             )}
           </div>
@@ -278,7 +279,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 rel="noreferrer"
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shrink-0"
               >
-                Xem Video Recording ↗
+                Xem Video Recording <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
           )}

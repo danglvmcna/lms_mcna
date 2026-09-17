@@ -313,7 +313,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     const conflicts = checkConflicts(editingSectionId, sectionTeacherId, sectionSlots);
     if (conflicts.length > 0) {
       setFormConflicts(conflicts);
-      showToast("⚠️ Trùng lịch! Vui lòng kiểm tra lại thời khóa biểu.");
+      showToast("Trùng lịch! Vui lòng kiểm tra lại thời khóa biểu.");
       return;
     }
 
@@ -333,43 +333,43 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     try {
       if (sectionModalMode === "create") {
         await api.createCourseSection(payload);
-        showToast("✅ Đã tạo lớp học phần thành công!");
+        showToast("Đã tạo lớp học phần thành công!");
       } else if (editingSectionId) {
         await api.updateCourseSection(editingSectionId, payload);
-        showToast("✅ Đã cập nhật lớp học phần!");
+        showToast("Đã cập nhật lớp học phần!");
       }
       setShowSectionModal(false);
       onRefreshData();
     } catch (err: any) {
-      showToast(`❌ Lỗi: ${err.message || "Không thể lưu lớp học phần"}`);
+      showToast(`Lỗi: ${err.message || "Không thể lưu lớp học phần"}`);
     }
   };
 
   // Delete Course
   const handleDeleteCourse = async (courseId: string, title: string) => {
-    if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xóa khóa học "${title}" không? Hành động này sẽ xóa toàn bộ nội dung, bài tập và điểm của khóa học!`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa khóa học "${title}" không? Hành động này sẽ xóa toàn bộ nội dung, bài tập và điểm của khóa học!`)) {
       return;
     }
     try {
       await api.deleteCourse(courseId);
-      showToast(`✅ Đã xóa khóa học "${title}"!`);
+      showToast(`Đã xóa khóa học "${title}"!`);
       onRefreshData();
     } catch (err: any) {
-      showToast(`❌ Không thể xóa khóa học: ${err.message}`);
+      showToast(`Không thể xóa khóa học: ${err.message}`);
     }
   };
 
   // Delete Section
   const handleDeleteSection = async (sectionId: string, code: string) => {
-    if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xóa lớp học phần "${code}" không?`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa lớp học phần "${code}" không?`)) {
       return;
     }
     try {
       await api.deleteCourseSection(sectionId);
-      showToast(`✅ Đã xóa lớp học phần "${code}"!`);
+      showToast(`Đã xóa lớp học phần "${code}"!`);
       onRefreshData();
     } catch (err: any) {
-      showToast(`❌ Không thể xóa lớp học phần: ${err.message}`);
+      showToast(`Không thể xóa lớp học phần: ${err.message}`);
     }
   };
 
@@ -418,29 +418,29 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     try {
       if (lessonFormMode === "create") {
         await api.addLesson(payload);
-        showToast("✅ Đã thêm bài học thành công!");
+        showToast("Đã thêm bài học thành công!");
       } else {
         if (!editingLessonId) return;
         await api.updateLesson(editingLessonId, payload);
-        showToast("✅ Đã cập nhật bài học thành công!");
+        showToast("Đã cập nhật bài học thành công!");
       }
       setShowLessonFormModal(false);
       onRefreshData();
     } catch (err: any) {
-      showToast(`❌ Lỗi: ${err.message || "Không thể lưu bài học"}`);
+      showToast(`Lỗi: ${err.message || "Không thể lưu bài học"}`);
     }
   };
 
   const handleDeleteLesson = async (lessonId: string, title: string) => {
-    if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xóa bài học "${title}" không?`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa bài học "${title}" không?`)) {
       return;
     }
     try {
       await api.deleteLesson(lessonId);
-      showToast("✅ Đã xóa bài học!");
+      showToast("Đã xóa bài học!");
       onRefreshData();
     } catch (err: any) {
-      showToast(`❌ Không thể xóa bài học: ${err.message}`);
+      showToast(`Không thể xóa bài học: ${err.message}`);
     }
   };
 
@@ -1631,7 +1631,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   store={store}
                   currentUser={currentUser}
                   onRefreshData={onRefreshData}
-                  triggerToast={(msg, type) => showToast(`${type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️"} ${msg}`)}
+                  triggerToast={(msg) => showToast(msg)}
                 />
               </div>
             </div>

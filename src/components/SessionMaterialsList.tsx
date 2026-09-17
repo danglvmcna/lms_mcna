@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Clock, Download, ExternalLink, Eye, FileText, Link2, Play, Presentation, X } from "lucide-react";
+import { Archive, BarChart3, Clock, Download, ExternalLink, Eye, FileSpreadsheet, FileText, Link2, Play, Presentation, X } from "lucide-react";
 import { api } from "../api";
 import { SessionMaterial } from "../types";
 import { extractYoutubeVideoId, youtubeEmbedUrl } from "../utils";
@@ -12,7 +12,7 @@ export const MATERIAL_TYPE_LABEL: Record<SessionMaterial["type"], string> = {
   link: "Liên kết"
 };
 
-export type MaterialFileType = "pptx" | "docx" | "pdf" | "youtube" | "link";
+export type MaterialFileType = "pptx" | "docx" | "pdf" | "xlsx" | "pbix" | "zip" | "youtube" | "link";
 
 export interface MaterialVisualMeta {
   key: MaterialFileType;
@@ -56,6 +56,51 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       badgeStyle: "bg-rose-50 text-rose-700 border-rose-200",
       hoverBorder: "hover:border-rose-300",
       actionButton: "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80"
+    };
+  }
+
+  // Power BI Desktop models
+  if (ext === "pbix") {
+    return {
+      key: "pbix",
+      badge: "PBIX",
+      label: "Mẫu Power BI",
+      Icon: BarChart3,
+      iconColor: "text-amber-700",
+      iconBg: "bg-amber-100/70 border-amber-300 text-amber-700",
+      badgeStyle: "bg-amber-100/90 text-amber-900 border-amber-300 font-bold",
+      hoverBorder: "hover:border-amber-400",
+      actionButton: "bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300"
+    };
+  }
+
+  // Excel / CSV Spreadsheets & Datasets
+  if (ext === "xlsx" || ext === "xls" || ext === "csv") {
+    return {
+      key: "xlsx",
+      badge: ext.toUpperCase() || "XLSX",
+      label: ext === "csv" ? "Dữ liệu CSV" : "Bảng tính Excel",
+      Icon: FileSpreadsheet,
+      iconColor: "text-emerald-700",
+      iconBg: "bg-emerald-50 border-emerald-200/90 text-emerald-700",
+      badgeStyle: "bg-emerald-100/80 text-emerald-800 border-emerald-300 font-bold",
+      hoverBorder: "hover:border-emerald-400",
+      actionButton: "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80"
+    };
+  }
+
+  // Zip / Compressed archives
+  if (ext === "zip" || ext === "rar") {
+    return {
+      key: "zip",
+      badge: ext.toUpperCase() || "ZIP",
+      label: "Tệp nén dữ liệu",
+      Icon: Archive,
+      iconColor: "text-purple-700",
+      iconBg: "bg-purple-50 border-purple-200/90 text-purple-700",
+      badgeStyle: "bg-purple-100/80 text-purple-800 border-purple-300 font-bold",
+      hoverBorder: "hover:border-purple-400",
+      actionButton: "bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/80"
     };
   }
 

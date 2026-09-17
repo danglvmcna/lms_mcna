@@ -445,7 +445,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     }
     try {
       await api.selfCheckin({ sessionId, code: code.trim().toUpperCase() });
-      triggerToast("Điểm danh thành công! Trạng thái: Có mặt 🎉");
+      triggerToast("Điểm danh thành công! Trạng thái: Có mặt");
       await api.markNotificationRead(notificationId);
       void onRefreshData();
     } catch (err: any) {

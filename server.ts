@@ -88,14 +88,20 @@ const MATERIAL_MIME_BY_EXT: Record<string, string> = {
   ".ppt": "application/vnd.ms-powerpoint",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".csv": "text/csv",
+  ".pbix": "application/octet-stream",
+  ".zip": "application/zip",
+  ".rar": "application/x-rar-compressed"
 };
 const materialUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
     if (MATERIAL_MIME_BY_EXT[ext]) return cb(null, true);
-    const err = new Error("Tài liệu buổi học chỉ nhận tệp .ppt, .pptx, .pdf, .doc, .docx.");
+    const err = new Error("Tài liệu buổi học chỉ nhận tệp .ppt, .pptx, .pdf, .doc, .docx, .xlsx, .xls, .csv, .pbix, .zip, .rar.");
     (err as any).status = 400;
     cb(err);
   },
@@ -103,7 +109,7 @@ const materialUpload = multer({
 });
 const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
   slide: new Set([".ppt", ".pptx", ".pdf"]),
-  document: new Set([".doc", ".docx", ".pdf"])
+  document: new Set([".doc", ".docx", ".pdf", ".xlsx", ".xls", ".csv", ".pbix", ".zip", ".rar"])
 };
 
 import crypto from "crypto";
@@ -3523,7 +3529,9 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
     const ext = path.extname(fileName).toLowerCase();
     if (!MATERIAL_FILE_EXTENSIONS[type].has(ext)) {
       return res.status(400).json({
-        error: type === "slide" ? "Slide phải là tệp .ppt, .pptx hoặc .pdf." : "Tài liệu phải là tệp .doc, .docx hoặc .pdf."
+        error: type === "slide"
+          ? "Slide phải là tệp .ppt, .pptx hoặc .pdf."
+          : "Tài liệu/dữ liệu thực hành phải là tệp .doc, .docx, .pdf, .xlsx, .xls, .csv, .pbix, .zip, .rar."
       });
     }
     const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;

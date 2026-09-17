@@ -169,12 +169,12 @@ export default function CertificateVerifier({ store, onRefreshData }: Certificat
 
   // Revoke/Delete Certificate
   const handleRevokeCertificate = async (id: string, code: string, name: string) => {
-    if (!window.confirm(`⚠️ Cảnh báo: Bạn có chắc chắn muốn THU HỒI chứng chỉ mã "${code}" của học viên "${name}"? Hành động này sẽ xóa vĩnh viễn chứng nhận khỏi hệ thống.`)) return;
+    if (!window.confirm(`Cảnh báo: Bạn có chắc chắn muốn THU HỒI chứng chỉ mã "${code}" của học viên "${name}"? Hành động này sẽ xóa vĩnh viễn chứng nhận khỏi hệ thống.`)) return;
 
     try {
       await api.revokeCertificate(id);
       onRefreshData();
-      triggerToast(`🗑️ Đã thu hồi chứng chỉ ${code}!`);
+      triggerToast(`Đã thu hồi chứng chỉ ${code}!`);
     } catch (err: any) {
       triggerToast(err.message || "Không thể thu hồi chứng chỉ.");
     }
