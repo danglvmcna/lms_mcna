@@ -3639,13 +3639,32 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
     { inline: wantsInline }
   );
   if (download.kind === "redirect") return res.redirect(302, download.url);
+
   res.setHeader("X-Content-Type-Options", "nosniff");
+  const fileName = row.file_name || path.basename(row.storage_path);
+  const encodedName = encodeURIComponent(fileName);
+  const asciiName = fileName.replace(/[^\x20-\x7E]/g, "_");
+  const disposition = wantsInline ? "inline" : "attachment";
+
+  if (download.kind === "buffer") {
+    const mime = row.mime_type || download.mimeType || (isPdf ? "application/pdf" : "application/octet-stream");
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    return res.send(download.buffer);
+  }
+
+  if (!fs.existsSync(download.absolutePath)) {
+    return res.status(404).json({
+      error: "Tệp tài liệu này không còn tồn tại trên bộ nhớ tạm của máy chủ (do máy chủ Vercel tự động dọn dẹp bộ nhớ tạm). Giảng viên vui lòng tải lại tệp này lên buổi học để hệ thống lưu trữ vĩnh viễn vào cơ sở dữ liệu."
+    });
+  }
+
   if (wantsInline) {
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(row.file_name || "document.pdf")}"`);
+    res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
     return res.sendFile(download.absolutePath);
   }
-  res.download(download.absolutePath, row.file_name || path.basename(row.storage_path));
+  res.download(download.absolutePath, fileName);
 }));
 
 app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {

@@ -2,15 +2,34 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { pool } from "../db";
 
 // Session materials (slides, documents) are stored in a private Supabase Storage bucket.
-// Without Supabase credentials (local dev / serverless) files go to a private folder that is NOT exposed by
-// the public /uploads static route; they are only reachable through the authorized download route.
+// Without Supabase credentials (local dev / serverless) files are persisted to PostgreSQL (BYTEA)
+// so that multi-instance serverless functions (like Vercel) can download files reliably.
 
 const SIGNED_URL_TTL_SECONDS = 60;
 
 let client: SupabaseClient | null = null;
 let bucketVerified = false;
+let tableEnsured = false;
+
+export async function ensureMaterialFilesTable() {
+  if (tableEnsured) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS material_files (
+        storage_path TEXT PRIMARY KEY,
+        file_data BYTEA NOT NULL,
+        mime_type TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    tableEnsured = true;
+  } catch (err: any) {
+    console.warn("[Storage] Table creation notice:", err.message);
+  }
+}
 
 // Env is read lazily because server.ts loads dotenv after its imports are evaluated.
 function getClient(): SupabaseClient | null {
@@ -49,6 +68,7 @@ function localPathFor(objectPath: string) {
 
 export type MaterialDownload =
   | { kind: "redirect"; url: string }
+  | { kind: "buffer"; buffer: Buffer; mimeType?: string }
   | { kind: "local"; absolutePath: string };
 
 export const materialStorage = {
@@ -80,15 +100,33 @@ export const materialStorage = {
           if (!retry.error) return;
         }
 
-        console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to local storage.`);
+        console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to DB/local storage.`);
       } catch (supaErr: any) {
-        console.warn(`[Storage] Supabase error: ${supaErr.message}. Falling back to local storage.`);
+        console.warn(`[Storage] Supabase error: ${supaErr.message}. Falling back to DB/local storage.`);
       }
     }
 
-    const target = localPathFor(objectPath);
-    await fs.promises.mkdir(path.dirname(target), { recursive: true });
-    await fs.promises.writeFile(target, body);
+    // Persistent database storage fallback (ensures cross-instance persistence on Vercel Serverless)
+    try {
+      await ensureMaterialFilesTable();
+      await pool.query(
+        `INSERT INTO material_files (storage_path, file_data, mime_type)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (storage_path) DO UPDATE SET file_data = EXCLUDED.file_data, mime_type = EXCLUDED.mime_type`,
+        [objectPath, body, contentType]
+      );
+    } catch (dbErr: any) {
+      console.warn("[Storage] DB persistence notice:", dbErr.message);
+    }
+
+    // Local filesystem / tmpdir fallback
+    try {
+      const target = localPathFor(objectPath);
+      await fs.promises.mkdir(path.dirname(target), { recursive: true });
+      await fs.promises.writeFile(target, body);
+    } catch (fsErr: any) {
+      console.warn("[Storage] Local filesystem write notice:", fsErr.message);
+    }
   },
 
   async getDownload(objectPath: string, fileName: string, options?: { inline?: boolean }): Promise<MaterialDownload> {
@@ -102,9 +140,35 @@ export const materialStorage = {
           return { kind: "redirect", url: data.signedUrl };
         }
       } catch (err: any) {
-        console.warn("[Storage] Supabase download error, trying local fallback:", err.message);
+        console.warn("[Storage] Supabase download error:", err.message);
       }
     }
+
+    // Try persistent database storage (works on any Vercel serverless container)
+    try {
+      await ensureMaterialFilesTable();
+      const res = await pool.query("SELECT file_data, mime_type FROM material_files WHERE storage_path = $1", [objectPath]);
+      if (res.rows[0]?.file_data) {
+        return {
+          kind: "buffer",
+          buffer: Buffer.from(res.rows[0].file_data),
+          mimeType: res.rows[0].mime_type || undefined
+        };
+      }
+    } catch (dbErr: any) {
+      console.warn("[Storage] DB retrieve error:", dbErr.message);
+    }
+
+    // Try local filesystem
+    try {
+      const localPath = localPathFor(objectPath);
+      if (fs.existsSync(localPath)) {
+        return { kind: "local", absolutePath: localPath };
+      }
+    } catch {
+      // ignore
+    }
+
     return { kind: "local", absolutePath: localPathFor(objectPath) };
   },
 
@@ -115,8 +179,13 @@ export const materialStorage = {
       try {
         await supabase.storage.from(bucket()).remove(objectPaths);
       } catch {
-        // Continue to local cleanup
+        // Continue
       }
+    }
+    try {
+      await pool.query("DELETE FROM material_files WHERE storage_path = ANY($1)", [objectPaths]);
+    } catch {
+      // Continue
     }
     for (const objectPath of objectPaths) {
       try {

@@ -5041,6 +5041,23 @@ import { createClient } from "@supabase/supabase-js";
 var SIGNED_URL_TTL_SECONDS = 60;
 var client = null;
 var bucketVerified = false;
+var tableEnsured = false;
+async function ensureMaterialFilesTable() {
+  if (tableEnsured) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS material_files (
+        storage_path TEXT PRIMARY KEY,
+        file_data BYTEA NOT NULL,
+        mime_type TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    tableEnsured = true;
+  } catch (err) {
+    console.warn("[Storage] Table creation notice:", err.message);
+  }
+}
 function getClient() {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -5094,14 +5111,29 @@ var materialStorage = {
           const retry = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
           if (!retry.error) return;
         }
-        console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to local storage.`);
+        console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to DB/local storage.`);
       } catch (supaErr) {
-        console.warn(`[Storage] Supabase error: ${supaErr.message}. Falling back to local storage.`);
+        console.warn(`[Storage] Supabase error: ${supaErr.message}. Falling back to DB/local storage.`);
       }
     }
-    const target = localPathFor(objectPath);
-    await fs4.promises.mkdir(path4.dirname(target), { recursive: true });
-    await fs4.promises.writeFile(target, body);
+    try {
+      await ensureMaterialFilesTable();
+      await pool.query(
+        `INSERT INTO material_files (storage_path, file_data, mime_type)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (storage_path) DO UPDATE SET file_data = EXCLUDED.file_data, mime_type = EXCLUDED.mime_type`,
+        [objectPath, body, contentType]
+      );
+    } catch (dbErr) {
+      console.warn("[Storage] DB persistence notice:", dbErr.message);
+    }
+    try {
+      const target = localPathFor(objectPath);
+      await fs4.promises.mkdir(path4.dirname(target), { recursive: true });
+      await fs4.promises.writeFile(target, body);
+    } catch (fsErr) {
+      console.warn("[Storage] Local filesystem write notice:", fsErr.message);
+    }
   },
   async getDownload(objectPath, fileName, options) {
     const supabase = getClient();
@@ -5112,8 +5144,28 @@ var materialStorage = {
           return { kind: "redirect", url: data.signedUrl };
         }
       } catch (err) {
-        console.warn("[Storage] Supabase download error, trying local fallback:", err.message);
+        console.warn("[Storage] Supabase download error:", err.message);
       }
+    }
+    try {
+      await ensureMaterialFilesTable();
+      const res = await pool.query("SELECT file_data, mime_type FROM material_files WHERE storage_path = $1", [objectPath]);
+      if (res.rows[0]?.file_data) {
+        return {
+          kind: "buffer",
+          buffer: Buffer.from(res.rows[0].file_data),
+          mimeType: res.rows[0].mime_type || void 0
+        };
+      }
+    } catch (dbErr) {
+      console.warn("[Storage] DB retrieve error:", dbErr.message);
+    }
+    try {
+      const localPath = localPathFor(objectPath);
+      if (fs4.existsSync(localPath)) {
+        return { kind: "local", absolutePath: localPath };
+      }
+    } catch {
     }
     return { kind: "local", absolutePath: localPathFor(objectPath) };
   },
@@ -5125,6 +5177,10 @@ var materialStorage = {
         await supabase.storage.from(bucket()).remove(objectPaths);
       } catch {
       }
+    }
+    try {
+      await pool.query("DELETE FROM material_files WHERE storage_path = ANY($1)", [objectPaths]);
+    } catch {
     }
     for (const objectPath of objectPaths) {
       try {
@@ -8984,12 +9040,27 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   );
   if (download.kind === "redirect") return res.redirect(302, download.url);
   res.setHeader("X-Content-Type-Options", "nosniff");
+  const fileName = row.file_name || path5.basename(row.storage_path);
+  const encodedName = encodeURIComponent(fileName);
+  const asciiName = fileName.replace(/[^\x20-\x7E]/g, "_");
+  const disposition = wantsInline ? "inline" : "attachment";
+  if (download.kind === "buffer") {
+    const mime = row.mime_type || download.mimeType || (isPdf ? "application/pdf" : "application/octet-stream");
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    return res.send(download.buffer);
+  }
+  if (!fs5.existsSync(download.absolutePath)) {
+    return res.status(404).json({
+      error: "T\u1EC7p t\xE0i li\u1EC7u n\xE0y kh\xF4ng c\xF2n t\u1ED3n t\u1EA1i tr\xEAn b\u1ED9 nh\u1EDB t\u1EA1m c\u1EE7a m\xE1y ch\u1EE7 (do m\xE1y ch\u1EE7 Vercel t\u1EF1 \u0111\u1ED9ng d\u1ECDn d\u1EB9p b\u1ED9 nh\u1EDB t\u1EA1m). Gi\u1EA3ng vi\xEAn vui l\xF2ng t\u1EA3i l\u1EA1i t\u1EC7p n\xE0y l\xEAn bu\u1ED5i h\u1ECDc \u0111\u1EC3 h\u1EC7 th\u1ED1ng l\u01B0u tr\u1EEF v\u0129nh vi\u1EC5n v\xE0o c\u01A1 s\u1EDF d\u1EEF li\u1EC7u."
+    });
+  }
   if (wantsInline) {
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(row.file_name || "document.pdf")}"`);
+    res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
     return res.sendFile(download.absolutePath);
   }
-  res.download(download.absolutePath, row.file_name || path5.basename(row.storage_path));
+  res.download(download.absolutePath, fileName);
 }));
 app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
