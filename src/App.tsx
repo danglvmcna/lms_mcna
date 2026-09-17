@@ -459,16 +459,18 @@ function AppShell() {
             <div className={`flex items-center justify-between pb-4 border-b border-white/5 w-full ${
               isSidebarCollapsed ? "flex-col gap-3" : ""
             }`}>
-              <div className="flex items-center space-x-2.5">
-                <img
-                  src="/mcna-logo.png"
-                  alt="MCNA Technology School"
-                  className="w-9 h-9 object-contain bg-white rounded-xl p-1 shrink-0 shadow-md"
-                />
+              <div className="flex items-center space-x-3">
+                <div className="w-11 h-11 bg-white rounded-xl p-1 shrink-0 shadow-md flex items-center justify-center">
+                  <img
+                    src="/mcna-logo.png"
+                    alt="MCNA Technology School"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
                 {!isSidebarCollapsed && (
                   <div>
                     <h1 className="text-sm font-display font-black tracking-widest text-white uppercase leading-none">MCNA LMS</h1>
-                    <p className="text-[9px] text-white/40 uppercase tracking-tighter mt-0.5">Học viện MCNA v1.1</p>
+                    <p className="text-[9px] text-white/40 uppercase tracking-tighter mt-1">Học viện MCNA v1.1</p>
                   </div>
                 )}
               </div>
@@ -690,13 +692,18 @@ function AppShell() {
               {/* Blur bubble */}
               <div className="absolute top-[-20%] left-[-20%] w-72 h-72 bg-[#2563eb]/35 rounded-full filter blur-[100px]" />
 
-              <div className="flex items-center space-x-2.5 relative z-10 pt-2">
-                <img
-                  src="/mcna-logo.png"
-                  alt="MCNA Technology School"
-                  className="h-9 w-9 object-contain bg-white rounded-lg p-1"
-                />
-                <span className="font-display font-black text-white tracking-widest uppercase text-xs">MCNA LMS</span>
+              <div className="flex items-center space-x-3 relative z-10 pt-2">
+                <div className="h-12 w-12 bg-white rounded-2xl p-1.5 shadow-md flex items-center justify-center shrink-0">
+                  <img
+                    src="/mcna-logo.png"
+                    alt="MCNA Technology School"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div>
+                  <span className="font-display font-black text-white tracking-wider uppercase text-sm block">MCNA LMS</span>
+                  <span className="text-[10px] text-indigo-200/80 font-semibold tracking-wider uppercase block">Học Viện Công Nghệ MCNA</span>
+                </div>
               </div>
 
               <div className="relative z-10 py-12 space-y-4">

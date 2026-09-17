@@ -339,17 +339,22 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
 
   return (
     <div className="min-h-screen bg-slate-950 text-white relative z-20">
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <button type="button" onClick={() => setSelectedCourseId(null)} className="flex items-center gap-2.5 min-w-0 cursor-pointer">
-            <img src="/mcna-logo.png" alt="MCNA Technology School" className="h-9 w-9 object-contain bg-white rounded-lg p-1 shrink-0" />
-            <span className="mcna-on-dark font-display font-black tracking-widest uppercase text-xs truncate">MCNA LMS</span>
+      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md border-b border-white/10 shadow-lg">
+        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <button type="button" onClick={() => setSelectedCourseId(null)} className="flex items-center gap-3 sm:gap-4 min-w-0 cursor-pointer text-left group">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 bg-white rounded-2xl p-1.5 sm:p-2 shadow-lg shadow-black/30 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
+              <img src="/mcna-logo.png" alt="MCNA Technology School" className="w-full h-full object-contain" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="mcna-on-dark font-display font-black tracking-wider uppercase text-base sm:text-lg md:text-xl leading-tight truncate">MCNA LMS</span>
+              <span className="text-[10px] sm:text-[11px] md:text-xs text-indigo-300 font-bold tracking-wider uppercase truncate">Học Viện Công Nghệ MCNA</span>
+            </div>
           </button>
           <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={onLogin} className="px-3 py-2 text-xs font-bold rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer">
+            <button type="button" onClick={onLogin} className="px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs font-bold rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition">
               Đăng nhập
             </button>
-            <button type="button" onClick={() => onRegister()} className="px-3 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 cursor-pointer">
+            <button type="button" onClick={() => onRegister()} className="px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 cursor-pointer transition">
               Tạo tài khoản
             </button>
           </div>
