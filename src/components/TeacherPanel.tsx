@@ -33,7 +33,6 @@ import AssignmentGrader from "./teacher/AssignmentGrader";
 import GradebookTable from "./teacher/GradebookTable";
 import TeacherAnalytics from "./teacher/TeacherAnalytics";
 import ModalPortal from "./ModalPortal";
-import AttendanceManager from "./AttendanceManager";
 import NotificationInbox from "./NotificationInbox";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
@@ -54,19 +53,9 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   const [activeSubTab, setActiveSubTab] = useState<string>("courses");
   const [showSidebar, setShowSidebar] = useState(false);
 
-  // Attendance routing/locking states from Timetable redirect
-  const [attendanceCourseId, setAttendanceCourseId] = useState<string | null>(null);
-  const [attendanceSectionId, setAttendanceSectionId] = useState<string | null>(null);
-  const [lockAttendanceSelectors, setLockAttendanceSelectors] = useState<boolean>(false);
-
   const handleNavClick = (tab: string) => {
     setActiveSubTab(tab);
     setShowSidebar(false);
-    if (tab !== "attendance") {
-      setAttendanceCourseId(null);
-      setAttendanceSectionId(null);
-      setLockAttendanceSelectors(false);
-    }
   };
 
   useEffect(() => {
@@ -74,7 +63,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["courses", "attendance", "assignments"];
+    const allowed = ["courses", "assignments"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("courses");
     }
@@ -629,7 +618,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               <span className="font-semibold">Menu điều hướng</span>
               <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
                 courses: "Khóa học & Bài giảng",
-                attendance: "Lịch học, Zoom & Tài liệu",
                 assignments: "Bài tập & Chấm điểm",
                 quizzes: "Đề thi & Đánh giá",
                 gradebook: "Sổ điểm Tổng hợp",
@@ -660,18 +648,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
             </button>
 
             <button
-              onClick={() => handleNavClick("attendance")}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
-                activeSubTab === "attendance" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <Video className={`h-4 w-4 ${activeSubTab === "attendance" ? "text-indigo-600" : "text-slate-400"}`} />
-              <span>Lịch học, Zoom & Tài liệu</span>
-            </button>
-
-            <button
               onClick={() => handleNavClick("assignments")}
               className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "assignments" 
@@ -698,24 +674,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               store={store}
               currentUser={currentUser}
               onRefreshData={onRefreshData}
-            />
-          )}
-
-          {activeSubTab === "attendance" && (
-            <AttendanceManager
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-              triggerToast={triggerToast}
-              lockSelectors={lockAttendanceSelectors}
-              courseId={attendanceCourseId}
-              sectionId={attendanceSectionId}
-              onGoBackToTimetable={() => {
-                setAttendanceCourseId(null);
-                setAttendanceSectionId(null);
-                setLockAttendanceSelectors(false);
-                setActiveSubTab("courses");
-              }}
             />
           )}
         </div>

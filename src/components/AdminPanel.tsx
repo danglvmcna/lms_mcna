@@ -37,7 +37,6 @@ import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
 
 import AdminOrdersManager from "./admin/AdminOrdersManager";
-import AttendanceManager from "./AttendanceManager";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";

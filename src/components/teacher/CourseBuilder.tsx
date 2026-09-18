@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 import { AppStore } from "../../store";
-import AttendanceManager from "../AttendanceManager";
+import { ZoomLogo } from "../icons/BrandLogos";
 import SessionMaterialsEditor from "../SessionMaterialsEditor";
 import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
@@ -211,7 +211,34 @@ export default function CourseBuilder(props: ComponentProps) {
   const [showSectionModal, setShowSectionModal] = React.useState(false);
   const [sectionModalMode, setSectionModalMode] = React.useState<"create" | "edit">("create");
   const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
-  const [showAttendanceModal, setShowAttendanceModal] = React.useState(false);
+  const [showEditZoomModal, setShowEditZoomModal] = React.useState(false);
+  const [editingZoomSection, setEditingZoomSection] = React.useState<any | null>(null);
+  const [zoomUrlInput, setZoomUrlInput] = React.useState("");
+  const [isSavingZoom, setIsSavingZoom] = React.useState(false);
+
+  const handleOpenEditZoom = (section: any) => {
+    setEditingZoomSection(section);
+    setZoomUrlInput(section.meetingUrl || "");
+    setShowEditZoomModal(true);
+  };
+
+  const handleSaveZoomUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingZoomSection) return;
+    setIsSavingZoom(true);
+    try {
+      await api.updateCourseSection(editingZoomSection.id, {
+        meetingUrl: zoomUrlInput.trim() || null
+      });
+      if (triggerToast) triggerToast("Đã cập nhật link Zoom cho lớp học thành công!");
+      setShowEditZoomModal(false);
+      props.onRefreshData?.();
+    } catch (err: any) {
+      if (triggerToast) triggerToast(err.message || "Không thể cập nhật link Zoom.");
+    } finally {
+      setIsSavingZoom(false);
+    }
+  };
   const [isVideoUploading, setIsVideoUploading] = React.useState(false);
   const [showEditLessonModal, setShowEditLessonModal] = React.useState(false);
   const [editingLesson, setEditingLesson] = React.useState<any | null>(null);
@@ -932,16 +959,49 @@ export default function CourseBuilder(props: ComponentProps) {
                 </div>
 
                 {selectedClassSection && (
-                  <div className="text-[11px] text-slate-600 flex items-center gap-2 font-mono">
-                    <span className="font-bold text-indigo-700">TKB:</span>
-                    {(selectedClassSection.schedule || []).map((slot: any, idx: number) => (
-                      <span key={idx} className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700">
-                        {slot.dayOfWeek} ({slot.startTime}-{slot.endTime}) · {slot.room || "Trực tuyến"}
-                      </span>
-                    ))}
-                    {(!selectedClassSection.schedule || selectedClassSection.schedule.length === 0) && (
-                      <span className="text-amber-600 italic">Chưa xếp ca học</span>
-                    )}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600 font-sans border-t border-slate-100 pt-3 mt-1 w-full">
+                    <div className="flex items-center gap-2 flex-wrap font-mono text-[11px]">
+                      <span className="font-bold text-indigo-700">TKB:</span>
+                      {(selectedClassSection.schedule || []).map((slot: any, idx: number) => (
+                        <span key={idx} className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700">
+                          {slot.dayOfWeek} ({slot.startTime}-{slot.endTime})
+                        </span>
+                      ))}
+                      {(!selectedClassSection.schedule || selectedClassSection.schedule.length === 0) && (
+                        <span className="text-amber-600 italic">Chưa xếp ca học</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {selectedClassSection.meetingUrl ? (
+                        <>
+                          <a
+                            href={selectedClassSection.meetingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-xs font-bold border border-blue-200 transition shadow-xs"
+                            title={selectedClassSection.meetingUrl}
+                          >
+                            <ZoomLogo className="h-3.5 w-3.5 shrink-0" /> Vào phòng Zoom ↗
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditZoom(selectedClassSection)}
+                            className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer px-1"
+                          >
+                            Đổi link
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditZoom(selectedClassSection)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer border border-slate-200"
+                        >
+                          <ZoomLogo className="h-3.5 w-3.5 shrink-0" /> + Gắn link Zoom cho lớp
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1669,35 +1729,60 @@ export default function CourseBuilder(props: ComponentProps) {
           </div>
         </ModalPortal>
       )}
-      {/* MODAL: ATTENDANCE MANAGER INTEGRATED */}
-      {showAttendanceModal && (
+      {/* MODAL: EDIT ZOOM MEETING URL */}
+      {showEditZoomModal && editingZoomSection && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-slate-900 font-sans max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setShowAttendanceModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer font-sans"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            
-            <h3 className="text-base font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3 flex items-center gap-2 font-sans uppercase">
-              Bảng Quản Lý Điểm Danh - {activeCourse.title}
-            </h3>
-            
-            <AttendanceManager
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={props.onRefreshData}
-              triggerToast={(msg: string) => {
-                if (props.triggerToast) props.triggerToast(msg);
-                else console.log(msg);
-              }}
-              defaultCourseId={activeCourse.id}
-              defaultSessionId={preselectedSessionId}
-            />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150 text-slate-900 font-sans">
+              <button 
+                onClick={() => setShowEditZoomModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer font-sans"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center gap-2.5 mb-4 border-b border-slate-100 pb-3">
+                <ZoomLogo className="h-5 w-5" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Link phòng Zoom - Lớp {editingZoomSection.sectionCode}
+                </h3>
+              </div>
+
+              <form onSubmit={handleSaveZoomUrl} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">Đường link phòng Zoom / Google Meet *</label>
+                  <input
+                    type="url"
+                    required
+                    value={zoomUrlInput}
+                    onChange={(e) => setZoomUrlInput(e.target.value)}
+                    placeholder="https://zoom.us/j/... hoặc https://meet.google.com/..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white text-xs font-mono"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Học viên ghi danh vào lớp này sẽ thấy nút vào phòng Zoom trực tuyến ngay trên đầu buổi học.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditZoomModal(false)}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-medium cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingZoom}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {isSavingZoom ? "Đang lưu..." : "Lưu link Zoom"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
         </ModalPortal>
       )}
 
