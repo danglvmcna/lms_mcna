@@ -10,7 +10,6 @@
     }
   ],
   "crons": [
-    { "path": "/api/internal/jobs/crm-outbox", "schedule": "0 2 * * *" },
-    { "path": "/api/internal/jobs/attendance-risk", "schedule": "0 3 * * *" }
+    { "path": "/api/internal/jobs/crm-outbox", "schedule": "0 2 * * *" }
   ]
 }

@@ -1,12 +1,6 @@
 import { deliverPendingCrmEvents } from "./crm/crmOutbox";
-import { pool } from "./db";
-import { checkAttendanceRisks } from "./services/attendanceRisk";
 
 export function startScheduler() {
-  setInterval(async () => {
-    await runSchedulerTask("attendance risk scan", runAttendanceRiskJob);
-  }, 60 * 60 * 1000);
-
   setInterval(() => {
     void runSchedulerTask("crm outbox", runCrmOutboxJob);
   }, 30 * 1000);
@@ -17,8 +11,9 @@ export async function runCrmOutboxJob() {
   return deliverPendingCrmEvents();
 }
 
+/** @deprecated Attendance tracking is disabled for online courses */
 export async function runAttendanceRiskJob() {
-  return checkAttendanceRisks(pool);
+  return { ok: true, message: "Attendance risk tracking disabled for online courses." };
 }
 
 async function runSchedulerTask(name: string, task: () => Promise<unknown>) {

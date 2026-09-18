@@ -77,24 +77,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     }
   }, [activeSubTab]);
 
-  // A camera scan opens /attendance/checkin?token=…; consume it after the
-  // authenticated app shell is ready, then remove the token from browser history.
-  useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return;
-    let cancelled = false;
-    api.selfCheckinQr({ token })
-      .then(() => {
-        if (!cancelled) triggerToast("Điểm danh bằng QR thành công! Trạng thái: Có mặt");
-        window.history.replaceState({}, document.title, "/");
-        void onRefreshData();
-      })
-      .catch((error: any) => {
-        if (!cancelled) triggerToast(error.message || "QR điểm danh đã hết hạn hoặc không hợp lệ.");
-        window.history.replaceState({}, document.title, "/");
-      });
-    return () => { cancelled = true; };
-  }, [currentUser.id]);
+
 
   // Periodic polling every 30s while on the notifications tab to catch new attendance links
   useEffect(() => {

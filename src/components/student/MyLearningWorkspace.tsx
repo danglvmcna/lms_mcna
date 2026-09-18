@@ -482,19 +482,79 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     );
   };
 
-  const renderAllFoldersGrid = () => (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-        <div>
-          <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
-            <Folder className="h-5 w-5 text-indigo-600" />
-            Tổng quan chương trình
-          </h4>
-          <p className="text-sm text-slate-500 mt-1">
-            {courseSessions.length} buổi học · Chọn một buổi để xem nội dung, tài liệu và bài tập.
-          </p>
+  const renderAllFoldersGrid = () => {
+    const activeSection = (store.courseSections || []).find((s: any) => s.id === activeLearningSectionId);
+    const zoomUrl = activeSection?.meetingUrl;
+
+    return (
+      <div className="space-y-5">
+        {/* Prominent Online Zoom Classroom Card */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border-2 border-emerald-200/80 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+              <Video className="h-6 w-6" />
+            </div>
+            <div className="space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-widest bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300/60">
+                  Phòng học trực tuyến Zoom
+                </span>
+                {activeSection?.sectionCode && (
+                  <span className="text-[10px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                    Lớp: {activeSection.sectionCode}
+                  </span>
+                )}
+                {activeSection?.groupChatUrl && (
+                  <a
+                    href={activeSection.groupChatUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-mono font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-200 flex items-center gap-1 transition"
+                  >
+                    <MessageSquare className="h-3 w-3" /> Nhóm Zalo lớp ↗
+                  </a>
+                )}
+              </div>
+              <h3 className="text-lg md:text-xl font-display font-bold text-slate-900 leading-tight">
+                {zoomUrl ? "Vào phòng Zoom học trực tuyến" : "Chưa cấu hình Link Zoom phòng học"}
+              </h3>
+              <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                {zoomUrl 
+                  ? "Bấm vào nút bên phải để vào thẳng phòng học Zoom của lớp. Không cần điểm danh phức tạp, không cần chờ link qua tin nhắn Zalo." 
+                  : "Giảng viên hoặc Quản trị viên sẽ sớm cập nhật đường link phòng học Zoom cho lớp này."}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center">
+            {zoomUrl ? (
+              <a
+                href={zoomUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 whitespace-nowrap"
+              >
+                <Video className="h-4.5 w-4.5" />
+                Vào phòng Zoom ngay ↗
+              </a>
+            ) : (
+              <span className="px-4 py-2.5 bg-slate-100 text-slate-500 font-medium rounded-xl text-xs flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> Đang chờ cập nhật link
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+          <div>
+            <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
+              <Folder className="h-5 w-5 text-indigo-600" />
+              Tổng quan chương trình
+            </h4>
+            <p className="text-sm text-slate-500 mt-1">
+              {courseSessions.length} buổi học · Chọn một buổi để xem nội dung, tài liệu, video xem lại và bài tập.
+            </p>
+          </div>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {courseSessions.map((session) => {
@@ -623,6 +683,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
       })()}
     </div>
   );
+};
 
   const getEnrollmentSection = (enroll: any) => {
     const registration = (store.courseRegistrations || []).find((r: any) => {

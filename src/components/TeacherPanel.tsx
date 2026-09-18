@@ -22,7 +22,8 @@ import {
   X,
   PlusCircle,
   FolderPlus,
-  Bell
+  Bell,
+  Video
 } from "lucide-react";
 import { LMSDataStore, User, Course, Lesson, Quiz, Question, Assignment, Submission, QuizAttempt } from "../types";
 import { AppStore } from "../store";
@@ -628,7 +629,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               <span className="font-semibold">Menu điều hướng</span>
               <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
                 courses: "Khóa học & Bài giảng",
-                attendance: "Lớp học & Điểm danh",
+                attendance: "Lịch học, Zoom & Tài liệu",
                 assignments: "Bài tập & Chấm điểm",
                 quizzes: "Đề thi & Đánh giá",
                 gradebook: "Sổ điểm Tổng hợp",
@@ -666,8 +667,8 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <Clock className={`h-4 w-4 ${activeSubTab === "attendance" ? "text-indigo-600" : "text-slate-400"}`} />
-              <span>Lớp học & Điểm danh</span>
+              <Video className={`h-4 w-4 ${activeSubTab === "attendance" ? "text-indigo-600" : "text-slate-400"}`} />
+              <span>Lịch học, Zoom & Tài liệu</span>
             </button>
 
             <button

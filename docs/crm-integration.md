@@ -136,13 +136,13 @@ Người học (hoặc CRM) đăng ký một khóa học, có thể kèm lớp m
 
 Trạng thái ghi danh đổi: xác nhận thanh toán, xếp lớp, kích hoạt.
 
-#### `attendance.risk_detected`
+#### `attendance.risk_detected` (Đã ngưng sử dụng)
 
-Học viên vắng ít nhất hai buổi liên tiếp hoặc tỷ lệ chuyên cần dưới 75%. Sự kiện chỉ phát một lần cho mỗi buổi học mới và có `alertId` để CRM chống trùng.
+> **Lưu ý**: Đối với mô hình bán khóa học online học qua Zoom, tính năng điểm danh và theo dõi chuyên cần đã được loại bỏ để tinh gọn quy trình học tập. Sự kiện này được giữ lại cho khả năng tương thích ngược.
 
-#### `attendance.recovered`
+#### `attendance.recovered` (Đã ngưng sử dụng)
 
-Một cảnh báo chuyên cần đang mở đã được giải quyết khi tỷ lệ tham gia trở lại mức an toàn.
+> **Lưu ý**: Đã ngưng sử dụng tương tự `attendance.risk_detected`.
 
 #### `course.completed` và `certificate.issued`
 
