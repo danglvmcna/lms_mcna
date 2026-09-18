@@ -6,7 +6,7 @@ Có hai chiều:
 
 | Chiều | Cơ chế | Dùng cho |
 |---|---|---|
-| LMS → CRM | Webhook `POST` tới URL của CRM, ký HMAC, tự thử lại | Người học tự tạo tài khoản; ghi danh khóa học; đổi trạng thái ghi danh |
+| LMS → CRM | Webhook `POST` tới URL của CRM, ký HMAC, tự thử lại | Người học tự tạo tài khoản; ghi danh; chuyên cần; hoàn thành khóa; cấp chứng chỉ |
 | CRM → LMS | API `/api/integrations/crm/*`, API key + chữ ký HMAC | Tra cứu khóa/lớp; tạo tài khoản học viên; ghi danh/xếp lớp; xác nhận thanh toán |
 
 ## 1. Cấu hình
@@ -20,6 +20,8 @@ Biến môi trường phía LMS:
 | `CRM_API_KEY` | Có (chiều CRM → LMS) | API key CRM gửi trong header `Authorization`. |
 | `CRM_INBOUND_SECRET` | Có (chiều CRM → LMS) | Khóa bí mật CRM dùng ký request gọi vào LMS. |
 | `CRM_SIGNATURE_TOLERANCE_SECONDS` | Không | Độ lệch thời gian cho phép, mặc định `300` giây. |
+| `CRON_SECRET` | Có khi dùng Vercel Cron | Secret cho các job `/api/internal/jobs/*` (outbox CRM và cảnh báo chuyên cần). |
+| `ATTENDANCE_QR_SECRET` | Khuyến nghị | Khóa HMAC riêng để ký QR động; nếu bỏ trống hệ thống dùng `JWT_SECRET`. |
 
 Chưa đặt `CRM_API_KEY` hoặc `CRM_INBOUND_SECRET` thì mọi endpoint `/api/integrations/crm/*` trả `503`.
 
@@ -100,6 +102,8 @@ Body luôn có cùng một vỏ:
 - `origin`: `lms` nếu hành động xảy ra trong LMS; `crm` nếu do chính CRM gọi API gây ra. CRM có thể bỏ qua sự kiện `origin = "crm"` để tránh vòng lặp.
 - Thứ tự giao không được bảo đảm tuyệt đối khi có thử lại; dùng `occurredAt` để sắp xếp.
 
+Với Vercel, hai cron đã được khai báo trong `vercel.json`: outbox CRM chạy mỗi 5 phút và quét rủi ro chuyên cần chạy mỗi giờ. Vercel gửi `Authorization: Bearer <CRON_SECRET>`; request không có secret sẽ bị từ chối.
+
 ### 3.2. Phản hồi và thử lại
 
 - CRM trả **bất kỳ mã 2xx** trong vòng 10 giây thì sự kiện được coi là đã giao.
@@ -131,6 +135,18 @@ Người học (hoặc CRM) đăng ký một khóa học, có thể kèm lớp m
 #### `enrollment.status_changed`
 
 Trạng thái ghi danh đổi: xác nhận thanh toán, xếp lớp, kích hoạt.
+
+#### `attendance.risk_detected`
+
+Học viên vắng ít nhất hai buổi liên tiếp hoặc tỷ lệ chuyên cần dưới 75%. Sự kiện chỉ phát một lần cho mỗi buổi học mới và có `alertId` để CRM chống trùng.
+
+#### `attendance.recovered`
+
+Một cảnh báo chuyên cần đang mở đã được giải quyết khi tỷ lệ tham gia trở lại mức an toàn.
+
+#### `course.completed` và `certificate.issued`
+
+LMS phát hai sự kiện trong cùng giao dịch khi quản trị viên cấp chứng chỉ: một cho vòng đời ghi danh hoàn tất, một chứa mã chứng chỉ để CRM gửi chăm sóc/upsell.
 
 Hai sự kiện ghi danh dùng chung cấu trúc `data`:
 

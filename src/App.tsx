@@ -33,6 +33,7 @@ import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
 import { ForcedPasswordChange, ForgotPasswordForm, SignUpForm } from "./components/public/AccountForms";
 import ErrorBoundary from "./components/ErrorBoundary";
+import CertificatePublicPage from "./components/public/CertificatePublicPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -1156,6 +1157,8 @@ function AppShell() {
 }
 
 export default function App() {
+  const certificateMatch = window.location.pathname.match(/^\/verify\/certificate\/([^/]+)$/i);
+  if (certificateMatch) return <CertificatePublicPage code={decodeURIComponent(certificateMatch[1])} />;
   return (
     <QueryClientProvider client={queryClient}>
       <AppShell />

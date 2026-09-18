@@ -1,6 +1,7 @@
 import React from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Users, MapPin, Video, ExternalLink, MessageSquare, Folder, FolderOpen } from "lucide-react";
 import { AppStore } from "../../store";
+import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
 import LinkedText from "../LinkedText";
@@ -78,6 +79,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<"study" | "discussion">("study");
   const [myClassSearch, setMyClassSearch] = React.useState("");
   const [showSectionDetailModal, setShowSectionDetailModal] = React.useState(false);
+  const [lessonNote, setLessonNote] = React.useState("");
+  const [noteDirty, setNoteDirty] = React.useState(false);
+  const [noteSaving, setNoteSaving] = React.useState(false);
+  const noteDirtyRef = React.useRef(false);
 
   // Reset local states when user exits or enters a different course
   React.useEffect(() => {
@@ -85,6 +90,39 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     setActivePresentationSessionNumber(null);
     setActiveWorkspaceTab("study");
   }, [learningCourseId]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLessonNote("");
+    setNoteDirty(false);
+    noteDirtyRef.current = false;
+    if (!activeLessonId) return () => { cancelled = true; };
+    api.getLessonNote(activeLessonId)
+      .then((response: any) => {
+        if (!cancelled && !noteDirtyRef.current) setLessonNote(response?.note?.content || "");
+      })
+      .catch(() => {
+        // Notes are an enhancement; an unavailable notes endpoint must not block lesson playback.
+      });
+    return () => { cancelled = true; };
+  }, [activeLessonId]);
+
+  React.useEffect(() => {
+    if (!activeLessonId || !noteDirty) return;
+    const timer = window.setTimeout(async () => {
+      setNoteSaving(true);
+      try {
+        await api.saveLessonNote(activeLessonId, lessonNote);
+        setNoteDirty(false);
+        noteDirtyRef.current = false;
+      } catch {
+        // Keep the dirty flag so the next edit retries the save.
+      } finally {
+        setNoteSaving(false);
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [activeLessonId, lessonNote, noteDirty]);
 
   const activeLearningSectionId = ((store.courseRegistrations || []).find((registration: any) => {
     if (registration.studentId !== currentUser.id || registration.status !== "registered") return false;
@@ -177,7 +215,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           {session.content}
         </p>
       )}
-      {session.materials?.length > 0 && <SessionMaterialsList materials={session.materials} />}
+      {session.materials?.length > 0 && <SessionMaterialsList materials={session.materials} sessionId={session.sessionId} />}
     </div>
   ) : null;
   const renderVideoStage = (videoUrl: string, title: string) => (
@@ -306,7 +344,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           </div>
 
           {session.materials.length > 0 ? (
-            <SessionMaterialsList materials={session.materials} />
+            <SessionMaterialsList materials={session.materials} sessionId={session.sessionId} />
           ) : (
             <div className="text-center py-8 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-xs text-slate-500">
               Thư mục này hiện chưa có file tài liệu hoặc slide đính kèm.
@@ -1092,6 +1130,28 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
                       <div className="relative z-10 text-sm md:text-base text-slate-800 leading-relaxed font-sans max-w-none space-y-4 whitespace-pre-line bg-slate-50 p-6 rounded-xl border border-slate-200">
                         {currentLessonContentObj.content}
+                      </div>
+
+                      <div className="relative z-10 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 md:p-5 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <label htmlFor="lesson-personal-note" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-800">
+                            <MessageSquare className="h-4 w-4" /> Ghi chú cá nhân
+                          </label>
+                          <span className="text-[10px] font-mono text-indigo-500">
+                            {noteSaving ? "Đang lưu…" : noteDirty ? "Chưa lưu" : "Đã lưu tự động"}
+                          </span>
+                        </div>
+                        <textarea
+                          id="lesson-personal-note"
+                          value={lessonNote}
+                          onChange={(event) => {
+                            setLessonNote(event.target.value);
+                            setNoteDirty(true);
+                            noteDirtyRef.current = true;
+                          }}
+                          placeholder="Ghi lại công thức, câu hỏi hoặc điều cần ôn tập…"
+                          className="min-h-28 w-full resize-y rounded-xl border border-indigo-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                        />
                       </div>
                     </div>
                   </div>

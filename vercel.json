@@ -8,5 +8,9 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    { "path": "/api/internal/jobs/crm-outbox", "schedule": "*/5 * * * *" },
+    { "path": "/api/internal/jobs/attendance-risk", "schedule": "17 * * * *" }
   ]
 }

@@ -6,7 +6,14 @@ import { signCrmPayload } from "./signature";
 // as its own writes, and a scheduler job delivers pending rows to CRM_WEBHOOK_URL with an HMAC signature,
 // retrying with backoff. Contract: docs/crm-integration.md.
 
-export type CrmEventType = "contact.registered" | "enrollment.requested" | "enrollment.status_changed";
+export type CrmEventType =
+  | "contact.registered"
+  | "enrollment.requested"
+  | "enrollment.status_changed"
+  | "attendance.risk_detected"
+  | "attendance.recovered"
+  | "course.completed"
+  | "certificate.issued";
 export type CrmOrigin = "lms" | "crm";
 
 const MAX_ATTEMPTS = 10;
@@ -87,6 +94,47 @@ export async function enqueueEnrollmentEvent(
 ) {
   const data = await buildEnrollmentEventData(db, enrollmentId);
   if (data) await enqueueCrmEvent(db, type, data, origin);
+}
+
+/** Build a privacy-conscious certificate event for CRM lifecycle automations. */
+export async function enqueueCertificateIssuedEvent(db: Queryable, certificateId: string, origin: CrmOrigin = "lms") {
+  const row = (await db.query(
+    `SELECT cert.id, cert.certificate_code, cert.issued_at,
+            u.id AS student_id, u.name AS student_name, u.email AS student_email, u.phone AS student_phone,
+            u.crm_contact_id, c.id AS course_id, c.title AS course_title
+     FROM certificates cert
+     JOIN users u ON u.id = cert.student_id
+     JOIN courses c ON c.id = cert.course_id
+     WHERE cert.id = $1`,
+    [certificateId]
+  )).rows[0];
+  if (!row) return null;
+  return enqueueCrmEvent(db, "certificate.issued", {
+    certificateId: row.id,
+    certificateCode: row.certificate_code,
+    issuedAt: row.issued_at,
+    student: {
+      lmsUserId: row.student_id,
+      name: row.student_name,
+      email: row.student_email,
+      phone: row.student_phone || null,
+      crmContactId: row.crm_contact_id || null
+    },
+    course: { id: row.course_id, title: row.course_title }
+  }, origin);
+}
+
+export async function enqueueCourseCompletedEvent(
+  db: Queryable,
+  enrollmentId: string,
+  origin: CrmOrigin = "lms"
+) {
+  const data = await buildEnrollmentEventData(db, enrollmentId);
+  if (!data) return null;
+  return enqueueCrmEvent(db, "course.completed", {
+    ...data,
+    completedAt: new Date().toISOString()
+  }, origin);
 }
 
 // 1 min, 2 min, 4 min ... capped at 6 hours.

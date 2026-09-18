@@ -15,3 +15,11 @@ createRoot(container!).render(
 );
 console.log("MAIN: createRoot render called!");
 
+if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(error => {
+      console.warn("[pwa] service worker registration failed", error);
+    });
+  });
+}
+

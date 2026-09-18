@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import multer from "multer";
+import { ZipArchive } from "archiver";
 import fs from "fs";
 import os from "os";
 
@@ -159,13 +160,14 @@ import {
   ServiceError
 } from "./src/server/services/enrollmentService";
 import { processSepayWebhook } from "./src/server/services/sepayService";
-import { enqueueCrmEvent, enqueueEnrollmentEvent } from "./src/server/crm/crmOutbox";
+import { enqueueCrmEvent, enqueueEnrollmentEvent, enqueueCertificateIssuedEvent, enqueueCourseCompletedEvent } from "./src/server/crm/crmOutbox";
 import { verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
-import { startScheduler } from "./src/server/scheduler";
+import { startScheduler, runCrmOutboxJob, runAttendanceRiskJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
+import { getAttendanceReportRows, getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
@@ -482,6 +484,7 @@ const rateLimitPublicCatalog = createIpRateLimiter("public-catalog", 120, 60, "Q
 const rateLimitRegister = createIpRateLimiter("register", 5, 60 * 60, "Bạn đã gửi quá nhiều yêu cầu tạo tài khoản. Vui lòng thử lại sau.");
 const rateLimitForgotPassword = createIpRateLimiter("forgot-password", 5, 15 * 60, "Quá nhiều yêu cầu quên mật khẩu. Vui lòng thử lại sau.");
 const rateLimitCrmIntegration = createIpRateLimiter("crm-integration", 300, 60, "Too many CRM integration requests.");
+const rateLimitCertificateVerify = createIpRateLimiter("certificate-verify", 60, 60, "Quá nhiều yêu cầu xác thực chứng chỉ, vui lòng thử lại sau ít phút.");
 
 async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -598,7 +601,10 @@ async function requireAuth(req: AuthRequest, res: express.Response, next: expres
       clearAuthCookie(res);
       return res.status(401).json({ error: "Invalid or expired session." });
     }
-    const user = await usersRepository.findById(pool, payload.sub);
+    const mockUser = isDevMockDb ? (devMockStore || getInitialStore()).users.find(item => item.id === payload.sub) : null;
+    const user = mockUser
+      ? { ...mockUser, passwordHash: "", passwordSalt: undefined }
+      : await usersRepository.findById(pool, payload.sub);
     if (!user || !user.isActive) {
       clearAuthCookie(res);
       return res.status(401).json({ error: "User is not available." });
@@ -1303,6 +1309,29 @@ app.post("/api/auth/force-logout", asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 
+// Vercel Cron (and a self-hosted scheduler) can invoke these idempotent jobs
+// without a browser CSRF token. Keep the shared secret out of query strings.
+function requireInternalJobSecret(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const configured = process.env.CRON_SECRET;
+  const supplied = req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.get("x-cron-secret");
+  const suppliedBuffer = Buffer.from(supplied || "");
+  const configuredBuffer = Buffer.from(configured || "");
+  const matches = suppliedBuffer.length === configuredBuffer.length && crypto.timingSafeEqual(suppliedBuffer, configuredBuffer);
+  if (!configured || !supplied || !matches) {
+    return res.status(configured ? 401 : 503).json({ error: configured ? "Unauthorized cron request." : "CRON_SECRET is not configured." });
+  }
+  return next();
+}
+
+for (const method of ["get", "post"] as const) {
+  app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
+    res.json(await runCrmOutboxJob());
+  }));
+  app[method]("/api/internal/jobs/attendance-risk", requireInternalJobSecret, asyncHandler(async (_req, res) => {
+    res.json(await runAttendanceRiskJob());
+  }));
+}
+
 app.use("/api", requireCsrf);
 
 app.get("/health", asyncHandler(async (_req, res) => {
@@ -1533,6 +1562,104 @@ app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHa
 app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
   const store = isDevMockDb ? (devMockStore || getInitialStore()) : (await storeSnapshotFromDb(pool));
   res.json(dashboardFromStore(store, req.user!));
+}));
+
+const reportFiltersFromRequest = (req: express.Request) => ({
+  courseId: typeof req.query.courseId === "string" ? req.query.courseId : undefined,
+  sectionId: typeof req.query.sectionId === "string" ? req.query.sectionId : undefined,
+  from: typeof req.query.from === "string" ? req.query.from : undefined,
+  to: typeof req.query.to === "string" ? req.query.to : undefined,
+  search: typeof req.query.search === "string" ? req.query.search.trim() : undefined
+});
+
+const attendanceReportHeaders = [
+  "Họ tên", "Email", "Số điện thoại", "Khóa học", "Mã lớp", "Tổng buổi",
+  "Có mặt", "Đi muộn", "Vắng", "Có phép", "Tỷ lệ chuyên cần (%)"
+];
+const attendanceReportKeys = [
+  "studentName", "studentEmail", "studentPhone", "courseTitle", "sectionCode", "totalSessions",
+  "presentSessions", "lateSessions", "absentSessions", "excusedSessions", "attendancePercent"
+];
+const gradebookReportHeaders = [
+  "Họ tên", "Email", "Số điện thoại", "Khóa học", "Mã lớp", "Bài đã hoàn thành",
+  "Tổng bài", "Điểm bài tập (%)", "Điểm quiz (%)", "Điểm tổng (%)", "Xếp loại", "Điểm hệ 4"
+];
+const gradebookReportKeys = [
+  "studentName", "studentEmail", "studentPhone", "courseTitle", "sectionCode", "completedLessons",
+  "totalLessons", "assignmentPercent", "quizPercent", "finalPercent", "letterGrade", "gradePoint"
+];
+
+async function sendReport(res: express.Response, name: string, headers: string[], rows: Array<Record<string, unknown>>, keys: string[], format: "csv" | "xlsx") {
+  const dateLabel = new Date().toISOString().slice(0, 10);
+  if (format === "csv") {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.csv"`);
+    return res.send(toCsv(headers, rows, keys));
+  }
+  const workbook = await toXlsx(name, headers, rows, keys);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.xlsx"`);
+  return res.send(workbook);
+}
+
+app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "csv");
+  const rows = await getAttendanceReportRows(pool, req.user!, reportFiltersFromRequest(req));
+  await audit(req, "export_attendance_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "csv");
+}));
+
+app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "xlsx");
+  const rows = await getAttendanceReportRows(pool, req.user!, reportFiltersFromRequest(req));
+  await audit(req, "export_attendance_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "xlsx");
+}));
+
+app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "csv");
+  const rows = await getGradebookReportRows(pool, req.user!, reportFiltersFromRequest(req));
+  await audit(req, "export_gradebook_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "csv");
+}));
+
+app.get("/api/reports/gradebook.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "xlsx");
+  const rows = await getGradebookReportRows(pool, req.user!, reportFiltersFromRequest(req));
+  await audit(req, "export_gradebook_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "xlsx");
+}));
+
+app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json({
+      pendingEnrollments: (store.enrollments || []).filter((item: any) => item.status === "pending" || item.status === "pending_payment").length,
+      ungradedSubmissions: (store.submissions || []).filter((item: any) => item.score === undefined || item.score === null).length,
+      pendingCourses: (store.courses || []).filter((item: any) => item.status === "pending").length,
+      attendanceRisks: 0,
+      crmFailures: 0,
+      generatedAt: new Date().toISOString()
+    });
+  }
+  const teacherFilter = req.user!.role === "teacher" ? "AND EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = e.course_id AND cs.teacher_id = $1)" : "";
+  const params = req.user!.role === "teacher" ? [req.user!.id] : [];
+  const teacherCourseFilter = req.user!.role === "teacher" ? "AND teacher_id = $1" : "";
+  const [enrollment, ungraded, pendingCourses, risks, crmFailures] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS count FROM enrollments e WHERE e.status IN ('pending', 'pending_payment') ${teacherFilter}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM submissions s JOIN assignments a ON a.id = s.assignment_id ${req.user!.role === "teacher" ? "JOIN courses c ON c.id = a.course_id" : ""} WHERE s.score IS NULL ${req.user!.role === "teacher" ? "AND c.teacher_id = $1" : ""}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM courses WHERE status = 'pending' ${teacherCourseFilter}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM attendance_risk_alerts WHERE status = 'open' ${req.user!.role === "teacher" ? "AND section_id IN (SELECT id FROM course_sections WHERE teacher_id = $1)" : ""}`, params),
+    pool.query("SELECT COUNT(*)::int AS count FROM crm_outbox WHERE status = 'failed'")
+  ]);
+  return res.json({
+    pendingEnrollments: Number(enrollment.rows[0]?.count || 0),
+    ungradedSubmissions: Number(ungraded.rows[0]?.count || 0),
+    pendingCourses: Number(pendingCourses.rows[0]?.count || 0),
+    attendanceRisks: Number(risks.rows[0]?.count || 0),
+    crmFailures: Number(crmFailures.rows[0]?.count || 0),
+    generatedAt: new Date().toISOString()
+  });
 }));
 
 
@@ -2377,6 +2504,164 @@ app.post("/api/courses/:id/request-section", requireAuth, requireRole(["student"
   res.json({ success: true, message: "Yêu cầu mở thêm lớp học phần đã được gửi tới quản trị viên." });
 }));
 
+app.get("/api/public/certificates/:code", rateLimitCertificateVerify, asyncHandler(async (req, res) => {
+  const code = String(req.params.code || "").trim().toUpperCase();
+  if (!code || code.length > 80) return res.status(400).json({ error: "Mã chứng chỉ không hợp lệ." });
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const cert = (store.certificates || []).find((item: any) => String(item.certificateCode || "").toUpperCase() === code);
+    if (!cert) return res.status(404).json({ error: "Không tìm thấy chứng chỉ." });
+    const student = store.users.find((item: any) => item.id === cert.studentId);
+    const course = store.courses.find((item: any) => item.id === cert.courseId);
+    return res.json({ certificateCode: cert.certificateCode, issuedAt: cert.issuedAt, studentName: student?.name || "Học viên MCNA", courseId: cert.courseId, courseTitle: course?.title || "Khóa học MCNA", status: "valid" });
+  }
+  const row = (await pool.query(
+    `SELECT cert.id, cert.certificate_code, cert.issued_at, cert.course_id, c.title AS course_title,
+            u.name AS student_name
+     FROM certificates cert
+     JOIN courses c ON c.id = cert.course_id
+     JOIN users u ON u.id = cert.student_id
+     WHERE UPPER(cert.certificate_code) = $1
+     LIMIT 1`,
+    [code]
+  )).rows[0];
+  if (!row) return res.status(404).json({ error: "Không tìm thấy chứng chỉ." });
+  res.setHeader("Cache-Control", "public, max-age=60");
+  return res.json({
+    certificateCode: row.certificate_code,
+    issuedAt: row.issued_at,
+    studentName: row.student_name,
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    status: "valid"
+  });
+}));
+
+app.get("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const note = (store.lessonNotes || []).find((item: any) => item.studentId === req.user!.id && item.lessonId === req.params.lessonId);
+    return res.json({ note: note || null });
+  }
+  const row = (await pool.query(
+    `SELECT ln.id, ln.student_id, ln.lesson_id, ln.course_id, ln.content, ln.created_at, ln.updated_at
+     FROM lesson_notes ln
+     WHERE ln.student_id = $1 AND ln.lesson_id = $2`,
+    [req.user!.id, req.params.lessonId]
+  )).rows[0];
+  return res.json({ note: row ? { id: row.id, studentId: row.student_id, lessonId: row.lesson_id, courseId: row.course_id, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at } : null });
+}));
+
+app.put("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), validateBody(schemas.lessonNote), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const lesson = store.lessons.find((item: any) => item.id === req.params.lessonId);
+    if (!lesson) return res.status(404).json({ error: "Không tìm thấy bài học." });
+    const enrollment = (store.enrollments || []).find((item: any) => item.studentId === req.user!.id && item.courseId === lesson.courseId && ["active", "completed"].includes(item.status));
+    if (!enrollment) return res.status(403).json({ error: "Bạn chưa có quyền ghi chú bài học này." });
+    const notes = store.lessonNotes || [];
+    const existing = notes.find((item: any) => item.studentId === req.user!.id && item.lessonId === lesson.id);
+    const now = new Date().toISOString();
+    const note = existing
+      ? { ...existing, content: req.body.content, updatedAt: now }
+      : { id: generateId("note"), studentId: req.user!.id, lessonId: lesson.id, courseId: lesson.courseId, content: req.body.content, createdAt: now, updatedAt: now };
+    const next = existing ? notes.map((item: any) => item.id === existing.id ? note : item) : [note, ...notes];
+    devMockStore = { ...store, lessonNotes: next };
+    return res.json({ note });
+  }
+  const lesson = (await pool.query("SELECT id, course_id FROM lessons WHERE id = $1", [req.params.lessonId])).rows[0];
+  if (!lesson) return res.status(404).json({ error: "Không tìm thấy bài học." });
+  const enrollment = (await pool.query(
+    "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed') LIMIT 1",
+    [req.user!.id, lesson.course_id]
+  )).rows[0];
+  if (!enrollment) return res.status(403).json({ error: "Bạn chưa có quyền ghi chú bài học này." });
+  const row = (await pool.query(
+    `INSERT INTO lesson_notes (id, student_id, lesson_id, course_id, content)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (student_id, lesson_id) DO UPDATE SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+     RETURNING id, student_id, lesson_id, course_id, content, created_at, updated_at`,
+    [generateId("note"), req.user!.id, lesson.id, lesson.course_id, req.body.content]
+  )).rows[0];
+  await audit(req, "save_lesson_note", lesson.id, `length=${String(req.body.content).length}`);
+  return res.json({ note: { id: row.id, studentId: row.student_id, lessonId: row.lesson_id, courseId: row.course_id, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at } });
+}));
+
+app.delete("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    devMockStore = { ...store, lessonNotes: (store.lessonNotes || []).filter((item: any) => !(item.studentId === req.user!.id && item.lessonId === req.params.lessonId)) };
+    return res.status(204).send();
+  }
+  await pool.query("DELETE FROM lesson_notes WHERE student_id = $1 AND lesson_id = $2", [req.user!.id, req.params.lessonId]);
+  await audit(req, "delete_lesson_note", req.params.lessonId, "Learner note deleted");
+  return res.status(204).send();
+}));
+
+app.get("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const courseId = typeof req.query.courseId === "string" ? req.query.courseId : null;
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json((store.feedbackTemplates || []).filter((item: any) => item.ownerUserId === req.user!.id && item.isActive !== false && (!courseId || !item.courseId || item.courseId === courseId)));
+  }
+  const values: unknown[] = [req.user!.id];
+  const courseFilter = courseId ? "AND (course_id IS NULL OR course_id = $2)" : "";
+  if (courseId) values.push(courseId);
+  const rows = (await pool.query(
+    `SELECT id, owner_user_id, course_id, title, content, sort_order, is_active, created_at, updated_at
+     FROM feedback_templates
+     WHERE owner_user_id = $1 AND is_active = TRUE ${courseFilter}
+     ORDER BY course_id NULLS FIRST, sort_order, created_at`,
+    values
+  )).rows;
+  return res.json(rows.map((row: any) => ({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || undefined, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at })));
+}));
+
+app.post("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.feedbackTemplate), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (req.body.courseId) {
+      const course = store.courses.find((item: any) => item.id === req.body.courseId);
+      if (!course) return res.status(404).json({ error: "Không tìm thấy khóa học." });
+      if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Bạn không phụ trách khóa học này." });
+    }
+    const now = new Date().toISOString();
+    const template = { id: generateId("feedback"), ownerUserId: req.user!.id, courseId: req.body.courseId, title: req.body.title, content: req.body.content, sortOrder: (store.feedbackTemplates || []).length, isActive: true, createdAt: now, updatedAt: now };
+    devMockStore = { ...store, feedbackTemplates: [template, ...(store.feedbackTemplates || [])] };
+    return res.status(201).json(template);
+  }
+  if (req.body.courseId) {
+    const course = await coursesRepository.findById(pool, req.body.courseId);
+    if (!course) return res.status(404).json({ error: "Không tìm thấy khóa học." });
+    if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Bạn không phụ trách khóa học này." });
+  }
+  const row = (await pool.query(
+    `INSERT INTO feedback_templates (id, owner_user_id, course_id, title, content, sort_order)
+     VALUES ($1, $2, $3, $4, $5, COALESCE((SELECT MAX(sort_order) + 1 FROM feedback_templates WHERE owner_user_id = $2), 0))
+     RETURNING id, owner_user_id, course_id, title, content, sort_order, is_active, created_at, updated_at`,
+    [generateId("feedback"), req.user!.id, req.body.courseId || null, req.body.title, req.body.content]
+  )).rows[0];
+  await audit(req, "create_feedback_template", row.id, row.title);
+  return res.status(201).json({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || undefined, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at });
+}));
+
+app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const existing = (store.feedbackTemplates || []).find((item: any) => item.id === req.params.id);
+    if (!existing) return res.status(404).json({ error: "Không tìm thấy mẫu nhận xét." });
+    if (req.user!.role === "teacher" && existing.ownerUserId !== req.user!.id) return res.status(403).json({ error: "Bạn không có quyền xóa mẫu này." });
+    devMockStore = { ...store, feedbackTemplates: (store.feedbackTemplates || []).filter((item: any) => item.id !== req.params.id) };
+    return res.status(204).send();
+  }
+  const existing = (await pool.query("SELECT owner_user_id, title FROM feedback_templates WHERE id = $1", [req.params.id])).rows[0];
+  if (!existing) return res.status(404).json({ error: "Không tìm thấy mẫu nhận xét." });
+  if (req.user!.role === "teacher" && existing.owner_user_id !== req.user!.id) return res.status(403).json({ error: "Bạn không có quyền xóa mẫu này." });
+  await pool.query("DELETE FROM feedback_templates WHERE id = $1", [req.params.id]);
+  await audit(req, "delete_feedback_template", req.params.id, existing.title);
+  return res.status(204).send();
+}));
+
 app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
   const client = await pool.connect();
   let committed = false;
@@ -2416,6 +2701,11 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       "UPDATE enrollments SET status = 'completed', completed_at = $1 WHERE id = $2",
       [issuedAt, enrollment.id]
     );
+
+    // Queue lifecycle events in the same transaction as the certificate and
+    // enrollment update so CRM never receives a completion for a rolled-back issue.
+    await enqueueCourseCompletedEvent(client, enrollment.id);
+    await enqueueCertificateIssuedEvent(client, certificate.id);
 
     await client.query("COMMIT");
     committed = true;
@@ -3388,12 +3678,13 @@ async function findSessionWithOwners(sessionId: string): Promise<SessionOwnershi
     const s = (store.attendanceSessions || []).find(sess => sess.id === sessionId);
     if (!s) return null;
     const sec = (store.courseSections || []).find(sec => sec.id === (s as any).sectionId);
+    const course = (store.courses || []).find(course => course.id === s.courseId);
     return {
       id: s.id,
       course_id: s.courseId,
       section_id: (s as any).sectionId || null,
-      course_teacher_id: "user_teacher",
-      section_teacher_id: sec?.teacherId || "user_teacher"
+      course_teacher_id: course?.teacherId || s.teacherId || "user_teacher",
+      section_teacher_id: sec?.teacherId || s.teacherId || "user_teacher"
     };
   }
   return (await pool.query(
@@ -3410,7 +3701,6 @@ function canManageSessionMaterials(user: User, session: SessionOwnership) {
   if (user.role === "admin") return true;
   if (user.role === "teacher") {
     if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
-    return true; // Allow teacher to manage materials of assigned courses
   }
   return false;
 }
@@ -3675,6 +3965,68 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   res.download(download.absolutePath, fileName);
 }));
 
+app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHandler(async (req, res) => {
+  const session = await findSessionWithOwners(req.params.sessionId);
+  if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
+  if (!await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
+  if (isDevMockDb) return res.status(501).json({ error: "Tải gói tài liệu chưa khả dụng trong mock mode." });
+
+  const materials = await sessionMaterialsRepository.listRowsBySession(pool, session.id);
+  const fileMaterials = materials.filter((material: any) => material.storage_path);
+  const links = materials.filter((material: any) => !material.storage_path && material.url);
+  if (fileMaterials.length === 0 && links.length === 0) return res.status(404).json({ error: "Buổi học chưa có tài liệu để tải." });
+
+  const maxBundleBytes = 250 * 1024 * 1024;
+  const estimatedBytes = fileMaterials.reduce((sum: number, material: any) => sum + Number(material.size_bytes || 0), 0);
+  if (estimatedBytes > maxBundleBytes) return res.status(413).json({ error: "Tổng dung lượng tài liệu vượt giới hạn 250 MB cho một gói tải." });
+
+  const usedNames = new Set<string>();
+  const safeArchiveName = (value: string, fallback: string) => {
+    const base = path.basename(value || fallback).replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_").trim() || fallback;
+    let candidate = base;
+    let index = 2;
+    while (usedNames.has(candidate)) {
+      const ext = path.extname(base);
+      candidate = `${path.basename(base, ext)}-${index++}${ext}`;
+    }
+    usedNames.add(candidate);
+    return candidate;
+  };
+
+  const archive = new ZipArchive({ zlib: { level: 6 } });
+  archive.on("error", error => {
+    if (!res.headersSent) res.status(500).json({ error: "Không thể tạo gói tài liệu." });
+    else res.destroy(error);
+  });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-materials.zip"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  archive.pipe(res);
+
+  for (const material of fileMaterials) {
+    try {
+      const download = await materialStorage.getDownload(material.storage_path, material.file_name || material.title);
+      const name = safeArchiveName(material.file_name || material.title, `material-${material.id}`);
+      if (download.kind === "buffer") archive.append(download.buffer, { name });
+      else if (download.kind === "redirect") {
+        const response = await fetch(download.url, { signal: AbortSignal.timeout(30_000) });
+        if (!response.ok) continue;
+        archive.append(Buffer.from(await response.arrayBuffer()), { name });
+      } else if (fs.existsSync(download.absolutePath)) {
+        archive.append(fs.createReadStream(download.absolutePath), { name });
+      }
+    } catch (error) {
+      console.warn(`[materials] unable to include ${material.id} in bundle`, error);
+    }
+  }
+  if (links.length > 0) {
+    const manifest = links.map((material: any) => `${material.title}: ${material.url}`).join("\n");
+    archive.append(Buffer.from(`Tài liệu dạng liên kết của buổi học\n\n${manifest}\n`, "utf8"), { name: "links.txt" });
+  }
+  await archive.finalize();
+  await audit(req, "download_session_material_bundle", session.id, `files=${fileMaterials.length};links=${links.length}`);
+}));
+
 app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
@@ -3697,7 +4049,8 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     sessionId: session.id,
     studentId: record.studentId,
     status: record.status,
-    note: record.note
+    note: record.note,
+    checkinMethod: "manual" as const
   }));
   await attendanceRepository.saveAttendanceSession(pool, session, records);
   invalidateStoreCache();
@@ -3735,7 +4088,8 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
     sessionId: req.body.sessionId,
     studentId: req.body.studentId,
     status: req.body.status,
-    note: req.body.note
+    note: req.body.note,
+    checkinMethod: "manual" as const
   };
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   invalidateStoreCache();
@@ -3820,6 +4174,115 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
   await audit(req, "create_attendance_link", session.id, `Course: ${course.title}, Code: ${code}`);
 
   res.status(201).json({ session, code, expiresAt });
+}));
+
+const ATTENDANCE_QR_INTERVAL_SECONDS = 30;
+const ATTENDANCE_QR_SECRET = process.env.ATTENDANCE_QR_SECRET || JWT_SECRET_VALUE;
+const devAttendanceQrSessions = new Map<string, { id: string; sessionId: string; sectionId?: string | null; tokenVersion: number; intervalSeconds: number; revokedAt?: string }>();
+
+function encodeQrPart(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function signQrPart(encodedPayload: string) {
+  return crypto.createHmac("sha256", ATTENDANCE_QR_SECRET).update(encodedPayload).digest("base64url");
+}
+
+function buildAttendanceQrToken(input: { qrId: string; sessionId: string; tokenVersion: number; intervalSeconds: number; bucket?: number }) {
+  const bucket = input.bucket ?? Math.floor(Date.now() / 1000 / input.intervalSeconds);
+  const expiresAt = (bucket + 1) * input.intervalSeconds;
+  const payload = encodeQrPart({
+    qrId: input.qrId,
+    sessionId: input.sessionId,
+    tokenVersion: input.tokenVersion,
+    bucket,
+    exp: expiresAt
+  });
+  return { token: `${payload}.${signQrPart(payload)}`, expiresAt: new Date(expiresAt * 1000).toISOString() };
+}
+
+function parseAttendanceQrToken(token: string) {
+  const [encodedPayload, signature] = String(token || "").split(".");
+  if (!encodedPayload || !signature) return null;
+  const expected = signQrPart(encodedPayload);
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (!payload?.qrId || !payload?.sessionId || !Number.isInteger(payload.tokenVersion) || !Number.isInteger(payload.bucket) || payload.bucket < 0 || !Number.isFinite(payload.exp)) return null;
+    return payload as { qrId: string; sessionId: string; tokenVersion: number; bucket: number; exp: number };
+  } catch {
+    return null;
+  }
+}
+
+async function validateAttendanceManagerAccess(sessionId: string, user: User) {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const item: any = (store.attendanceSessions || []).find((entry: any) => entry.id === sessionId);
+    if (!item) return { session: null, error: "Attendance session not found.", status: 404 };
+    const course = (store.courses || []).find((entry: any) => entry.id === item.courseId);
+    const ownerId = item.teacherId || course?.teacherId;
+    if (user.role === "teacher" && ownerId !== user.id) return { session: null, error: "Permission denied.", status: 403 };
+    return { session: { id: item.id, course_id: item.courseId, section_id: item.sectionId || null, teacher_id: ownerId }, error: null, status: 200 };
+  }
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
+  if (!session) return { session: null, error: "Attendance session not found.", status: 404 };
+  if (user.role === "teacher" && session.teacher_id !== user.id) return { session: null, error: "Permission denied.", status: 403 };
+  return { session, error: null, status: 200 };
+}
+
+app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  const session = access.session!;
+  if (isDevMockDb) {
+    const previous = [...devAttendanceQrSessions.values()].find(item => item.sessionId === session.id && !item.revokedAt);
+    const qr = { id: previous?.id || generateId("qr"), sessionId: session.id, sectionId: session.section_id || null, tokenVersion: (previous?.tokenVersion || 0) + 1, intervalSeconds: ATTENDANCE_QR_INTERVAL_SECONDS };
+    devAttendanceQrSessions.set(qr.id, qr);
+    const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.tokenVersion, intervalSeconds: qr.intervalSeconds });
+    return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.intervalSeconds });
+  }
+  const qr = (await pool.query(
+    `INSERT INTO attendance_qr_sessions (id, attendance_session_id, section_id, interval_seconds, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (attendance_session_id) WHERE revoked_at IS NULL
+     DO UPDATE SET token_version = attendance_qr_sessions.token_version + 1,
+                   started_at = CURRENT_TIMESTAMP,
+                   expires_at = NULL,
+                   created_by = EXCLUDED.created_by
+     RETURNING *`,
+    [generateId("qr"), session.id, session.section_id || null, ATTENDANCE_QR_INTERVAL_SECONDS, req.user!.id]
+  )).rows[0];
+  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
+  await audit(req, "open_attendance_qr", session.id, `interval=${qr.interval_seconds}s`);
+  return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
+}));
+
+app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  if (isDevMockDb) {
+    const qr = [...devAttendanceQrSessions.values()].find(item => item.sessionId === req.params.id && !item.revokedAt);
+    if (!qr) return res.status(404).json({ error: "QR điểm danh chưa được mở." });
+    const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.tokenVersion, intervalSeconds: qr.intervalSeconds });
+    return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.intervalSeconds });
+  }
+  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE attendance_session_id = $1 AND revoked_at IS NULL LIMIT 1", [req.params.id])).rows[0];
+  if (!qr) return res.status(404).json({ error: "QR điểm danh chưa được mở." });
+  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
+  return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
+}));
+
+app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  if (isDevMockDb) {
+    for (const qr of devAttendanceQrSessions.values()) if (qr.sessionId === req.params.id && !qr.revokedAt) qr.revokedAt = new Date().toISOString();
+    return res.json({ ok: true });
+  }
+  await pool.query("UPDATE attendance_qr_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE attendance_session_id = $1 AND revoked_at IS NULL", [req.params.id]);
+  await audit(req, "close_attendance_qr", req.params.id, "QR session revoked");
+  return res.json({ ok: true });
 }));
 
 
@@ -3942,12 +4405,80 @@ app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), 
     sessionId,
     studentId: req.user!.id,
     status: "present" as const,
-    note: "Tự điểm danh qua link"
+    note: "Tự điểm danh qua link",
+    checkedInAt: new Date().toISOString(),
+    checkinMethod: "link" as const
   };
 
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   await audit(req, "student_self_checkin", record.id, `Student: ${req.user!.id}, Status: present`);
   res.json({ ok: true, record });
+}));
+
+app.post("/api/attendance/self-checkin/qr", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckinQr), asyncHandler(async (req, res) => {
+  const payload = parseAttendanceQrToken(req.body.token);
+  if (!payload) return res.status(400).json({ error: "QR điểm danh không hợp lệ hoặc đã bị thay đổi." });
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (nowSeconds > payload.exp + 5 || Math.abs(Math.floor(nowSeconds / ATTENDANCE_QR_INTERVAL_SECONDS) - payload.bucket) > 1) {
+    return res.status(400).json({ error: "QR điểm danh đã hết hạn. Vui lòng quét mã đang hiển thị trên màn hình lớp." });
+  }
+
+  if (isDevMockDb) {
+    const qr = devAttendanceQrSessions.get(payload.qrId);
+    if (!qr || qr.revokedAt || qr.sessionId !== payload.sessionId || qr.tokenVersion !== payload.tokenVersion) return res.status(400).json({ error: "Phiên QR điểm danh đã bị đóng hoặc đổi mã." });
+    const store = devMockStore || getInitialStore();
+    const session: any = (store.attendanceSessions || []).find((item: any) => item.id === payload.sessionId);
+    if (!session) return res.status(404).json({ error: "Attendance session not found." });
+    const registered = session.sectionId
+      ? (store.courseRegistrations || []).some((item: any) => item.studentId === req.user!.id && item.sectionId === session.sectionId && item.status === "registered")
+      : (store.enrollments || []).some((item: any) => item.studentId === req.user!.id && item.courseId === session.courseId && ["active", "completed"].includes(item.status));
+    if (!registered) return res.status(403).json({ error: "Bạn chưa được xếp vào lớp học phần này." });
+    const now = new Date().toISOString();
+    const records = store.attendanceRecords || [];
+    const existing = records.find((item: any) => item.sessionId === session.id && item.studentId === req.user!.id);
+    const record = { id: existing?.id || generateId("atr"), sessionId: session.id, studentId: req.user!.id, status: "present" as const, note: "Tự điểm danh qua QR động", checkedInAt: now, checkinMethod: "qr" as const };
+    devMockStore = { ...store, attendanceRecords: existing ? records.map((item: any) => item.id === existing.id ? { ...item, ...record } : item) : [record, ...records] };
+    return res.json({ ok: true, record });
+  }
+
+  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE id = $1 AND attendance_session_id = $2 AND revoked_at IS NULL", [payload.qrId, payload.sessionId])).rows[0];
+  if (!qr || Number(qr.token_version) !== Number(payload.tokenVersion)) return res.status(400).json({ error: "Phiên QR điểm danh đã bị đóng hoặc đổi mã." });
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [payload.sessionId])).rows[0];
+  if (!session) return res.status(404).json({ error: "Attendance session not found." });
+
+  if (session.section_id) {
+    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
+    if (section) {
+      const schedule = parseSchedule(section);
+      if (!isWithinSchedule(schedule)) return res.status(400).json({ error: "Điểm danh không hợp lệ: hiện tại không nằm trong khung giờ học của lớp." });
+    }
+    const registration = (await pool.query(
+      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
+      [req.user!.id, session.section_id]
+    )).rows[0];
+    if (!registration) return res.status(403).json({ error: "Bạn chưa được xếp vào lớp học phần này." });
+  } else {
+    const enrollment = (await pool.query(
+      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
+      [req.user!.id, session.course_id]
+    )).rows[0];
+    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
+  }
+
+  const existing = (await pool.query("SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2", [session.id, req.user!.id])).rows[0];
+  const record = {
+    id: existing?.id || generateId("atr"),
+    sessionId: session.id,
+    studentId: req.user!.id,
+    status: "present" as const,
+    note: "Tự điểm danh qua QR động",
+    checkedInAt: new Date().toISOString(),
+    checkinMethod: "qr" as const
+  };
+  await attendanceRepository.bulkMarkRecords(pool, [record]);
+  await audit(req, "student_qr_checkin", record.id, `Student: ${req.user!.id}, Session: ${session.id}`);
+  invalidateStoreCache();
+  return res.json({ ok: true, record });
 }));
 
 app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]), validateBody(schemas.teacherCheckin), asyncHandler(async (req, res) => {

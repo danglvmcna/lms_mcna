@@ -181,7 +181,7 @@ export const materialHref = (material: SessionMaterial) =>
   isFileMaterial(material) ? api.materialDownloadUrl(material.id) : material.url || "#";
 
 /** Read-only view of a session's materials for learners: YouTube embeds plus download/open cards and inline PDF preview. */
-export default function SessionMaterialsList({ materials }: { materials: SessionMaterial[] }) {
+export default function SessionMaterialsList({ materials, sessionId }: { materials: SessionMaterial[]; sessionId?: string }) {
   const [previewPdf, setPreviewPdf] = useState<SessionMaterial | null>(null);
 
   if (materials.length === 0) return null;
@@ -190,7 +190,18 @@ export default function SessionMaterialsList({ materials }: { materials: Session
 
   return (
     <div className="space-y-3">
-      <span className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">Tài liệu buổi học</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">Tài liệu buổi học</span>
+        {sessionId && (materials.some(material => isFileMaterial(material)) || materials.some(material => material.url)) && (
+          <a
+            href={api.sessionMaterialsBundleUrl(sessionId)}
+            download
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
+          >
+            <Archive className="h-3.5 w-3.5" /> Tải toàn bộ (.ZIP)
+          </a>
+        )}
+      </div>
 
       {videos.map(video => {
         const videoId = extractYoutubeVideoId(video.url || "");

@@ -142,6 +142,27 @@ export const api = {
   updateAttendanceRecord: (payload: unknown) => apiFetch("/api/attendance/records", { method: "PATCH", body: JSON.stringify(payload) }),
   generateAttendanceLink: (payload: { courseId: string; sectionId?: string; topic: string }) => apiFetch<{ session: any; code: string; expiresAt: string }>("/api/attendance/sessions/generate-link", { method: "POST", body: JSON.stringify(payload) }),
   selfCheckin: (payload: { sessionId: string; code: string }) => apiFetch<{ ok: boolean; record: any }>("/api/attendance/self-checkin", { method: "POST", body: JSON.stringify(payload) }),
+  openAttendanceQr: (sessionId: string) => apiFetch<{ sessionId: string; token: string; expiresAt: string; intervalSeconds: number }>(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/open`, { method: "POST" }),
+  getAttendanceQr: (sessionId: string) => apiFetch<{ sessionId: string; token: string; expiresAt: string; intervalSeconds: number }>(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/current`),
+  closeAttendanceQr: (sessionId: string) => apiFetch(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/close`, { method: "POST" }),
+  selfCheckinQr: (payload: { token: string }) => apiFetch<{ ok: boolean; record: any }>("/api/attendance/self-checkin/qr", { method: "POST", body: JSON.stringify(payload) }),
+  getAttendanceReportUrl: (format: "csv" | "xlsx", filters: Record<string, string | undefined> = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    return `/api/reports/attendance.${format}${params.toString() ? `?${params.toString()}` : ""}`;
+  },
+  getGradebookReportUrl: (format: "csv" | "xlsx", filters: Record<string, string | undefined> = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    return `/api/reports/gradebook.${format}${params.toString() ? `?${params.toString()}` : ""}`;
+  },
+  getOperationsSummary: () => apiFetch<{ pendingEnrollments: number; ungradedSubmissions: number; pendingCourses: number; attendanceRisks: number; crmFailures: number; generatedAt: string }>("/api/admin/operations/summary"),
+  getLessonNote: (lessonId: string) => apiFetch<any>(`/api/lessons/${encodeURIComponent(lessonId)}/note`),
+  saveLessonNote: (lessonId: string, content: string) => apiFetch<any>(`/api/lessons/${encodeURIComponent(lessonId)}/note`, { method: "PUT", body: JSON.stringify({ content }) }),
+  deleteLessonNote: (lessonId: string) => apiFetch(`/api/lessons/${encodeURIComponent(lessonId)}/note`, { method: "DELETE" }),
+  listFeedbackTemplates: (courseId?: string) => apiFetch<any[]>(`/api/feedback-templates${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ""}`),
+  createFeedbackTemplate: (payload: { title: string; content: string; courseId?: string }) => apiFetch<any>("/api/feedback-templates", { method: "POST", body: JSON.stringify(payload) }),
+  deleteFeedbackTemplate: (id: string) => apiFetch(`/api/feedback-templates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  publicCertificateUrl: (code: string) => `/verify/certificate/${encodeURIComponent(code)}`,
+  sessionMaterialsBundleUrl: (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/materials/download-all`,
   markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
   resetPassword: (userId: string) => apiFetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }),

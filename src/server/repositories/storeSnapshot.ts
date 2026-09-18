@@ -102,7 +102,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     code: row.code || undefined,
     expiresAt: row.expires_at || undefined
   }));
-  const attendanceRecords = attendanceRecordsRes.rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined }));
+  const attendanceRecords = attendanceRecordsRes.rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined, checkedInAt: row.checked_in_at || undefined, checkinMethod: row.checkin_method || undefined }));
   const sessionMaterials = sessionMaterialsRes.rows.map(sessionMaterialFromRow);
   const notifications = notificationsRes.rows.map(row => ({
     id: row.id,

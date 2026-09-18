@@ -18,8 +18,12 @@ import {
   Award,
   CheckCircle,
   Info,
-  Link2
+  Link2,
+  QrCode,
+  Download,
+  FileSpreadsheet
 } from "lucide-react";
+import * as QRCode from "qrcode";
 import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord } from "../types";
 import { AppStore } from "../store";
 import { api } from "../api";
@@ -244,6 +248,9 @@ export default function AttendanceManager({
   const [newSessionTopic, setNewSessionTopic] = useState("");
   const [newSessionTime, setNewSessionTime] = useState("09:00 - 11:30");
   const [checkinMethod, setCheckinMethod] = useState<"manual" | "link">("manual");
+  const [qrInfo, setQrInfo] = useState<{ token: string; expiresAt: string; intervalSeconds: number } | null>(null);
+  const [qrImage, setQrImage] = useState<string>("");
+  const [qrBusy, setQrBusy] = useState(false);
 
   // Edit session fields
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
@@ -309,6 +316,60 @@ export default function AttendanceManager({
 
   // Load records for active session
   const activeRecords = (store.attendanceRecords || []).filter(r => r.sessionId === activeSessionId);
+
+  useEffect(() => {
+    setQrInfo(null);
+    setQrImage("");
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    if (!qrInfo?.token) return;
+    let cancelled = false;
+    const checkinUrl = `${window.location.origin}/attendance/checkin?token=${encodeURIComponent(qrInfo.token)}`;
+    QRCode.toDataURL(checkinUrl, { width: 300, margin: 2, errorCorrectionLevel: "M" })
+      .then((url: string) => { if (!cancelled) setQrImage(url); })
+      .catch(() => { if (!cancelled) setQrImage(""); });
+    const refreshMs = Math.max(10_000, (qrInfo.intervalSeconds || 30) * 1000);
+    const timer = window.setTimeout(async () => {
+      if (cancelled || !activeSessionId) return;
+      try {
+        const latest = await api.getAttendanceQr(activeSessionId);
+        if (!cancelled) setQrInfo(latest);
+      } catch {
+        if (!cancelled) setQrInfo(null);
+      }
+    }, refreshMs);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [qrInfo, activeSessionId]);
+
+  const handleOpenQr = async () => {
+    if (!activeSessionId) return;
+    setQrBusy(true);
+    try {
+      const info = await api.openAttendanceQr(activeSessionId);
+      setQrInfo(info);
+      triggerToast("Đã mở QR động. Mã sẽ tự đổi mỗi 30 giây.");
+    } catch (error: any) {
+      triggerToast(error.message || "Không thể mở QR điểm danh.");
+    } finally {
+      setQrBusy(false);
+    }
+  };
+
+  const handleCloseQr = async () => {
+    if (!activeSessionId) return;
+    setQrBusy(true);
+    try {
+      await api.closeAttendanceQr(activeSessionId);
+      setQrInfo(null);
+      setQrImage("");
+      triggerToast("Đã đóng QR điểm danh.");
+    } catch (error: any) {
+      triggerToast(error.message || "Không thể đóng QR điểm danh.");
+    } finally {
+      setQrBusy(false);
+    }
+  };
 
   // New Session submit
   const handleCreateSessionSubmit = async (e: React.FormEvent) => {
@@ -787,6 +848,14 @@ export default function AttendanceManager({
 
       {/* Main Area layout split */}
       {selectedCourseId ? (
+        <>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+          <div><p className="text-xs font-bold text-slate-800">Báo cáo điểm danh</p><p className="text-[10px] text-slate-500">Xuất dữ liệu theo khóa học/lớp đang chọn để lưu trữ hoặc gửi nội bộ.</p></div>
+          <div className="flex flex-wrap gap-2">
+            <a href={api.getAttendanceReportUrl("csv", { courseId: selectedCourseId, sectionId: selectedSectionId || undefined })} download className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"><Download className="h-3.5 w-3.5" /> CSV</a>
+            <a href={api.getAttendanceReportUrl("xlsx", { courseId: selectedCourseId, sectionId: selectedSectionId || undefined })} download className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"><FileSpreadsheet className="h-3.5 w-3.5" /> Excel</a>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Left / Middle Span: Attendance taking Grid */}
@@ -832,6 +901,36 @@ export default function AttendanceManager({
                             <span className={`h-2 w-2 rounded-full shrink-0 ${isLinkActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
                             {isLinkActive ? `Đang mở (Hết hạn: ${new Date(activeSession.expiresAt!).toLocaleTimeString("vi-VN", {hour: "2-digit", minute:"2-digit"})})` : `Đã đóng / Hết hạn`}
                           </span>
+                        </div>
+                      )}
+                      {(["teacher", "admin", "super_admin"] as string[]).includes(currentUser.role as string) && (
+                        <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-violet-900">
+                              <QrCode className="h-4 w-4 text-violet-600" /> QR động chống điểm danh hộ
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {!qrInfo ? (
+                                <button type="button" onClick={handleOpenQr} disabled={qrBusy} className="rounded-xl bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50">
+                                  {qrBusy ? "Đang mở…" : "Mở QR trên màn hình"}
+                                </button>
+                              ) : (
+                                <button type="button" onClick={handleCloseQr} disabled={qrBusy} className="rounded-xl border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:opacity-50">
+                                  Đóng QR
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {qrInfo && (
+                            <div className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-violet-200 bg-white p-3 sm:flex-row sm:items-center">
+                              {qrImage ? <img src={qrImage} alt="QR điểm danh động" className="h-40 w-40 rounded-lg border border-slate-200" /> : <div className="h-40 w-40 animate-pulse rounded-lg bg-slate-100" />}
+                              <div className="space-y-1 text-center sm:text-left">
+                                <p className="text-xs font-semibold text-slate-800">Cho học viên quét mã này bằng camera</p>
+                                <p className="text-[10px] leading-relaxed text-slate-500">Mã tự đổi sau mỗi {qrInfo.intervalSeconds} giây và hết hạn khi đóng ca điểm danh.</p>
+                                <button type="button" onClick={() => navigator.clipboard?.writeText(qrInfo.token)} className="text-[10px] font-semibold text-violet-700 hover:underline">Sao chép token dự phòng</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1131,6 +1230,7 @@ export default function AttendanceManager({
           </div>
 
         </div>
+        </>
       ) : (
         <div className="space-y-6 animate-in fade-in duration-200">
           {currentUser.role === "teacher" && (

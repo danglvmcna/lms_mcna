@@ -217,6 +217,17 @@ export const schemas = {
     sessionId: z.string().trim().min(1),
     code: z.string().trim().min(1)
   }),
+  selfCheckinQr: z.object({
+    token: z.string().trim().min(20).max(2000)
+  }),
+  lessonNote: z.object({
+    content: z.string().max(20000)
+  }),
+  feedbackTemplate: z.object({
+    title: z.string().trim().min(1).max(120),
+    content: z.string().trim().min(1).max(2000),
+    courseId: z.string().trim().min(1).optional()
+  }),
   teacherCheckin: z.object({
     courseId: z.string().trim().min(1),
     sectionId: z.string().trim().min(1),

@@ -30,6 +30,13 @@ export const sessionMaterialsRepository = {
     )).rows.map(sessionMaterialFromRow);
   },
 
+  async listRowsBySession(db: Queryable, sessionId: string) {
+    return (await db.query(
+      "SELECT * FROM session_materials WHERE session_id = $1 ORDER BY sort_order, created_at",
+      [sessionId]
+    )).rows;
+  },
+
   /** Raw row including storage_path; server-side use only. */
   async findRowById(db: Queryable, id: string) {
     return (await db.query("SELECT * FROM session_materials WHERE id = $1", [id])).rows[0] || null;

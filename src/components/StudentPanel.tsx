@@ -32,7 +32,8 @@ import {
   Cpu,
   ChevronUp,
   BadgeAlert,
-  LifeBuoy
+  LifeBuoy,
+  ExternalLink
 } from "lucide-react";
 import NotificationInbox from "./NotificationInbox";
 import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceRecord, AttendanceSession } from "../types";
@@ -75,6 +76,25 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
       onRefreshData();
     }
   }, [activeSubTab]);
+
+  // A camera scan opens /attendance/checkin?token=…; consume it after the
+  // authenticated app shell is ready, then remove the token from browser history.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token) return;
+    let cancelled = false;
+    api.selfCheckinQr({ token })
+      .then(() => {
+        if (!cancelled) triggerToast("Điểm danh bằng QR thành công! Trạng thái: Có mặt");
+        window.history.replaceState({}, document.title, "/");
+        void onRefreshData();
+      })
+      .catch((error: any) => {
+        if (!cancelled) triggerToast(error.message || "QR điểm danh đã hết hạn hoặc không hợp lệ.");
+        window.history.replaceState({}, document.title, "/");
+      });
+    return () => { cancelled = true; };
+  }, [currentUser.id]);
 
   // Periodic polling every 30s while on the notifications tab to catch new attendance links
   useEffect(() => {
@@ -772,6 +792,24 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                           <span className="text-slate-400 block uppercase font-medium">Mã kiểm định độc bản</span>
                           <span className="text-amber-700 font-bold font-mono tracking-wider uppercase">{cert.certificateCode}</span>
                         </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                        <a
+                          href={`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(cTitle)}&organizationName=${encodeURIComponent("MCNA Technology School")}&issueYear=${new Date(cert.issuedAt).getFullYear()}&issueMonth=${new Date(cert.issuedAt).getMonth() + 1}&certificationId=${encodeURIComponent(cert.certificateCode)}&certificationUrl=${encodeURIComponent(`${window.location.origin}${api.publicCertificateUrl(cert.certificateCode)}`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Thêm vào LinkedIn
+                        </a>
+                        <a
+                          href={api.publicCertificateUrl(cert.certificateCode)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          <Shield className="h-3.5 w-3.5" /> Trang xác thực
+                        </a>
                       </div>
                     </div>
                   </div>

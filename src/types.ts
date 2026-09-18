@@ -227,6 +227,30 @@ export interface AttendanceRecord {
   studentId: string;
   status: "present" | "absent" | "late" | "excused";
   note?: string;
+  checkedInAt?: string;
+  checkinMethod?: "manual" | "link" | "qr";
+}
+
+export interface LessonNote {
+  id: string;
+  studentId: string;
+  lessonId: string;
+  courseId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackTemplate {
+  id: string;
+  ownerUserId: string;
+  courseId?: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CourseSection {
@@ -335,6 +359,8 @@ export interface LMSDataStore {
   attendanceSessions: AttendanceSession[];
   sessionMaterials?: SessionMaterial[];
   attendanceRecords: AttendanceRecord[];
+  lessonNotes?: LessonNote[];
+  feedbackTemplates?: FeedbackTemplate[];
   courseSections?: CourseSection[];
   courseRegistrations?: CourseRegistration[];
   systemEvents?: SystemEvent[];

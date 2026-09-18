@@ -128,6 +128,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [operationsSummary, setOperationsSummary] = useState<any | null>(null);
 
 
 
@@ -135,6 +136,14 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getOperationsSummary()
+      .then(summary => { if (!cancelled) setOperationsSummary(summary); })
+      .catch(() => { if (!cancelled) setOperationsSummary(null); });
+    return () => { cancelled = true; };
+  }, [store.enrollments.length, store.submissions.length, store.courses.length]);
 
   // Create User Action
   const handleCreateUserSubmit = async (e: React.FormEvent) => {
@@ -448,6 +457,21 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-1">{totalEnrollmentsCount}</h3>
         </div>
       </div>
+
+      {operationsSummary && (
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-sky-50 p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-800">Bảng điều hành hôm nay</p><p className="mt-1 text-[10px] text-slate-500">Các việc cần xử lý được tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-50">Làm mới</button></div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            {[
+              ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments, "text-amber-700"],
+              ["Bài chưa chấm", operationsSummary.ungradedSubmissions, "text-rose-700"],
+              ["Khóa chờ duyệt", operationsSummary.pendingCourses, "text-indigo-700"],
+              ["Cảnh báo chuyên cần", operationsSummary.attendanceRisks, "text-orange-700"],
+              ["CRM giao thất bại", operationsSummary.crmFailures, "text-slate-700"]
+            ].map(([label, value, color]) => <div key={String(label)} className="rounded-xl border border-slate-200 bg-white/90 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className={`mt-1 text-xl font-bold font-mono ${color}`}>{value}</p></div>)}
+          </div>
+        </div>
+      )}
 
       {/* Main Two-Column Layout split sidebar list vs viewports */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">

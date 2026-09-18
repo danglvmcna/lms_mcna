@@ -1,6 +1,7 @@
 import React from "react";
 import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus } from "lucide-react";
 import ModalPortal from "../ModalPortal";
+import { api } from "../../api";
 
 interface ComponentProps {
   [key: string]: any;
@@ -10,6 +11,7 @@ export default function AssignmentGrader(props: ComponentProps) {
   const [submissionSearch, setSubmissionSearch] = React.useState("");
   const [courseDetailId, setCourseDetailId] = React.useState<string | null>(null);
   const [previewAttachmentUrl, setPreviewAttachmentUrl] = React.useState<string | null>(null);
+  const [feedbackTemplates, setFeedbackTemplates] = React.useState<any[]>([]);
 
   // Sorting state for student submissions grading table
   const [subSortField, setSubSortField] = React.useState<string>("studentName");
@@ -114,6 +116,20 @@ export default function AssignmentGrader(props: ComponentProps) {
     myAssignments,
     studentSubmissionsRaw
   } = props;
+
+  React.useEffect(() => {
+    const submission = activeSubmissionId ? store.submissions.find((item: any) => item.id === activeSubmissionId) : null;
+    const assignment = submission ? store.assignments.find((item: any) => item.id === submission.assignmentId) : null;
+    if (!activeSubmissionId || !assignment?.courseId) {
+      setFeedbackTemplates([]);
+      return;
+    }
+    let cancelled = false;
+    api.listFeedbackTemplates(assignment.courseId)
+      .then((items: any[]) => { if (!cancelled) setFeedbackTemplates(Array.isArray(items) ? items : []); })
+      .catch(() => { if (!cancelled) setFeedbackTemplates([]); });
+    return () => { cancelled = true; };
+  }, [activeSubmissionId, store.submissions, store.assignments]);
 
   const filteredSubmissions = studentSubmissionsRaw.filter((sub: any) => {
     const student = store.users.find((u: any) => u.id === sub.studentId);
@@ -424,6 +440,21 @@ export default function AssignmentGrader(props: ComponentProps) {
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-slate-700">Góp ý & Nhận xét của Giảng viên</label>
+                    {feedbackTemplates.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pb-1.5">
+                        {feedbackTemplates.map((template: any) => (
+                          <button
+                            key={template.id}
+                            type="button"
+                            onClick={() => setGradingFeedback((current: string) => current ? `${current}\n${template.content}` : template.content)}
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                            title={template.content}
+                          >
+                            + {template.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       required
                       placeholder="Ví dụ: Ý tưởng tốt, cách trình bày rõ ràng, cần tối ưu thêm mã nguồn."

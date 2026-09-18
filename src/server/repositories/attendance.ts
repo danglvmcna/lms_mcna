@@ -44,10 +44,14 @@ export const attendanceRepository = {
   async bulkMarkRecords(db: Queryable, records: AttendanceRecord[]): Promise<void> {
     for (const r of records) {
       await db.query(
-        `INSERT INTO attendance_records (id, session_id, student_id, status, note) 
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note`,
-        [r.id, r.sessionId, r.studentId, r.status, r.note || null]
+        `INSERT INTO attendance_records (id, session_id, student_id, status, note, checked_in_at, checkin_method)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO UPDATE SET
+           status = EXCLUDED.status,
+           note = EXCLUDED.note,
+           checked_in_at = COALESCE(EXCLUDED.checked_in_at, attendance_records.checked_in_at),
+           checkin_method = COALESCE(EXCLUDED.checkin_method, attendance_records.checkin_method)`,
+        [r.id, r.sessionId, r.studentId, r.status, r.note || null, r.checkedInAt || null, r.checkinMethod || null]
       );
     }
     if (records.length) {

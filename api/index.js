@@ -1096,7 +1096,7 @@ async function storeSnapshotFromDb(db, forceBypassCache = false) {
     code: row.code || void 0,
     expiresAt: row.expires_at || void 0
   }));
-  const attendanceRecords = attendanceRecordsRes.rows.map((row) => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || void 0 }));
+  const attendanceRecords = attendanceRecordsRes.rows.map((row) => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || void 0, checkedInAt: row.checked_in_at || void 0, checkinMethod: row.checkin_method || void 0 }));
   const sessionMaterials = sessionMaterialsRes.rows.map(sessionMaterialFromRow);
   const notifications = notificationsRes.rows.map((row) => ({
     id: row.id,
@@ -1289,6 +1289,7 @@ init_authHash();
 import express from "express";
 import path5 from "path";
 import multer from "multer";
+import { ZipArchive } from "archiver";
 import fs5 from "fs";
 import os3 from "os";
 import crypto4 from "crypto";
@@ -1646,6 +1647,17 @@ var schemas = {
   selfCheckin: z.object({
     sessionId: z.string().trim().min(1),
     code: z.string().trim().min(1)
+  }),
+  selfCheckinQr: z.object({
+    token: z.string().trim().min(20).max(2e3)
+  }),
+  lessonNote: z.object({
+    content: z.string().max(2e4)
+  }),
+  feedbackTemplate: z.object({
+    title: z.string().trim().min(1).max(120),
+    content: z.string().trim().min(1).max(2e3),
+    courseId: z.string().trim().min(1).optional()
   }),
   teacherCheckin: z.object({
     courseId: z.string().trim().min(1),
@@ -4846,10 +4858,14 @@ var attendanceRepository = {
   async bulkMarkRecords(db, records) {
     for (const r of records) {
       await db.query(
-        `INSERT INTO attendance_records (id, session_id, student_id, status, note) 
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note`,
-        [r.id, r.sessionId, r.studentId, r.status, r.note || null]
+        `INSERT INTO attendance_records (id, session_id, student_id, status, note, checked_in_at, checkin_method)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO UPDATE SET
+           status = EXCLUDED.status,
+           note = EXCLUDED.note,
+           checked_in_at = COALESCE(EXCLUDED.checked_in_at, attendance_records.checked_in_at),
+           checkin_method = COALESCE(EXCLUDED.checkin_method, attendance_records.checkin_method)`,
+        [r.id, r.sessionId, r.studentId, r.status, r.note || null, r.checkedInAt || null, r.checkinMethod || null]
       );
     }
     if (records.length) {
@@ -4976,6 +4992,12 @@ var sessionMaterialsRepository = {
       "SELECT * FROM session_materials WHERE session_id = $1 ORDER BY sort_order, created_at",
       [sessionId]
     )).rows.map(sessionMaterialFromRow);
+  },
+  async listRowsBySession(db, sessionId) {
+    return (await db.query(
+      "SELECT * FROM session_materials WHERE session_id = $1 ORDER BY sort_order, created_at",
+      [sessionId]
+    )).rows;
   },
   /** Raw row including storage_path; server-side use only. */
   async findRowById(db, id) {
@@ -5279,6 +5301,40 @@ async function buildEnrollmentEventData(db, enrollmentId) {
 async function enqueueEnrollmentEvent(db, type, enrollmentId, origin = "lms") {
   const data = await buildEnrollmentEventData(db, enrollmentId);
   if (data) await enqueueCrmEvent(db, type, data, origin);
+}
+async function enqueueCertificateIssuedEvent(db, certificateId, origin = "lms") {
+  const row = (await db.query(
+    `SELECT cert.id, cert.certificate_code, cert.issued_at,
+            u.id AS student_id, u.name AS student_name, u.email AS student_email, u.phone AS student_phone,
+            u.crm_contact_id, c.id AS course_id, c.title AS course_title
+     FROM certificates cert
+     JOIN users u ON u.id = cert.student_id
+     JOIN courses c ON c.id = cert.course_id
+     WHERE cert.id = $1`,
+    [certificateId]
+  )).rows[0];
+  if (!row) return null;
+  return enqueueCrmEvent(db, "certificate.issued", {
+    certificateId: row.id,
+    certificateCode: row.certificate_code,
+    issuedAt: row.issued_at,
+    student: {
+      lmsUserId: row.student_id,
+      name: row.student_name,
+      email: row.student_email,
+      phone: row.student_phone || null,
+      crmContactId: row.crm_contact_id || null
+    },
+    course: { id: row.course_id, title: row.course_title }
+  }, origin);
+}
+async function enqueueCourseCompletedEvent(db, enrollmentId, origin = "lms") {
+  const data = await buildEnrollmentEventData(db, enrollmentId);
+  if (!data) return null;
+  return enqueueCrmEvent(db, "course.completed", {
+    ...data,
+    completedAt: (/* @__PURE__ */ new Date()).toISOString()
+  }, origin);
 }
 var retryDelaySeconds = (attempt) => Math.min(60 * 2 ** (attempt - 1), 6 * 60 * 60);
 var delivering = false;
@@ -5911,37 +5967,139 @@ function registerEventHandlers() {
   });
 }
 
+// src/server/services/attendanceRisk.ts
+var toSessionDate = (value) => {
+  const text = String(value || "");
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!match) return null;
+  const date = /* @__PURE__ */ new Date(`${match[1]}T23:59:59+07:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+async function checkAttendanceRisks(db = pool) {
+  const rows = (await db.query(
+    `SELECT cr.student_id, u.name AS student_name, u.email AS student_email, u.phone AS student_phone, u.crm_contact_id,
+            cs.course_id, c.title AS course_title, cs.id AS section_id, cs.section_code,
+            ats.id AS session_id, ats.date AS session_date, ar.status
+     FROM course_registrations cr
+     JOIN users u ON u.id = cr.student_id
+     JOIN course_sections cs ON cs.id = cr.section_id
+     JOIN courses c ON c.id = cs.course_id
+     LEFT JOIN attendance_sessions ats
+       ON ats.course_id = cs.course_id
+      AND (ats.section_id = cs.id OR ats.section_id IS NULL)
+     LEFT JOIN attendance_records ar ON ar.session_id = ats.id AND ar.student_id = cr.student_id
+     WHERE cr.status = 'registered'
+     ORDER BY cr.student_id, cs.id, ats.date DESC NULLS LAST, ats.id DESC`
+  )).rows;
+  const grouped = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (!row.session_id || !toSessionDate(row.session_date) || toSessionDate(row.session_date).getTime() > Date.now()) continue;
+    const key = `${row.student_id}:${row.section_id || row.course_id}`;
+    const list = grouped.get(key) || [];
+    if (!list.some((item) => item.session_id === row.session_id)) list.push(row);
+    grouped.set(key, list);
+  }
+  let created = 0;
+  let resolved = 0;
+  for (const [groupKey, sessions] of grouped.entries()) {
+    if (!sessions.length) continue;
+    const latest = sessions[0];
+    const statuses = sessions.map((item) => item.status || "absent");
+    let consecutiveAbsences = 0;
+    for (const status of statuses) {
+      if (status === "absent") consecutiveAbsences++;
+      else break;
+    }
+    const attended = statuses.filter((status) => status === "present" || status === "late" || status === "excused").length;
+    const attendanceRate = Math.round(attended / statuses.length * 100);
+    const atRisk = consecutiveAbsences >= 2 || statuses.length >= 2 && attendanceRate < 75;
+    const riskKey = `${groupKey}:${latest.session_id}:${atRisk ? "risk" : "clear"}`;
+    if (atRisk) {
+      await db.query(
+        `UPDATE attendance_risk_alerts
+         SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+         WHERE student_id = $1 AND course_id = $2 AND section_id IS NOT DISTINCT FROM $3
+           AND status = 'open' AND risk_key <> $4`,
+        [latest.student_id, latest.course_id, latest.section_id, riskKey]
+      );
+      const alertId = generateId2("risk");
+      const inserted = (await db.query(
+        `INSERT INTO attendance_risk_alerts
+           (id, student_id, course_id, section_id, risk_type, risk_key, consecutive_absences, attendance_rate, evidence)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (risk_key) DO NOTHING
+         RETURNING id`,
+        [
+          alertId,
+          latest.student_id,
+          latest.course_id,
+          latest.section_id,
+          consecutiveAbsences >= 2 ? "consecutive_absence" : "low_attendance",
+          riskKey,
+          consecutiveAbsences,
+          attendanceRate,
+          JSON.stringify({ latestSessionId: latest.session_id, sessionCount: statuses.length, sectionCode: latest.section_code })
+        ]
+      )).rows[0];
+      if (inserted) {
+        created++;
+        const message = consecutiveAbsences >= 2 ? `C\u1EA3nh b\xE1o chuy\xEAn c\u1EA7n: b\u1EA1n \u0111\xE3 v\u1EAFng ${consecutiveAbsences} bu\u1ED5i li\xEAn ti\u1EBFp \u1EDF l\u1EDBp ${latest.course_title}. H\xE3y li\xEAn h\u1EC7 h\u1ECDc v\u1EE5 n\u1EBFu c\u1EA7n h\u1ED7 tr\u1EE3.` : `T\u1EF7 l\u1EC7 chuy\xEAn c\u1EA7n c\u1EE7a b\u1EA1n \u1EDF l\u1EDBp ${latest.course_title} \u0111ang l\xE0 ${attendanceRate}%. H\xE3y ch\u1EE7 \u0111\u1ED9ng tham gia c\xE1c bu\u1ED5i ti\u1EBFp theo.`;
+        await notifyStudent(db, latest.student_id, message, { relatedEntityType: "attendance_risk", relatedEntityId: inserted.id });
+        await enqueueCrmEvent(db, "attendance.risk_detected", {
+          alertId: inserted.id,
+          riskType: consecutiveAbsences >= 2 ? "consecutive_absence" : "low_attendance",
+          consecutiveAbsences,
+          attendanceRate,
+          latestSessionId: latest.session_id,
+          student: { lmsUserId: latest.student_id, crmContactId: latest.crm_contact_id || null, name: latest.student_name, email: latest.student_email, phone: latest.student_phone || null },
+          course: { id: latest.course_id, title: latest.course_title },
+          section: latest.section_id ? { id: latest.section_id, code: latest.section_code } : null
+        });
+      }
+    }
+    if (!atRisk) {
+      const result = await db.query(
+        `UPDATE attendance_risk_alerts
+         SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+         WHERE student_id = $1 AND course_id = $2 AND section_id IS NOT DISTINCT FROM $3 AND status = 'open'
+         RETURNING id, risk_type, attendance_rate`,
+        [latest.student_id, latest.course_id, latest.section_id]
+      );
+      for (const alert of result.rows) {
+        resolved++;
+        await enqueueCrmEvent(db, "attendance.recovered", {
+          alertId: alert.id,
+          riskType: alert.risk_type,
+          attendanceRate,
+          student: { lmsUserId: latest.student_id, crmContactId: latest.crm_contact_id || null, name: latest.student_name, email: latest.student_email, phone: latest.student_phone || null },
+          course: { id: latest.course_id, title: latest.course_title }
+        });
+      }
+    }
+  }
+  return { created, resolved };
+}
+
 // src/server/scheduler.ts
 function startScheduler() {
   setInterval(async () => {
-    await runSchedulerTask("attendance alerts", checkAttendanceAlerts);
+    await runSchedulerTask("attendance risk scan", runAttendanceRiskJob);
   }, 60 * 60 * 1e3);
   setInterval(() => {
-    void runSchedulerTask("crm outbox", async () => {
-      await deliverPendingCrmEvents();
-    });
+    void runSchedulerTask("crm outbox", runCrmOutboxJob);
   }, 30 * 1e3);
+}
+async function runCrmOutboxJob() {
+  return deliverPendingCrmEvents();
+}
+async function runAttendanceRiskJob() {
+  return checkAttendanceRisks(pool);
 }
 async function runSchedulerTask(name, task) {
   try {
     await task();
   } catch (error) {
     console.error(`[scheduler] ${name} failed`, error);
-  }
-}
-async function checkAttendanceAlerts() {
-  const rows = await pool.query(`
-    SELECT DISTINCT s.course_id, ar.student_id
-    FROM attendance_sessions s
-    JOIN attendance_records ar ON ar.session_id = s.id
-  `);
-  const byCourse = /* @__PURE__ */ new Map();
-  for (const row of rows.rows) {
-    if (!byCourse.has(row.course_id)) byCourse.set(row.course_id, []);
-    byCourse.get(row.course_id).push({ studentId: row.student_id });
-  }
-  for (const [courseId2, records] of byCourse.entries()) {
-    await eventBus.emit("attendance.session.saved", { courseId: courseId2, records }, pool);
   }
 }
 
@@ -5956,6 +6114,185 @@ function percentToLetterGrade(score) {
 function percentToGradePoint(letterGrade) {
   const map = { A: 4, B: 3, C: 2, D: 1, F: 0, W: 0 };
   return map[letterGrade] ?? 0;
+}
+
+// src/server/reporting.ts
+import ExcelJS from "exceljs";
+var addFilter = (conditions, values, sql, value) => {
+  values.push(value);
+  conditions.push(sql.replace("$VALUE", `$${values.length}`));
+};
+var actorScope = (actor, conditions, values) => {
+  if (actor.role === "teacher") {
+    values.push(actor.id);
+    conditions.push(`cs.teacher_id = $${values.length}`);
+  }
+};
+async function getAttendanceReportRows(db, actor, filters = {}) {
+  const values = [];
+  const conditions = ["cr.status = 'registered'"];
+  actorScope(actor, conditions, values);
+  if (filters.courseId) addFilter(conditions, values, "c.id = $VALUE", filters.courseId);
+  if (filters.sectionId) addFilter(conditions, values, "cs.id = $VALUE", filters.sectionId);
+  const dateFromParam = filters.from ? (values.push(filters.from), values.length) : null;
+  const dateToParam = filters.to ? (values.push(filters.to), values.length) : null;
+  if (filters.search) {
+    values.push(`%${filters.search}%`);
+    conditions.push(`(u.name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR cs.section_code ILIKE $${values.length})`);
+  }
+  const result = await db.query(
+    `SELECT
+       u.id AS student_id,
+       u.name AS student_name,
+       u.email AS student_email,
+       u.phone AS student_phone,
+       c.id AS course_id,
+       c.title AS course_title,
+       cs.id AS section_id,
+       cs.section_code,
+       COUNT(DISTINCT ats.id)::int AS total_sessions,
+       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status IN ('present', 'late', 'excused'))::int AS attended_sessions,
+       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'present')::int AS present_sessions,
+       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'late')::int AS late_sessions,
+       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'absent' OR ar.id IS NULL)::int AS absent_sessions,
+       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'excused')::int AS excused_sessions,
+       COALESCE(ROUND(
+         COUNT(DISTINCT ats.id) FILTER (WHERE ar.status IN ('present', 'late', 'excused'))::numeric
+         * 100 / NULLIF(COUNT(DISTINCT ats.id), 0)
+       ), 100)::int AS attendance_percent
+     FROM course_registrations cr
+     JOIN users u ON u.id = cr.student_id
+     JOIN course_sections cs ON cs.id = cr.section_id
+     JOIN courses c ON c.id = cs.course_id
+     LEFT JOIN attendance_sessions ats
+       ON ats.course_id = c.id
+      AND (ats.section_id = cs.id OR ats.section_id IS NULL)
+      ${dateFromParam || dateToParam ? `AND ${dateFromParam ? `substring(ats.date from '^\\d{4}-\\d{2}-\\d{2}')::date >= $${dateFromParam}::date` : "TRUE"} ${dateToParam ? `AND substring(ats.date from '^\\d{4}-\\d{2}-\\d{2}')::date <= $${dateToParam}::date` : ""}` : ""}
+     LEFT JOIN attendance_records ar ON ar.session_id = ats.id AND ar.student_id = cr.student_id
+     WHERE ${conditions.filter((item) => !item.includes("substring(ats.date")).join(" AND ")}
+     GROUP BY u.id, u.name, u.email, u.phone, c.id, c.title, cs.id, cs.section_code
+     ORDER BY c.title, cs.section_code, u.name`,
+    values
+  );
+  return result.rows.map((row) => ({
+    studentId: row.student_id,
+    studentName: row.student_name,
+    studentEmail: row.student_email,
+    studentPhone: row.student_phone || "",
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    sectionId: row.section_id,
+    sectionCode: row.section_code,
+    totalSessions: Number(row.total_sessions || 0),
+    attendedSessions: Number(row.attended_sessions || 0),
+    presentSessions: Number(row.present_sessions || 0),
+    lateSessions: Number(row.late_sessions || 0),
+    absentSessions: Number(row.absent_sessions || 0),
+    excusedSessions: Number(row.excused_sessions || 0),
+    attendancePercent: Number(row.attendance_percent ?? 100)
+  }));
+}
+async function getGradebookReportRows(db, actor, filters = {}) {
+  const values = [];
+  const conditions = ["cr.status = 'registered'"];
+  actorScope(actor, conditions, values);
+  if (filters.courseId) addFilter(conditions, values, "c.id = $VALUE", filters.courseId);
+  if (filters.sectionId) addFilter(conditions, values, "cs.id = $VALUE", filters.sectionId);
+  if (filters.search) {
+    values.push(`%${filters.search}%`);
+    conditions.push(`(u.name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR cs.section_code ILIKE $${values.length})`);
+  }
+  const result = await db.query(
+    `WITH lesson_counts AS (
+       SELECT course_id, COUNT(*)::int AS total_lessons FROM lessons GROUP BY course_id
+     ), progress_counts AS (
+       SELECT e.id AS enrollment_id, COUNT(*) FILTER (WHERE lp.completed)::int AS completed_lessons
+       FROM enrollments e
+       LEFT JOIN lesson_progress lp ON lp.enrollment_id = e.id
+       GROUP BY e.id
+     ), assignment_scores AS (
+       SELECT a.course_id, s.student_id,
+              ROUND(AVG((s.score::numeric / NULLIF(a.max_score, 0)) * 100), 2) AS assignment_percent
+       FROM assignments a
+       JOIN submissions s ON s.assignment_id = a.id
+       WHERE s.score IS NOT NULL
+       GROUP BY a.course_id, s.student_id
+     ), quiz_scores AS (
+       SELECT q.course_id, qa.student_id, ROUND(AVG(qa.score), 2) AS quiz_percent
+       FROM quizzes q
+       JOIN LATERAL (
+         SELECT DISTINCT ON (student_id, quiz_id) student_id, quiz_id, score
+         FROM quiz_attempts
+         WHERE quiz_id = q.id
+         ORDER BY student_id, quiz_id, score DESC, submitted_at DESC
+       ) qa ON TRUE
+       GROUP BY q.course_id, qa.student_id
+     )
+     SELECT u.id AS student_id, u.name AS student_name, u.email AS student_email, u.phone AS student_phone,
+            c.id AS course_id, c.title AS course_title, cs.id AS section_id, cs.section_code,
+            COALESCE(lp.completed_lessons, 0)::int AS completed_lessons,
+            COALESCE(lc.total_lessons, 0)::int AS total_lessons,
+            ascore.assignment_percent, qscore.quiz_percent,
+            CASE
+              WHEN ascore.assignment_percent IS NOT NULL AND qscore.quiz_percent IS NOT NULL THEN ROUND(ascore.assignment_percent * 0.3 + qscore.quiz_percent * 0.7, 2)
+              ELSE COALESCE(ascore.assignment_percent, qscore.quiz_percent)
+            END AS final_percent,
+            cr.letter_grade, cr.grade_point
+     FROM course_registrations cr
+     JOIN users u ON u.id = cr.student_id
+     JOIN course_sections cs ON cs.id = cr.section_id
+     JOIN courses c ON c.id = cs.course_id
+     LEFT JOIN progress_counts lp ON lp.enrollment_id = (
+       SELECT e.id FROM enrollments e WHERE e.student_id = cr.student_id AND e.course_id = c.id ORDER BY e.enrolled_at DESC LIMIT 1
+     )
+     LEFT JOIN lesson_counts lc ON lc.course_id = c.id
+     LEFT JOIN assignment_scores ascore ON ascore.course_id = c.id AND ascore.student_id = u.id
+     LEFT JOIN quiz_scores qscore ON qscore.course_id = c.id AND qscore.student_id = u.id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY c.title, cs.section_code, u.name`,
+    values
+  );
+  return result.rows.map((row) => ({
+    studentId: row.student_id,
+    studentName: row.student_name,
+    studentEmail: row.student_email,
+    studentPhone: row.student_phone || "",
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    sectionId: row.section_id,
+    sectionCode: row.section_code,
+    completedLessons: Number(row.completed_lessons || 0),
+    totalLessons: Number(row.total_lessons || 0),
+    assignmentPercent: row.assignment_percent === null ? null : Number(row.assignment_percent),
+    quizPercent: row.quiz_percent === null ? null : Number(row.quiz_percent),
+    finalPercent: row.final_percent === null ? null : Number(row.final_percent),
+    letterGrade: row.letter_grade || "",
+    gradePoint: row.grade_point === null ? null : Number(row.grade_point)
+  }));
+}
+function csvCell(value) {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+function toCsv(headers, rows, keys) {
+  return `\uFEFF${headers.map(csvCell).join(",")}\r
+${rows.map((row) => keys.map((key) => csvCell(row[key])).join(",")).join("\r\n")}\r
+`;
+}
+async function toXlsx(sheetName, headers, rows, keys) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "MCNA LMS";
+  workbook.created = /* @__PURE__ */ new Date();
+  const sheet = workbook.addWorksheet(sheetName);
+  sheet.columns = headers.map((header, index) => ({ header, key: keys[index], width: Math.min(Math.max(header.length + 4, 14), 32) }));
+  rows.forEach((row) => sheet.addRow(Object.fromEntries(keys.map((key) => [key, row[key] ?? ""]))));
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4338CA" } };
+  headerRow.alignment = { vertical: "middle" };
+  sheet.autoFilter = { from: "A1", to: `${String.fromCharCode(64 + Math.min(headers.length, 26))}1` };
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 // server.ts
@@ -6332,6 +6669,7 @@ var rateLimitPublicCatalog = createIpRateLimiter("public-catalog", 120, 60, "Qu\
 var rateLimitRegister = createIpRateLimiter("register", 5, 60 * 60, "B\u1EA1n \u0111\xE3 g\u1EEDi qu\xE1 nhi\u1EC1u y\xEAu c\u1EA7u t\u1EA1o t\xE0i kho\u1EA3n. Vui l\xF2ng th\u1EED l\u1EA1i sau.");
 var rateLimitForgotPassword = createIpRateLimiter("forgot-password", 5, 15 * 60, "Qu\xE1 nhi\u1EC1u y\xEAu c\u1EA7u qu\xEAn m\u1EADt kh\u1EA9u. Vui l\xF2ng th\u1EED l\u1EA1i sau.");
 var rateLimitCrmIntegration = createIpRateLimiter("crm-integration", 300, 60, "Too many CRM integration requests.");
+var rateLimitCertificateVerify = createIpRateLimiter("certificate-verify", 60, 60, "Qu\xE1 nhi\u1EC1u y\xEAu c\u1EA7u x\xE1c th\u1EF1c ch\u1EE9ng ch\u1EC9, vui l\xF2ng th\u1EED l\u1EA1i sau \xEDt ph\xFAt.");
 async function rateLimitLogin(req, res, next) {
   try {
     if (process.env.DISABLE_RATE_LIMIT === "true") return next();
@@ -6425,7 +6763,8 @@ async function requireAuth(req, res, next) {
       clearAuthCookie(res);
       return res.status(401).json({ error: "Invalid or expired session." });
     }
-    const user = await usersRepository.findById(pool, payload.sub);
+    const mockUser = isDevMockDb ? (devMockStore || getInitialStore()).users.find((item) => item.id === payload.sub) : null;
+    const user = mockUser ? { ...mockUser, passwordHash: "", passwordSalt: void 0 } : await usersRepository.findById(pool, payload.sub);
     if (!user || !user.isActive) {
       clearAuthCookie(res);
       return res.status(401).json({ error: "User is not available." });
@@ -6998,6 +7337,25 @@ app.post("/api/auth/force-logout", asyncHandler(async (req, res) => {
   clearAuthCookie(res);
   res.status(204).send();
 }));
+function requireInternalJobSecret(req, res, next) {
+  const configured = process.env.CRON_SECRET;
+  const supplied = req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.get("x-cron-secret");
+  const suppliedBuffer = Buffer.from(supplied || "");
+  const configuredBuffer = Buffer.from(configured || "");
+  const matches = suppliedBuffer.length === configuredBuffer.length && crypto4.timingSafeEqual(suppliedBuffer, configuredBuffer);
+  if (!configured || !supplied || !matches) {
+    return res.status(configured ? 401 : 503).json({ error: configured ? "Unauthorized cron request." : "CRON_SECRET is not configured." });
+  }
+  return next();
+}
+for (const method of ["get", "post"]) {
+  app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
+    res.json(await runCrmOutboxJob());
+  }));
+  app[method]("/api/internal/jobs/attendance-risk", requireInternalJobSecret, asyncHandler(async (_req, res) => {
+    res.json(await runAttendanceRiskJob());
+  }));
+}
 app.use("/api", requireCsrf);
 app.get("/health", asyncHandler(async (_req, res) => {
   if (isDevMockDb) {
@@ -7194,6 +7552,134 @@ app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHa
 app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
   const store = isDevMockDb ? devMockStore || getInitialStore() : await storeSnapshotFromDb(pool);
   res.json(dashboardFromStore(store, req.user));
+}));
+var reportFiltersFromRequest = (req) => ({
+  courseId: typeof req.query.courseId === "string" ? req.query.courseId : void 0,
+  sectionId: typeof req.query.sectionId === "string" ? req.query.sectionId : void 0,
+  from: typeof req.query.from === "string" ? req.query.from : void 0,
+  to: typeof req.query.to === "string" ? req.query.to : void 0,
+  search: typeof req.query.search === "string" ? req.query.search.trim() : void 0
+});
+var attendanceReportHeaders = [
+  "H\u1ECD t\xEAn",
+  "Email",
+  "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i",
+  "Kh\xF3a h\u1ECDc",
+  "M\xE3 l\u1EDBp",
+  "T\u1ED5ng bu\u1ED5i",
+  "C\xF3 m\u1EB7t",
+  "\u0110i mu\u1ED9n",
+  "V\u1EAFng",
+  "C\xF3 ph\xE9p",
+  "T\u1EF7 l\u1EC7 chuy\xEAn c\u1EA7n (%)"
+];
+var attendanceReportKeys = [
+  "studentName",
+  "studentEmail",
+  "studentPhone",
+  "courseTitle",
+  "sectionCode",
+  "totalSessions",
+  "presentSessions",
+  "lateSessions",
+  "absentSessions",
+  "excusedSessions",
+  "attendancePercent"
+];
+var gradebookReportHeaders = [
+  "H\u1ECD t\xEAn",
+  "Email",
+  "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i",
+  "Kh\xF3a h\u1ECDc",
+  "M\xE3 l\u1EDBp",
+  "B\xE0i \u0111\xE3 ho\xE0n th\xE0nh",
+  "T\u1ED5ng b\xE0i",
+  "\u0110i\u1EC3m b\xE0i t\u1EADp (%)",
+  "\u0110i\u1EC3m quiz (%)",
+  "\u0110i\u1EC3m t\u1ED5ng (%)",
+  "X\u1EBFp lo\u1EA1i",
+  "\u0110i\u1EC3m h\u1EC7 4"
+];
+var gradebookReportKeys = [
+  "studentName",
+  "studentEmail",
+  "studentPhone",
+  "courseTitle",
+  "sectionCode",
+  "completedLessons",
+  "totalLessons",
+  "assignmentPercent",
+  "quizPercent",
+  "finalPercent",
+  "letterGrade",
+  "gradePoint"
+];
+async function sendReport(res, name, headers, rows, keys, format) {
+  const dateLabel = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  if (format === "csv") {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.csv"`);
+    return res.send(toCsv(headers, rows, keys));
+  }
+  const workbook = await toXlsx(name, headers, rows, keys);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.xlsx"`);
+  return res.send(workbook);
+}
+app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "csv");
+  const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
+  await audit(req, "export_attendance_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "csv");
+}));
+app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "xlsx");
+  const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
+  await audit(req, "export_attendance_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "xlsx");
+}));
+app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "csv");
+  const rows = await getGradebookReportRows(pool, req.user, reportFiltersFromRequest(req));
+  await audit(req, "export_gradebook_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "csv");
+}));
+app.get("/api/reports/gradebook.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "xlsx");
+  const rows = await getGradebookReportRows(pool, req.user, reportFiltersFromRequest(req));
+  await audit(req, "export_gradebook_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
+  return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "xlsx");
+}));
+app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json({
+      pendingEnrollments: (store.enrollments || []).filter((item) => item.status === "pending" || item.status === "pending_payment").length,
+      ungradedSubmissions: (store.submissions || []).filter((item) => item.score === void 0 || item.score === null).length,
+      pendingCourses: (store.courses || []).filter((item) => item.status === "pending").length,
+      attendanceRisks: 0,
+      crmFailures: 0,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
+  const teacherFilter = req.user.role === "teacher" ? "AND EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = e.course_id AND cs.teacher_id = $1)" : "";
+  const params = req.user.role === "teacher" ? [req.user.id] : [];
+  const teacherCourseFilter = req.user.role === "teacher" ? "AND teacher_id = $1" : "";
+  const [enrollment, ungraded, pendingCourses, risks, crmFailures] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS count FROM enrollments e WHERE e.status IN ('pending', 'pending_payment') ${teacherFilter}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM submissions s JOIN assignments a ON a.id = s.assignment_id ${req.user.role === "teacher" ? "JOIN courses c ON c.id = a.course_id" : ""} WHERE s.score IS NULL ${req.user.role === "teacher" ? "AND c.teacher_id = $1" : ""}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM courses WHERE status = 'pending' ${teacherCourseFilter}`, params),
+    pool.query(`SELECT COUNT(*)::int AS count FROM attendance_risk_alerts WHERE status = 'open' ${req.user.role === "teacher" ? "AND section_id IN (SELECT id FROM course_sections WHERE teacher_id = $1)" : ""}`, params),
+    pool.query("SELECT COUNT(*)::int AS count FROM crm_outbox WHERE status = 'failed'")
+  ]);
+  return res.json({
+    pendingEnrollments: Number(enrollment.rows[0]?.count || 0),
+    ungradedSubmissions: Number(ungraded.rows[0]?.count || 0),
+    pendingCourses: Number(pendingCourses.rows[0]?.count || 0),
+    attendanceRisks: Number(risks.rows[0]?.count || 0),
+    crmFailures: Number(crmFailures.rows[0]?.count || 0),
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
 }));
 var PUBLIC_COURSE_SELECT = `
   SELECT c.*, u.name AS teacher_name,
@@ -7922,6 +8408,155 @@ app.post("/api/courses/:id/request-section", requireAuth, requireRole(["student"
   await audit(req, "request_new_section", course.id, course.title);
   res.json({ success: true, message: "Y\xEAu c\u1EA7u m\u1EDF th\xEAm l\u1EDBp h\u1ECDc ph\u1EA7n \u0111\xE3 \u0111\u01B0\u1EE3c g\u1EEDi t\u1EDBi qu\u1EA3n tr\u1ECB vi\xEAn." });
 }));
+app.get("/api/public/certificates/:code", rateLimitCertificateVerify, asyncHandler(async (req, res) => {
+  const code = String(req.params.code || "").trim().toUpperCase();
+  if (!code || code.length > 80) return res.status(400).json({ error: "M\xE3 ch\u1EE9ng ch\u1EC9 kh\xF4ng h\u1EE3p l\u1EC7." });
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const cert = (store.certificates || []).find((item) => String(item.certificateCode || "").toUpperCase() === code);
+    if (!cert) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y ch\u1EE9ng ch\u1EC9." });
+    const student = store.users.find((item) => item.id === cert.studentId);
+    const course = store.courses.find((item) => item.id === cert.courseId);
+    return res.json({ certificateCode: cert.certificateCode, issuedAt: cert.issuedAt, studentName: student?.name || "H\u1ECDc vi\xEAn MCNA", courseId: cert.courseId, courseTitle: course?.title || "Kh\xF3a h\u1ECDc MCNA", status: "valid" });
+  }
+  const row = (await pool.query(
+    `SELECT cert.id, cert.certificate_code, cert.issued_at, cert.course_id, c.title AS course_title,
+            u.name AS student_name
+     FROM certificates cert
+     JOIN courses c ON c.id = cert.course_id
+     JOIN users u ON u.id = cert.student_id
+     WHERE UPPER(cert.certificate_code) = $1
+     LIMIT 1`,
+    [code]
+  )).rows[0];
+  if (!row) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y ch\u1EE9ng ch\u1EC9." });
+  res.setHeader("Cache-Control", "public, max-age=60");
+  return res.json({
+    certificateCode: row.certificate_code,
+    issuedAt: row.issued_at,
+    studentName: row.student_name,
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    status: "valid"
+  });
+}));
+app.get("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const note = (store.lessonNotes || []).find((item) => item.studentId === req.user.id && item.lessonId === req.params.lessonId);
+    return res.json({ note: note || null });
+  }
+  const row = (await pool.query(
+    `SELECT ln.id, ln.student_id, ln.lesson_id, ln.course_id, ln.content, ln.created_at, ln.updated_at
+     FROM lesson_notes ln
+     WHERE ln.student_id = $1 AND ln.lesson_id = $2`,
+    [req.user.id, req.params.lessonId]
+  )).rows[0];
+  return res.json({ note: row ? { id: row.id, studentId: row.student_id, lessonId: row.lesson_id, courseId: row.course_id, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at } : null });
+}));
+app.put("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), validateBody(schemas.lessonNote), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const lesson2 = store.lessons.find((item) => item.id === req.params.lessonId);
+    if (!lesson2) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y b\xE0i h\u1ECDc." });
+    const enrollment2 = (store.enrollments || []).find((item) => item.studentId === req.user.id && item.courseId === lesson2.courseId && ["active", "completed"].includes(item.status));
+    if (!enrollment2) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a c\xF3 quy\u1EC1n ghi ch\xFA b\xE0i h\u1ECDc n\xE0y." });
+    const notes = store.lessonNotes || [];
+    const existing = notes.find((item) => item.studentId === req.user.id && item.lessonId === lesson2.id);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const note = existing ? { ...existing, content: req.body.content, updatedAt: now } : { id: generateId2("note"), studentId: req.user.id, lessonId: lesson2.id, courseId: lesson2.courseId, content: req.body.content, createdAt: now, updatedAt: now };
+    const next = existing ? notes.map((item) => item.id === existing.id ? note : item) : [note, ...notes];
+    devMockStore = { ...store, lessonNotes: next };
+    return res.json({ note });
+  }
+  const lesson = (await pool.query("SELECT id, course_id FROM lessons WHERE id = $1", [req.params.lessonId])).rows[0];
+  if (!lesson) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y b\xE0i h\u1ECDc." });
+  const enrollment = (await pool.query(
+    "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed') LIMIT 1",
+    [req.user.id, lesson.course_id]
+  )).rows[0];
+  if (!enrollment) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a c\xF3 quy\u1EC1n ghi ch\xFA b\xE0i h\u1ECDc n\xE0y." });
+  const row = (await pool.query(
+    `INSERT INTO lesson_notes (id, student_id, lesson_id, course_id, content)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (student_id, lesson_id) DO UPDATE SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+     RETURNING id, student_id, lesson_id, course_id, content, created_at, updated_at`,
+    [generateId2("note"), req.user.id, lesson.id, lesson.course_id, req.body.content]
+  )).rows[0];
+  await audit(req, "save_lesson_note", lesson.id, `length=${String(req.body.content).length}`);
+  return res.json({ note: { id: row.id, studentId: row.student_id, lessonId: row.lesson_id, courseId: row.course_id, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at } });
+}));
+app.delete("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    devMockStore = { ...store, lessonNotes: (store.lessonNotes || []).filter((item) => !(item.studentId === req.user.id && item.lessonId === req.params.lessonId)) };
+    return res.status(204).send();
+  }
+  await pool.query("DELETE FROM lesson_notes WHERE student_id = $1 AND lesson_id = $2", [req.user.id, req.params.lessonId]);
+  await audit(req, "delete_lesson_note", req.params.lessonId, "Learner note deleted");
+  return res.status(204).send();
+}));
+app.get("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const courseId2 = typeof req.query.courseId === "string" ? req.query.courseId : null;
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    return res.json((store.feedbackTemplates || []).filter((item) => item.ownerUserId === req.user.id && item.isActive !== false && (!courseId2 || !item.courseId || item.courseId === courseId2)));
+  }
+  const values = [req.user.id];
+  const courseFilter = courseId2 ? "AND (course_id IS NULL OR course_id = $2)" : "";
+  if (courseId2) values.push(courseId2);
+  const rows = (await pool.query(
+    `SELECT id, owner_user_id, course_id, title, content, sort_order, is_active, created_at, updated_at
+     FROM feedback_templates
+     WHERE owner_user_id = $1 AND is_active = TRUE ${courseFilter}
+     ORDER BY course_id NULLS FIRST, sort_order, created_at`,
+    values
+  )).rows;
+  return res.json(rows.map((row) => ({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || void 0, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at })));
+}));
+app.post("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.feedbackTemplate), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    if (req.body.courseId) {
+      const course = store.courses.find((item) => item.id === req.body.courseId);
+      if (!course) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc." });
+      if (req.user.role === "teacher" && course.teacherId !== req.user.id) return res.status(403).json({ error: "B\u1EA1n kh\xF4ng ph\u1EE5 tr\xE1ch kh\xF3a h\u1ECDc n\xE0y." });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const template = { id: generateId2("feedback"), ownerUserId: req.user.id, courseId: req.body.courseId, title: req.body.title, content: req.body.content, sortOrder: (store.feedbackTemplates || []).length, isActive: true, createdAt: now, updatedAt: now };
+    devMockStore = { ...store, feedbackTemplates: [template, ...store.feedbackTemplates || []] };
+    return res.status(201).json(template);
+  }
+  if (req.body.courseId) {
+    const course = await coursesRepository.findById(pool, req.body.courseId);
+    if (!course) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc." });
+    if (req.user.role === "teacher" && course.teacherId !== req.user.id) return res.status(403).json({ error: "B\u1EA1n kh\xF4ng ph\u1EE5 tr\xE1ch kh\xF3a h\u1ECDc n\xE0y." });
+  }
+  const row = (await pool.query(
+    `INSERT INTO feedback_templates (id, owner_user_id, course_id, title, content, sort_order)
+     VALUES ($1, $2, $3, $4, $5, COALESCE((SELECT MAX(sort_order) + 1 FROM feedback_templates WHERE owner_user_id = $2), 0))
+     RETURNING id, owner_user_id, course_id, title, content, sort_order, is_active, created_at, updated_at`,
+    [generateId2("feedback"), req.user.id, req.body.courseId || null, req.body.title, req.body.content]
+  )).rows[0];
+  await audit(req, "create_feedback_template", row.id, row.title);
+  return res.status(201).json({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || void 0, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at });
+}));
+app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const existing2 = (store.feedbackTemplates || []).find((item) => item.id === req.params.id);
+    if (!existing2) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y m\u1EABu nh\u1EADn x\xE9t." });
+    if (req.user.role === "teacher" && existing2.ownerUserId !== req.user.id) return res.status(403).json({ error: "B\u1EA1n kh\xF4ng c\xF3 quy\u1EC1n x\xF3a m\u1EABu n\xE0y." });
+    devMockStore = { ...store, feedbackTemplates: (store.feedbackTemplates || []).filter((item) => item.id !== req.params.id) };
+    return res.status(204).send();
+  }
+  const existing = (await pool.query("SELECT owner_user_id, title FROM feedback_templates WHERE id = $1", [req.params.id])).rows[0];
+  if (!existing) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y m\u1EABu nh\u1EADn x\xE9t." });
+  if (req.user.role === "teacher" && existing.owner_user_id !== req.user.id) return res.status(403).json({ error: "B\u1EA1n kh\xF4ng c\xF3 quy\u1EC1n x\xF3a m\u1EABu n\xE0y." });
+  await pool.query("DELETE FROM feedback_templates WHERE id = $1", [req.params.id]);
+  await audit(req, "delete_feedback_template", req.params.id, existing.title);
+  return res.status(204).send();
+}));
 app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
   const client2 = await pool.connect();
   let committed = false;
@@ -7957,6 +8592,8 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       "UPDATE enrollments SET status = 'completed', completed_at = $1 WHERE id = $2",
       [issuedAt, enrollment.id]
     );
+    await enqueueCourseCompletedEvent(client2, enrollment.id);
+    await enqueueCertificateIssuedEvent(client2, certificate.id);
     await client2.query("COMMIT");
     committed = true;
     invalidateStoreCache();
@@ -8818,12 +9455,13 @@ async function findSessionWithOwners(sessionId) {
     const s = (store.attendanceSessions || []).find((sess) => sess.id === sessionId);
     if (!s) return null;
     const sec = (store.courseSections || []).find((sec2) => sec2.id === s.sectionId);
+    const course = (store.courses || []).find((course2) => course2.id === s.courseId);
     return {
       id: s.id,
       course_id: s.courseId,
       section_id: s.sectionId || null,
-      course_teacher_id: "user_teacher",
-      section_teacher_id: sec?.teacherId || "user_teacher"
+      course_teacher_id: course?.teacherId || s.teacherId || "user_teacher",
+      section_teacher_id: sec?.teacherId || s.teacherId || "user_teacher"
     };
   }
   return (await pool.query(
@@ -8839,7 +9477,6 @@ function canManageSessionMaterials(user, session) {
   if (user.role === "admin") return true;
   if (user.role === "teacher") {
     if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
-    return true;
   }
   return false;
 }
@@ -9068,6 +9705,65 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   }
   res.download(download.absolutePath, fileName);
 }));
+app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHandler(async (req, res) => {
+  const session = await findSessionWithOwners(req.params.sessionId);
+  if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
+  if (!await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
+  if (isDevMockDb) return res.status(501).json({ error: "T\u1EA3i g\xF3i t\xE0i li\u1EC7u ch\u01B0a kh\u1EA3 d\u1EE5ng trong mock mode." });
+  const materials = await sessionMaterialsRepository.listRowsBySession(pool, session.id);
+  const fileMaterials = materials.filter((material) => material.storage_path);
+  const links = materials.filter((material) => !material.storage_path && material.url);
+  if (fileMaterials.length === 0 && links.length === 0) return res.status(404).json({ error: "Bu\u1ED5i h\u1ECDc ch\u01B0a c\xF3 t\xE0i li\u1EC7u \u0111\u1EC3 t\u1EA3i." });
+  const maxBundleBytes = 250 * 1024 * 1024;
+  const estimatedBytes = fileMaterials.reduce((sum, material) => sum + Number(material.size_bytes || 0), 0);
+  if (estimatedBytes > maxBundleBytes) return res.status(413).json({ error: "T\u1ED5ng dung l\u01B0\u1EE3ng t\xE0i li\u1EC7u v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n 250 MB cho m\u1ED9t g\xF3i t\u1EA3i." });
+  const usedNames = /* @__PURE__ */ new Set();
+  const safeArchiveName = (value, fallback) => {
+    const base = path5.basename(value || fallback).replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_").trim() || fallback;
+    let candidate = base;
+    let index = 2;
+    while (usedNames.has(candidate)) {
+      const ext = path5.extname(base);
+      candidate = `${path5.basename(base, ext)}-${index++}${ext}`;
+    }
+    usedNames.add(candidate);
+    return candidate;
+  };
+  const archive = new ZipArchive({ zlib: { level: 6 } });
+  archive.on("error", (error) => {
+    if (!res.headersSent) res.status(500).json({ error: "Kh\xF4ng th\u1EC3 t\u1EA1o g\xF3i t\xE0i li\u1EC7u." });
+    else res.destroy(error);
+  });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-materials.zip"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  archive.pipe(res);
+  for (const material of fileMaterials) {
+    try {
+      const download = await materialStorage.getDownload(material.storage_path, material.file_name || material.title);
+      const name = safeArchiveName(material.file_name || material.title, `material-${material.id}`);
+      if (download.kind === "buffer") archive.append(download.buffer, { name });
+      else if (download.kind === "redirect") {
+        const response = await fetch(download.url, { signal: AbortSignal.timeout(3e4) });
+        if (!response.ok) continue;
+        archive.append(Buffer.from(await response.arrayBuffer()), { name });
+      } else if (fs5.existsSync(download.absolutePath)) {
+        archive.append(fs5.createReadStream(download.absolutePath), { name });
+      }
+    } catch (error) {
+      console.warn(`[materials] unable to include ${material.id} in bundle`, error);
+    }
+  }
+  if (links.length > 0) {
+    const manifest = links.map((material) => `${material.title}: ${material.url}`).join("\n");
+    archive.append(Buffer.from(`T\xE0i li\u1EC7u d\u1EA1ng li\xEAn k\u1EBFt c\u1EE7a bu\u1ED5i h\u1ECDc
+
+${manifest}
+`, "utf8"), { name: "links.txt" });
+  }
+  await archive.finalize();
+  await audit(req, "download_session_material_bundle", session.id, `files=${fileMaterials.length};links=${links.length}`);
+}));
 app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
@@ -9090,7 +9786,8 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
     sessionId: session.id,
     studentId: record.studentId,
     status: record.status,
-    note: record.note
+    note: record.note,
+    checkinMethod: "manual"
   }));
   await attendanceRepository.saveAttendanceSession(pool, session, records);
   invalidateStoreCache();
@@ -9126,7 +9823,8 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
     sessionId: req.body.sessionId,
     studentId: req.body.studentId,
     status: req.body.status,
-    note: req.body.note
+    note: req.body.note,
+    checkinMethod: "manual"
   };
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   invalidateStoreCache();
@@ -9194,6 +9892,106 @@ app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["te
   }
   await audit(req, "create_attendance_link", session.id, `Course: ${course.title}, Code: ${code}`);
   res.status(201).json({ session, code, expiresAt });
+}));
+var ATTENDANCE_QR_INTERVAL_SECONDS = 30;
+var ATTENDANCE_QR_SECRET = process.env.ATTENDANCE_QR_SECRET || JWT_SECRET_VALUE;
+var devAttendanceQrSessions = /* @__PURE__ */ new Map();
+function encodeQrPart(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+function signQrPart(encodedPayload) {
+  return crypto4.createHmac("sha256", ATTENDANCE_QR_SECRET).update(encodedPayload).digest("base64url");
+}
+function buildAttendanceQrToken(input) {
+  const bucket2 = input.bucket ?? Math.floor(Date.now() / 1e3 / input.intervalSeconds);
+  const expiresAt = (bucket2 + 1) * input.intervalSeconds;
+  const payload = encodeQrPart({
+    qrId: input.qrId,
+    sessionId: input.sessionId,
+    tokenVersion: input.tokenVersion,
+    bucket: bucket2,
+    exp: expiresAt
+  });
+  return { token: `${payload}.${signQrPart(payload)}`, expiresAt: new Date(expiresAt * 1e3).toISOString() };
+}
+function parseAttendanceQrToken(token) {
+  const [encodedPayload, signature] = String(token || "").split(".");
+  if (!encodedPayload || !signature) return null;
+  const expected = signQrPart(encodedPayload);
+  try {
+    if (!crypto4.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (!payload?.qrId || !payload?.sessionId || !Number.isInteger(payload.tokenVersion) || !Number.isInteger(payload.bucket) || payload.bucket < 0 || !Number.isFinite(payload.exp)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+async function validateAttendanceManagerAccess(sessionId, user) {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const item = (store.attendanceSessions || []).find((entry) => entry.id === sessionId);
+    if (!item) return { session: null, error: "Attendance session not found.", status: 404 };
+    const course = (store.courses || []).find((entry) => entry.id === item.courseId);
+    const ownerId = item.teacherId || course?.teacherId;
+    if (user.role === "teacher" && ownerId !== user.id) return { session: null, error: "Permission denied.", status: 403 };
+    return { session: { id: item.id, course_id: item.courseId, section_id: item.sectionId || null, teacher_id: ownerId }, error: null, status: 200 };
+  }
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
+  if (!session) return { session: null, error: "Attendance session not found.", status: 404 };
+  if (user.role === "teacher" && session.teacher_id !== user.id) return { session: null, error: "Permission denied.", status: 403 };
+  return { session, error: null, status: 200 };
+}
+app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  const session = access.session;
+  if (isDevMockDb) {
+    const previous = [...devAttendanceQrSessions.values()].find((item) => item.sessionId === session.id && !item.revokedAt);
+    const qr2 = { id: previous?.id || generateId2("qr"), sessionId: session.id, sectionId: session.section_id || null, tokenVersion: (previous?.tokenVersion || 0) + 1, intervalSeconds: ATTENDANCE_QR_INTERVAL_SECONDS };
+    devAttendanceQrSessions.set(qr2.id, qr2);
+    const current2 = buildAttendanceQrToken({ qrId: qr2.id, sessionId: session.id, tokenVersion: qr2.tokenVersion, intervalSeconds: qr2.intervalSeconds });
+    return res.status(201).json({ sessionId: session.id, token: current2.token, expiresAt: current2.expiresAt, intervalSeconds: qr2.intervalSeconds });
+  }
+  const qr = (await pool.query(
+    `INSERT INTO attendance_qr_sessions (id, attendance_session_id, section_id, interval_seconds, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (attendance_session_id) WHERE revoked_at IS NULL
+     DO UPDATE SET token_version = attendance_qr_sessions.token_version + 1,
+                   started_at = CURRENT_TIMESTAMP,
+                   expires_at = NULL,
+                   created_by = EXCLUDED.created_by
+     RETURNING *`,
+    [generateId2("qr"), session.id, session.section_id || null, ATTENDANCE_QR_INTERVAL_SECONDS, req.user.id]
+  )).rows[0];
+  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
+  await audit(req, "open_attendance_qr", session.id, `interval=${qr.interval_seconds}s`);
+  return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
+}));
+app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  if (isDevMockDb) {
+    const qr2 = [...devAttendanceQrSessions.values()].find((item) => item.sessionId === req.params.id && !item.revokedAt);
+    if (!qr2) return res.status(404).json({ error: "QR \u0111i\u1EC3m danh ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF." });
+    const current2 = buildAttendanceQrToken({ qrId: qr2.id, sessionId: req.params.id, tokenVersion: qr2.tokenVersion, intervalSeconds: qr2.intervalSeconds });
+    return res.json({ sessionId: req.params.id, token: current2.token, expiresAt: current2.expiresAt, intervalSeconds: qr2.intervalSeconds });
+  }
+  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE attendance_session_id = $1 AND revoked_at IS NULL LIMIT 1", [req.params.id])).rows[0];
+  if (!qr) return res.status(404).json({ error: "QR \u0111i\u1EC3m danh ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF." });
+  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
+  return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
+}));
+app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  if (isDevMockDb) {
+    for (const qr of devAttendanceQrSessions.values()) if (qr.sessionId === req.params.id && !qr.revokedAt) qr.revokedAt = (/* @__PURE__ */ new Date()).toISOString();
+    return res.json({ ok: true });
+  }
+  await pool.query("UPDATE attendance_qr_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE attendance_session_id = $1 AND revoked_at IS NULL", [req.params.id]);
+  await audit(req, "close_attendance_qr", req.params.id, "QR session revoked");
+  return res.json({ ok: true });
 }));
 var getVietnamTimeInfo = () => {
   const now = /* @__PURE__ */ new Date();
@@ -9294,11 +10092,72 @@ app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), 
     sessionId,
     studentId: req.user.id,
     status: "present",
-    note: "T\u1EF1 \u0111i\u1EC3m danh qua link"
+    note: "T\u1EF1 \u0111i\u1EC3m danh qua link",
+    checkedInAt: (/* @__PURE__ */ new Date()).toISOString(),
+    checkinMethod: "link"
   };
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   await audit(req, "student_self_checkin", record.id, `Student: ${req.user.id}, Status: present`);
   res.json({ ok: true, record });
+}));
+app.post("/api/attendance/self-checkin/qr", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckinQr), asyncHandler(async (req, res) => {
+  const payload = parseAttendanceQrToken(req.body.token);
+  if (!payload) return res.status(400).json({ error: "QR \u0111i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7 ho\u1EB7c \u0111\xE3 b\u1ECB thay \u0111\u1ED5i." });
+  const nowSeconds = Math.floor(Date.now() / 1e3);
+  if (nowSeconds > payload.exp + 5 || Math.abs(Math.floor(nowSeconds / ATTENDANCE_QR_INTERVAL_SECONDS) - payload.bucket) > 1) {
+    return res.status(400).json({ error: "QR \u0111i\u1EC3m danh \u0111\xE3 h\u1EBFt h\u1EA1n. Vui l\xF2ng qu\xE9t m\xE3 \u0111ang hi\u1EC3n th\u1ECB tr\xEAn m\xE0n h\xECnh l\u1EDBp." });
+  }
+  if (isDevMockDb) {
+    const qr2 = devAttendanceQrSessions.get(payload.qrId);
+    if (!qr2 || qr2.revokedAt || qr2.sessionId !== payload.sessionId || qr2.tokenVersion !== payload.tokenVersion) return res.status(400).json({ error: "Phi\xEAn QR \u0111i\u1EC3m danh \u0111\xE3 b\u1ECB \u0111\xF3ng ho\u1EB7c \u0111\u1ED5i m\xE3." });
+    const store = devMockStore || getInitialStore();
+    const session2 = (store.attendanceSessions || []).find((item) => item.id === payload.sessionId);
+    if (!session2) return res.status(404).json({ error: "Attendance session not found." });
+    const registered = session2.sectionId ? (store.courseRegistrations || []).some((item) => item.studentId === req.user.id && item.sectionId === session2.sectionId && item.status === "registered") : (store.enrollments || []).some((item) => item.studentId === req.user.id && item.courseId === session2.courseId && ["active", "completed"].includes(item.status));
+    if (!registered) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y." });
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const records = store.attendanceRecords || [];
+    const existing2 = records.find((item) => item.sessionId === session2.id && item.studentId === req.user.id);
+    const record2 = { id: existing2?.id || generateId2("atr"), sessionId: session2.id, studentId: req.user.id, status: "present", note: "T\u1EF1 \u0111i\u1EC3m danh qua QR \u0111\u1ED9ng", checkedInAt: now, checkinMethod: "qr" };
+    devMockStore = { ...store, attendanceRecords: existing2 ? records.map((item) => item.id === existing2.id ? { ...item, ...record2 } : item) : [record2, ...records] };
+    return res.json({ ok: true, record: record2 });
+  }
+  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE id = $1 AND attendance_session_id = $2 AND revoked_at IS NULL", [payload.qrId, payload.sessionId])).rows[0];
+  if (!qr || Number(qr.token_version) !== Number(payload.tokenVersion)) return res.status(400).json({ error: "Phi\xEAn QR \u0111i\u1EC3m danh \u0111\xE3 b\u1ECB \u0111\xF3ng ho\u1EB7c \u0111\u1ED5i m\xE3." });
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [payload.sessionId])).rows[0];
+  if (!session) return res.status(404).json({ error: "Attendance session not found." });
+  if (session.section_id) {
+    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
+    if (section) {
+      const schedule = parseSchedule(section);
+      if (!isWithinSchedule(schedule)) return res.status(400).json({ error: "\u0110i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7: hi\u1EC7n t\u1EA1i kh\xF4ng n\u1EB1m trong khung gi\u1EDD h\u1ECDc c\u1EE7a l\u1EDBp." });
+    }
+    const registration = (await pool.query(
+      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
+      [req.user.id, session.section_id]
+    )).rows[0];
+    if (!registration) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y." });
+  } else {
+    const enrollment = (await pool.query(
+      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
+      [req.user.id, session.course_id]
+    )).rows[0];
+    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
+  }
+  const existing = (await pool.query("SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2", [session.id, req.user.id])).rows[0];
+  const record = {
+    id: existing?.id || generateId2("atr"),
+    sessionId: session.id,
+    studentId: req.user.id,
+    status: "present",
+    note: "T\u1EF1 \u0111i\u1EC3m danh qua QR \u0111\u1ED9ng",
+    checkedInAt: (/* @__PURE__ */ new Date()).toISOString(),
+    checkinMethod: "qr"
+  };
+  await attendanceRepository.bulkMarkRecords(pool, [record]);
+  await audit(req, "student_qr_checkin", record.id, `Student: ${req.user.id}, Session: ${session.id}`);
+  invalidateStoreCache();
+  return res.json({ ok: true, record });
 }));
 app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]), validateBody(schemas.teacherCheckin), asyncHandler(async (req, res) => {
   const { courseId: courseId2, sectionId, slotTime, classDate } = req.body;
