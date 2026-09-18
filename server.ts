@@ -4609,7 +4609,24 @@ app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "m
 let initDbPromise: Promise<void> | null = null;
 export async function ensureDatabaseReady() {
   if (!initDbPromise) {
-    initDbPromise = initializeDatabase();
+    initDbPromise = (async () => {
+      if (!isDevMockDb) {
+        try {
+          await pool.query(`
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
+            ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS session_id TEXT;
+          `);
+        } catch (err: any) {
+          console.warn("[ensureDatabaseReady] Schema auto-patch notice:", err?.message);
+        }
+      }
+      return initializeDatabase();
+    })();
   }
   return initDbPromise;
 }

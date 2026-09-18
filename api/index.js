@@ -4493,27 +4493,76 @@ var quizzesRepository = {
 };
 
 // src/server/repositories/assignments.ts
+var hasEnsuredColumns = false;
+async function ensureAssignmentSchema(db) {
+  if (hasEnsuredColumns) return;
+  try {
+    await db.query(`
+      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
+      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
+      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS session_id TEXT;
+    `);
+    hasEnsuredColumns = true;
+  } catch (err) {
+  }
+}
 var assignmentsRepository = {
   async create(db, input) {
+    await ensureAssignmentSchema(db);
     const assignment = { ...input, id: generateId2("assign") };
-    await db.query(
-      "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-      [
-        assignment.id,
-        assignment.courseId,
-        assignment.title,
-        assignment.description,
-        assignment.deadline,
-        assignment.maxScore,
-        assignment.attachmentUrl || null,
-        assignment.lessonId || null,
-        assignment.type || null,
-        assignment.sessionId || null
-      ]
-    );
+    try {
+      await db.query(
+        "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+        [
+          assignment.id,
+          assignment.courseId,
+          assignment.title,
+          assignment.description,
+          assignment.deadline,
+          assignment.maxScore,
+          assignment.attachmentUrl || null,
+          assignment.lessonId || null,
+          assignment.type || null,
+          assignment.sessionId || null
+        ]
+      );
+    } catch (err) {
+      if (err?.code === "42703" || err?.message?.includes("does not exist") || err?.message?.includes("attachment_url")) {
+        hasEnsuredColumns = false;
+        await db.query(`
+          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
+          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
+          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
+        `);
+        hasEnsuredColumns = true;
+        await db.query(
+          "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+          [
+            assignment.id,
+            assignment.courseId,
+            assignment.title,
+            assignment.description,
+            assignment.deadline,
+            assignment.maxScore,
+            assignment.attachmentUrl || null,
+            assignment.lessonId || null,
+            assignment.type || null,
+            assignment.sessionId || null
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
     return assignment;
   },
   async submit(db, studentId, assignmentId, content, attachmentUrl) {
+    await ensureAssignmentSchema(db);
     const assignment = (await db.query("SELECT course_id, deadline FROM assignments WHERE id = $1", [assignmentId])).rows[0];
     if (!assignment) return { error: "Assignment not found.", status: 404 };
     if (assignment.deadline) {
@@ -4531,20 +4580,42 @@ var assignmentsRepository = {
       "SELECT id FROM submissions WHERE student_id = $1 AND assignment_id = $2",
       [studentId, assignmentId]
     )).rows[0];
-    if (existing) {
-      const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
-      const updated = (await db.query(
-        "UPDATE submissions SET content = $1, submitted_at = $2, attachment_url = COALESCE($4, attachment_url) WHERE id = $3 RETURNING attachment_url",
-        [content, submittedAt, existing.id, attachmentUrl || null]
-      )).rows[0];
-      return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
-    } else {
-      const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
-      await db.query(
-        "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
-        [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
-      );
-      return { row: submission };
+    try {
+      if (existing) {
+        const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
+        const updated = (await db.query(
+          "UPDATE submissions SET content = $1, submitted_at = $2, attachment_url = COALESCE($4, attachment_url) WHERE id = $3 RETURNING attachment_url",
+          [content, submittedAt, existing.id, attachmentUrl || null]
+        )).rows[0];
+        return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
+      } else {
+        const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
+        await db.query(
+          "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
+          [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
+        );
+        return { row: submission };
+      }
+    } catch (err) {
+      if (err?.code === "42703" || err?.message?.includes("attachment_url")) {
+        await db.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;");
+        if (existing) {
+          const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
+          const updated = (await db.query(
+            "UPDATE submissions SET content = $1, submitted_at = $2, attachment_url = COALESCE($4, attachment_url) WHERE id = $3 RETURNING attachment_url",
+            [content, submittedAt, existing.id, attachmentUrl || null]
+          )).rows[0];
+          return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
+        } else {
+          const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
+          await db.query(
+            "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
+            [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
+          );
+          return { row: submission };
+        }
+      }
+      throw err;
     }
   },
   async findSubmissionForGrading(db, submissionId) {
@@ -10157,7 +10228,24 @@ app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "m
 var initDbPromise = null;
 async function ensureDatabaseReady() {
   if (!initDbPromise) {
-    initDbPromise = initializeDatabase();
+    initDbPromise = (async () => {
+      if (!isDevMockDb) {
+        try {
+          await pool.query(`
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
+            ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
+            ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS session_id TEXT;
+          `);
+        } catch (err) {
+          console.warn("[ensureDatabaseReady] Schema auto-patch notice:", err?.message);
+        }
+      }
+      return initializeDatabase();
+    })();
   }
   return initDbPromise;
 }
