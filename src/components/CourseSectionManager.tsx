@@ -24,6 +24,7 @@ import { api } from "../api";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../utils";
 import ModalPortal from "./ModalPortal";
 import ForumDiscussion from "./ForumDiscussion";
+import { ZoomLogo } from "./icons/BrandLogos";
 
 interface CourseSectionManagerProps {
   store: any;
@@ -708,10 +709,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                 href={sec.meetingUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-sans transition border border-indigo-200/60 font-medium"
+                                className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md font-sans transition border border-blue-200/60 font-medium"
                                 title={sec.meetingUrl}
                               >
-                                <Video className="h-3 w-3" /> Zoom/Meet
+                                <ZoomLogo className="h-3 w-3 shrink-0" /> Zoom
                               </a>
                             )}
                             {sec.groupChatUrl && (
@@ -1011,9 +1012,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                         href={sec.meetingUrl}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-sans transition border border-indigo-200/60 font-medium"
+                                        className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md font-sans transition border border-blue-200/60 font-medium"
+                                        title={sec.meetingUrl}
                                       >
-                                        <Video className="h-3 w-3" /> Zoom/Meet
+                                        <ZoomLogo className="h-3 w-3 shrink-0" /> Zoom
                                       </a>
                                     )}
                                     {sec.groupChatUrl && (

@@ -20,6 +20,7 @@ import { LMSDataStore, Course, User, AttendanceSession } from "../types";
 import { api } from "../api";
 import ModalPortal from "./ModalPortal";
 import SessionMaterialsEditor from "./SessionMaterialsEditor";
+import { ZoomLogo } from "./icons/BrandLogos";
 
 const MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = "50 MB";
@@ -296,11 +297,11 @@ export default function AttendanceManager({
       {selectedCourseId && selectedSectionId && activeSection ? (
         <div className="space-y-6">
           {/* Zoom Meeting Card for the Class Section */}
-          <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50/70 via-white to-indigo-50/50 p-4 md:p-5 shadow-xs">
+          <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/60 via-white to-indigo-50/40 p-4 md:p-5 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-emerald-100 border border-emerald-200 px-2 py-0.5 font-mono text-[10.5px] font-bold text-emerald-800">
+                  <span className="rounded-md bg-blue-100 border border-blue-200 px-2 py-0.5 font-mono text-[10.5px] font-bold text-blue-900">
                     Lớp: {activeSection.sectionCode}
                   </span>
                   <span className="text-xs text-slate-500">
@@ -309,14 +310,14 @@ export default function AttendanceManager({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                    <Video className="h-4 w-4 text-emerald-600" /> Link phòng Zoom học trực tuyến:
+                    <ZoomLogo className="h-4.5 w-4.5 shrink-0" /> Link phòng Zoom học trực tuyến:
                   </span>
                   {activeSection.meetingUrl ? (
                     <a
                       href={activeSection.meetingUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1 bg-white border border-emerald-200 px-2.5 py-1 rounded-lg truncate max-w-xs md:max-w-md"
+                      className="font-mono text-xs font-bold text-[#0B5CFF] hover:underline flex items-center gap-1 bg-white border border-blue-200 px-2.5 py-1 rounded-lg truncate max-w-xs md:max-w-md"
                     >
                       {activeSection.meetingUrl} <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
@@ -332,9 +333,9 @@ export default function AttendanceManager({
                     href={activeSection.meetingUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#0B5CFF] hover:bg-[#004BE5] px-3.5 py-2 text-xs font-bold text-white shadow-xs transition"
                   >
-                    <Video className="h-3.5 w-3.5" /> Vào phòng Zoom ngay ↗
+                    <ZoomLogo className="h-3.5 w-3.5" /> Vào phòng Zoom ngay ↗
                   </a>
                 )}
                 <button
@@ -730,7 +731,7 @@ export default function AttendanceManager({
               </button>
 
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-2">
-                <Video className="h-4 w-4 text-emerald-600" /> Link phòng Zoom - Lớp {activeSection.sectionCode}
+                <ZoomLogo className="h-4.5 w-4.5" /> Link phòng Zoom - Lớp {activeSection.sectionCode}
               </h4>
               <p className="text-[11px] text-slate-500 mb-4">
                 Link này sẽ hiển thị nổi bật trên màn hình học tập của tất cả học viên đã được xếp vào lớp này.

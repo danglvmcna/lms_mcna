@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Clock, Download, ExternalLink, FileSpreadsheet, FileText, Pencil, Play, Presentation, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Clock, Download, ExternalLink, Pencil, Trash2, X } from "lucide-react";
 import { api } from "../api";
 import { SessionMaterial } from "../types";
 import { extractYoutubeVideoId } from "../utils";
 import { formatFileSize, formatUploadTime, getMaterialTypeMeta, isFileMaterial, MATERIAL_TYPE_LABEL, MaterialIcon, materialHref } from "./SessionMaterialsList";
+import { PowerPointLogo, ExcelLogo, YouTubeLogo } from "./icons/BrandLogos";
 
 const MATERIAL_MAX_BYTES = 50 * 1024 * 1024; // mirrors the server upload limit
 
@@ -134,12 +135,12 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
       </div>
 
       <div className="flex flex-wrap gap-2.5">
-        <label className={`${uploadButtonClass} bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
-          <Presentation className="h-4 w-4" /> Tải slide (PPT/PDF)
+        <label className={`${uploadButtonClass} bg-[#D24726] hover:bg-[#b83b1d] active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <PowerPointLogo className="h-4 w-4 shrink-0" /> Tải slide (PPT/PPTX)
           <input type="file" accept=".ppt,.pptx,.pdf" className="hidden" onChange={handleUpload("slide")} disabled={busy} />
         </label>
-        <label className={`${uploadButtonClass} bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
-          <FileSpreadsheet className="h-4 w-4" /> Tải tài liệu & Data (Excel/PBIX/Word/ZIP)
+        <label className={`${uploadButtonClass} bg-[#107C41] hover:bg-[#0d6434] active:scale-[0.98] ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          <ExcelLogo className="h-4 w-4 shrink-0" /> Tải Excel & Data (XLSX/CSV/PBIX/DOC)
           <input type="file" accept=".doc,.docx,.pdf,.xlsx,.xls,.csv,.pbix,.zip,.rar" className="hidden" onChange={handleUpload("document")} disabled={busy} />
         </label>
       </div>
@@ -170,9 +171,9 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
         <button
           type="submit"
           disabled={busy || !youtubeUrl.trim()}
-          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.98]"
+          className="px-4 py-2 bg-[#FF0000] hover:bg-[#cc0000] disabled:opacity-50 text-white rounded-xl font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.98]"
         >
-          <Play className="h-4 w-4 fill-current" /> Thêm video
+          <YouTubeLogo className="h-4 w-4 shrink-0" /> Thêm video
         </button>
       </form>
 

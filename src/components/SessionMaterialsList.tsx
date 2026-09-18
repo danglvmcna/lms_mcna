@@ -4,6 +4,7 @@ import { api } from "../api";
 import { SessionMaterial } from "../types";
 import { extractYoutubeVideoId, youtubeEmbedUrl } from "../utils";
 import ModalPortal from "./ModalPortal";
+import { PowerPointLogo, WordLogo, ExcelLogo, YouTubeLogo, PdfLogo } from "./icons/BrandLogos";
 
 export const MATERIAL_TYPE_LABEL: Record<SessionMaterial["type"], string> = {
   slide: "Slide",
@@ -50,10 +51,10 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       key: "pdf",
       badge: "PDF",
       label: "Tài liệu PDF",
-      Icon: FileText,
-      iconColor: "text-rose-600",
-      iconBg: "bg-rose-50 border-rose-200/90 text-rose-600",
-      badgeStyle: "bg-rose-50 text-rose-700 border-rose-200",
+      Icon: PdfLogo,
+      iconColor: "",
+      iconBg: "bg-rose-50 border-rose-200/90",
+      badgeStyle: "bg-rose-50 text-rose-700 border-rose-200 font-bold",
       hoverBorder: "hover:border-rose-300",
       actionButton: "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80"
     };
@@ -80,9 +81,9 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       key: "xlsx",
       badge: ext.toUpperCase() || "XLSX",
       label: ext === "csv" ? "Dữ liệu CSV" : "Bảng tính Excel",
-      Icon: FileSpreadsheet,
-      iconColor: "text-emerald-700",
-      iconBg: "bg-emerald-50 border-emerald-200/90 text-emerald-700",
+      Icon: ExcelLogo,
+      iconColor: "",
+      iconBg: "bg-emerald-50 border-emerald-200/90",
       badgeStyle: "bg-emerald-100/80 text-emerald-800 border-emerald-300 font-bold",
       hoverBorder: "hover:border-emerald-400",
       actionButton: "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80"
@@ -109,13 +110,13 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
     return {
       key: "pptx",
       badge: isPpt ? "PPT" : "PPTX",
-      label: "Slide bài giảng",
-      Icon: Presentation,
-      iconColor: "text-amber-600",
-      iconBg: "bg-amber-50 border-amber-200/90 text-amber-600",
-      badgeStyle: "bg-amber-50 text-amber-800 border-amber-200",
-      hoverBorder: "hover:border-amber-300",
-      actionButton: "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80"
+      label: "Slide bài giảng (PowerPoint)",
+      Icon: PowerPointLogo,
+      iconColor: "",
+      iconBg: "bg-orange-50 border-orange-200/90",
+      badgeStyle: "bg-orange-50 text-orange-800 border-orange-200 font-bold",
+      hoverBorder: "hover:border-orange-300",
+      actionButton: "bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200/80"
     };
   }
 
@@ -125,10 +126,10 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       key: "docx",
       badge: isDoc ? "DOC" : "DOCX",
       label: "Tài liệu Word",
-      Icon: FileText,
-      iconColor: "text-blue-600",
-      iconBg: "bg-blue-50 border-blue-200/90 text-blue-600",
-      badgeStyle: "bg-blue-50 text-blue-700 border-blue-200",
+      Icon: WordLogo,
+      iconColor: "",
+      iconBg: "bg-blue-50 border-blue-200/90",
+      badgeStyle: "bg-blue-50 text-blue-700 border-blue-200 font-bold",
       hoverBorder: "hover:border-blue-300",
       actionButton: "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80"
     };
@@ -139,10 +140,10 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       key: "youtube",
       badge: "YOUTUBE",
       label: "Video YouTube",
-      Icon: Play,
-      iconColor: "text-red-600",
-      iconBg: "bg-red-50 border-red-200/90 text-red-600",
-      badgeStyle: "bg-red-50 text-red-700 border-red-200",
+      Icon: YouTubeLogo,
+      iconColor: "",
+      iconBg: "bg-red-50 border-red-200/90",
+      badgeStyle: "bg-red-50 text-red-700 border-red-200 font-bold",
       hoverBorder: "hover:border-red-300",
       actionButton: "bg-red-50 hover:bg-red-100 text-red-700 border border-red-200/80"
     };
@@ -164,12 +165,12 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
 export function MaterialIcon({ material, type, className }: { material?: SessionMaterial; type?: SessionMaterial["type"]; className?: string }) {
   if (material) {
     const meta = getMaterialTypeMeta(material);
-    return <meta.Icon className={className || meta.iconColor} />;
+    return <meta.Icon className={className || "h-5 w-5"} />;
   }
-  if (type === "slide") return <Presentation className={className} />;
-  if (type === "document") return <FileText className={className} />;
-  if (type === "youtube") return <Play className={className} />;
-  return <Link2 className={className} />;
+  if (type === "slide") return <PowerPointLogo className={className || "h-5 w-5"} />;
+  if (type === "document") return <WordLogo className={className || "h-5 w-5"} />;
+  if (type === "youtube") return <YouTubeLogo className={className || "h-5 w-5"} />;
+  return <Link2 className={className || "h-5 w-5"} />;
 }
 
 export const isFileMaterial = (material: SessionMaterial) => material.type === "slide" || material.type === "document";

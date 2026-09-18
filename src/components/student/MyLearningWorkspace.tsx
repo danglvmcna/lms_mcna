@@ -5,6 +5,7 @@ import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
 import LinkedText from "../LinkedText";
+import { ZoomLogo } from "../icons/BrandLogos";
 
 interface ComponentProps {
   [key: string]: any;
@@ -308,17 +309,17 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           )}
 
           {/* Zoom Meeting Link - Ngay dưới mô tả buổi học */}
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="p-4 bg-blue-50/70 border border-blue-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Video className="h-5 w-5" />
+              <div className="w-10 h-10 rounded-xl bg-white border border-blue-200/80 flex items-center justify-center shrink-0 shadow-2xs">
+                <ZoomLogo className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <span className="block text-xs sm:text-sm font-bold text-emerald-950 truncate">
+                <span className="block text-xs sm:text-sm font-bold text-slate-900 truncate">
                   Phòng học Zoom trực tuyến của buổi học
                 </span>
-                <span className="text-[11px] text-emerald-700 font-medium">
-                  {zoomUrl ? "Nhấp nút bên phải để vào phòng học Zoom trực tiếp" : "Phòng học Zoom trực tuyến chính thức của lớp"}
+                <span className="text-[11px] text-blue-700 font-medium">
+                  {zoomUrl ? "Bấm nút bên phải để vào phòng Zoom học trực tiếp" : "Phòng học Zoom trực tuyến chính thức của lớp"}
                 </span>
               </div>
             </div>
@@ -326,9 +327,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               href={zoomUrl || "https://zoom.us/join"}
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
+              className="px-4 py-2.5 bg-[#0B5CFF] hover:bg-[#004BE5] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shadow-blue-500/20 shrink-0 whitespace-nowrap"
             >
-              <Video className="h-3.5 w-3.5" />
+              <ZoomLogo className="h-4 w-4" />
               Vào phòng Zoom ngay ↗
             </a>
           </div>
@@ -926,10 +927,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                               href={section.meetingUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="px-2.5 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-700 hover:text-emerald-800 text-[10.5px] font-mono font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1 transition cursor-pointer w-fit shrink-0"
-                              title="Vào phòng học trực tuyến Zoom / Google Meet"
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#0B5CFF] text-[10.5px] font-mono font-bold rounded-lg border border-blue-200 flex items-center gap-1.5 transition cursor-pointer w-fit shrink-0"
+                              title="Vào phòng học trực tuyến Zoom"
                             >
-                              <Video className="h-3.5 w-3.5 text-emerald-600" /> Vào Zoom/Meet ↗
+                              <ZoomLogo className="h-3.5 w-3.5" /> Vào Zoom ↗
                             </a>
                           )}
                           {section.groupChatUrl && (
@@ -1299,9 +1300,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                           href={section.meetingUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-blue-50 border border-blue-200 text-[#0B5CFF] text-xs font-semibold shadow-2xs transition cursor-pointer"
                         >
-                          <Video className="h-3.5 w-3.5 text-emerald-600" /> Vào phòng Zoom/Meet
+                          <ZoomLogo className="h-4 w-4" /> Vào phòng Zoom
                           <ExternalLink className="h-3 w-3 opacity-60" />
                         </a>
                       )}
