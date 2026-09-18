@@ -1,10 +1,88 @@
 import React, { useRef, useState } from "react";
-import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
+import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Loader2 } from "lucide-react";
 import { api } from "../../api";
 import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
+}
+
+async function compressImageIfApplicable(file: File): Promise<File> {
+  // Only compress raster images > 1MB
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml" || file.size < 1024 * 1024) {
+    return file;
+  }
+  return new Promise<File>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 1920;
+        const maxHeight = 1920;
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size < file.size) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          0.82
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+function getAttachmentInfo(attachmentUrl?: string, content?: string) {
+  let url = attachmentUrl;
+  let name = "";
+  if (content) {
+    const match = content.match(/\[(?:Attachment|Tệp đính kèm):\s*([^\]]+)\]/i);
+    if (match) {
+      const val = match[1].trim();
+      if (val.includes("|")) {
+        const parts = val.split("|").map(p => p.trim());
+        name = parts[0];
+        const urlPart = parts.find(p => p.startsWith("http://") || p.startsWith("https://") || p.startsWith("/"));
+        if (urlPart && !url) url = urlPart;
+      } else if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/")) {
+        if (!url) url = val;
+      } else {
+        name = val;
+      }
+    }
+  }
+  if (!name && url) {
+    const raw = url.split("/").pop() || "file_bai_lam";
+    name = raw.replace(/^\d+-\d+-/, "");
+  }
+  return { url, name: name || "Tệp đính kèm" };
 }
 
 export default function AssignmentSubmit(props: ComponentProps) {
@@ -74,6 +152,8 @@ export default function AssignmentSubmit(props: ComponentProps) {
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [existingAttachment, setExistingAttachment] = useState<string | null>(null);
   const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatusText, setUploadStatusText] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,21 +167,33 @@ export default function AssignmentSubmit(props: ComponentProps) {
     const selectedFile = submissionFile;
     const hasFile = selectedFile !== null;
     if (!hasText && !hasFile && !existingAttachment) {
-      triggerToast("Vui long nhap noi dung bai lam hoac dinh kem tep.");
+      triggerToast("Vui lòng nhập nội dung bài làm hoặc đính kèm tệp.");
       return;
     }
 
     setIsSubmittingAssignment(true);
+    setUploadProgress(null);
+    setUploadStatusText("Đang xử lý bài nộp...");
     try {
       let attachmentUrl = existingAttachment || undefined;
+      const selectedFileName = selectedFile?.name;
       if (selectedFile) {
-        const uploaded = await api.uploadFile(selectedFile);
+        setUploadStatusText("Đang chuẩn bị và tối ưu tệp...");
+        const fileToUpload = await compressImageIfApplicable(selectedFile);
+
+        setUploadStatusText("Đang tải tệp lên máy chủ...");
+        setUploadProgress(0);
+        const uploaded = await api.uploadFile(fileToUpload, (pct) => {
+          setUploadProgress(pct);
+          setUploadStatusText(`Đang tải tệp lên: ${pct}%`);
+        });
         attachmentUrl = uploaded.url;
       }
 
-      let finalContent = submissionCodeText.trim().replace(/\s*\[Attachment:[^\]]+\]/g, "").trim();
-      if (selectedFile) {
-        finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)]`;
+      setUploadStatusText("Đang lưu bài nộp...");
+      let finalContent = submissionCodeText.trim().replace(/\s*\[(?:Attachment|Tệp đính kèm):[^\]]+\]/g, "").trim();
+      if (selectedFileName && attachmentUrl) {
+        finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${selectedFileName} | ${attachmentUrl}]`;
       } else if (attachmentUrl) {
         finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${attachmentUrl}]`;
       }
@@ -114,9 +206,11 @@ export default function AssignmentSubmit(props: ComponentProps) {
       }
     } catch (err: any) {
       console.error(err);
-      triggerToast(err.message || "Khong the upload tep dinh kem.");
+      triggerToast(err.message || "Không thể upload tệp đính kèm.");
     } finally {
       setIsSubmittingAssignment(false);
+      setUploadProgress(null);
+      setUploadStatusText("");
     }
   };
 
@@ -347,16 +441,25 @@ export default function AssignmentSubmit(props: ComponentProps) {
                         </div>
                       )}
 
-                      {submission.attachmentUrl && (
-                        <a
-                          href={submission.attachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 text-xs text-indigo-600 hover:text-indigo-700 font-semibold"
-                        >
-                          <FileText className="h-3.5 w-3.5" /> Xem tệp đã nộp
-                        </a>
-                      )}
+                      {(() => {
+                        const att = getAttachmentInfo(submission.attachmentUrl, submission.content);
+                        if (!att.url) return null;
+                        return (
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition"
+                            >
+                              <FileText className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate max-w-xs">{att.name}</span>
+                              <span className="text-[10px] text-indigo-500 font-normal">(Xem / Tải về)</span>
+                            </a>
+                          </div>
+                        );
+                      })()}
 
                       {submission.feedback && (
                         <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
@@ -438,21 +541,51 @@ export default function AssignmentSubmit(props: ComponentProps) {
                 ) : null}
               </div>
 
+              {/* Upload progress & feedback */}
+              {isSubmittingAssignment && (
+                <div className="space-y-1.5 p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-xs">
+                  <div className="flex items-center justify-between text-indigo-900 font-medium">
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600 shrink-0" />
+                      <span>{uploadStatusText || "Đang xử lý bài làm..."}</span>
+                    </span>
+                    {typeof uploadProgress === "number" && (
+                      <span className="font-mono font-bold text-indigo-700">{uploadProgress}%</span>
+                    )}
+                  </div>
+                  {typeof uploadProgress === "number" && (
+                    <div className="w-full bg-indigo-200/60 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-1.5 rounded-full transition-all duration-200 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="pt-2 flex justify-end gap-2 text-xs">
                 <button
                   type="button"
                   onClick={() => { setSubmittingAssignmentId(null); setSubmissionFile(null); }}
                   disabled={isSubmittingAssignment}
-                  className="mcna-btn-ghost disabled:opacity-50 disabled:cursor-wait"
+                  className="mcna-btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingAssignment}
-                  className="mcna-btn-primary disabled:opacity-60 disabled:cursor-wait"
+                  className="mcna-btn-primary disabled:opacity-60 disabled:cursor-wait flex items-center gap-2"
                 >
-                  {isSubmittingAssignment ? "Đang gửi bài..." : "Xác nhận nộp bài"}
+                  {isSubmittingAssignment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      <span>{uploadProgress !== null ? `Đang tải lên ${uploadProgress}%...` : "Đang lưu bài nộp..."}</span>
+                    </>
+                  ) : (
+                    "Xác nhận nộp bài"
+                  )}
                 </button>
               </div>
             </form>

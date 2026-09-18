@@ -2,9 +2,64 @@ import React from "react";
 import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 import { api } from "../../api";
+import { PowerPointLogo, WordLogo, ExcelLogo, PdfLogo } from "../icons/BrandLogos";
 
 interface ComponentProps {
   [key: string]: any;
+}
+
+function getSubmissionFileDetails(sub: any) {
+  let url = sub?.attachmentUrl;
+  let filename = "";
+  if (sub?.content) {
+    const match = sub.content.match(/\[(?:Attachment|Tệp đính kèm):\s*([^\]]+)\]/i);
+    if (match) {
+      const val = match[1].trim();
+      if (val.includes("|")) {
+        const parts = val.split("|").map((p: string) => p.trim());
+        filename = parts[0];
+        const urlPart = parts.find((p: string) => p.startsWith("http://") || p.startsWith("https://") || p.startsWith("/"));
+        if (urlPart && !url) url = urlPart;
+      } else if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/")) {
+        if (!url) url = val;
+      } else {
+        filename = val;
+      }
+    }
+  }
+
+  if (url && !filename) {
+    const raw = url.split("/").pop() || "file_bai_lam";
+    filename = raw.replace(/^\d+-\d+-/, "");
+  }
+
+  const ext = filename ? "." + filename.split(".").pop()?.toLowerCase() : (url ? "." + url.split(".").pop()?.toLowerCase() : "");
+  const isWord = [".doc", ".docx"].includes(ext);
+  const isExcel = [".xls", ".xlsx", ".csv"].includes(ext);
+  const isPowerPoint = [".ppt", ".pptx"].includes(ext);
+  const isPdf = ext === ".pdf";
+  const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"].includes(ext);
+  const isZip = [".zip", ".rar", ".7z"].includes(ext);
+
+  return {
+    url,
+    filename: filename || (url ? "Tệp bài làm" : ""),
+    ext,
+    isWord,
+    isExcel,
+    isPowerPoint,
+    isPdf,
+    isImage,
+    isZip
+  };
+}
+
+function renderFileIcon(details: ReturnType<typeof getSubmissionFileDetails>, size = "h-4 w-4") {
+  if (details.isWord) return <WordLogo className={size} />;
+  if (details.isExcel) return <ExcelLogo className={size} />;
+  if (details.isPowerPoint) return <PowerPointLogo className={size} />;
+  if (details.isPdf) return <PdfLogo className={size} />;
+  return <FileText className={`${size} text-indigo-600`} />;
 }
 
 export default function AssignmentGrader(props: ComponentProps) {
@@ -290,6 +345,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                             <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("submittedAt")}>
                               Ngày nộp {subSortField === "submittedAt" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
+                            <th className="mcna-th">File bài làm</th>
                             <th className="mcna-th cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSubSort("score")}>
                               Điểm số đạt được {subSortField === "score" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
                             </th>
@@ -318,6 +374,42 @@ export default function AssignmentGrader(props: ComponentProps) {
                                   </div>
                                 </td>
                                 <td className="mcna-td text-slate-500 font-mono text-[11px]">{new Date(sub.submittedAt).toLocaleDateString()}</td>
+                                <td className="mcna-td">
+                                  {(() => {
+                                    const fileInfo = getSubmissionFileDetails(sub);
+                                    if (!fileInfo.url) {
+                                      return <span className="text-[11px] text-slate-400 italic">Văn bản</span>;
+                                    }
+                                    return (
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 max-w-[150px]" title={fileInfo.filename}>
+                                          {renderFileIcon(fileInfo, "h-4 w-4 shrink-0")}
+                                          <span className="text-xs font-medium text-slate-800 truncate">{fileInfo.filename}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                                            className="p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer"
+                                            title="Xem file trực tiếp"
+                                          >
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </button>
+                                          <a
+                                            href={fileInfo.url}
+                                            download
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                                            title="Tải file về máy"
+                                          >
+                                            <Download className="h-3.5 w-3.5" />
+                                          </a>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
                                 <td className="mcna-td">
                                   {sub.score !== undefined ? (
                                     <span className="mcna-badge-success">
@@ -397,29 +489,40 @@ export default function AssignmentGrader(props: ComponentProps) {
                     </p>
 
                     {(() => {
-                      let extractedUrl = sub?.attachmentUrl;
-                      if (!extractedUrl && sub?.content) {
-                        const match = sub.content.match(/\[Attachment:\s*([^\]]+)\]/) || sub.content.match(/\[Tệp đính kèm:\s*([^\]]+)\]/);
-                        if (match) {
-                          const val = match[1].trim();
-                          if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/")) {
-                            extractedUrl = val;
-                          }
-                        }
-                      }
-                      if (!extractedUrl) return null;
+                      const fileInfo = getSubmissionFileDetails(sub);
+                      if (!fileInfo.url) return null;
 
                       return (
-                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
-                          <span className="text-[10px] text-slate-500 font-semibold uppercase">Tệp đính kèm:</span>
-                          <button
-                            type="button"
-                            onClick={() => setPreviewAttachmentUrl(extractedUrl)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Xem file bài làm
-                          </button>
+                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {renderFileIcon(fileInfo, "h-5 w-5 shrink-0")}
+                            <div className="min-w-0">
+                              <span className="text-[10px] text-slate-500 font-semibold uppercase block">Tệp đính kèm bài làm:</span>
+                              <span className="text-xs font-bold text-slate-800 truncate block max-w-xs" title={fileInfo.filename}>
+                                {fileInfo.filename}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Xem trực tiếp
+                            </button>
+                            <a
+                              href={fileInfo.url}
+                              download
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans decoration-none"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              Tải về
+                            </a>
+                          </div>
                         </div>
                       );
                     })()}
@@ -487,69 +590,113 @@ export default function AssignmentGrader(props: ComponentProps) {
         </ModalPortal>
       )}
 
-      {previewAttachmentUrl && (
-        <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[86vh] shadow-2xl relative overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 bg-white">
-                <h3 className="text-sm font-semibold text-slate-900">Xem file bài làm</h3>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={previewAttachmentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-lg border border-slate-200 transition"
-                  >
-                    Mở tab mới
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewAttachmentUrl(null)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 bg-slate-900">
-                {/\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(previewAttachmentUrl) ? (
-                  <div className="h-full w-full overflow-auto flex items-center justify-center p-4">
-                    <img src={previewAttachmentUrl} alt="File bài làm" className="max-h-full max-w-full object-contain" />
-                  </div>
-                ) : /\.(pdf|txt|html|htm)(\?|#|$)/i.test(previewAttachmentUrl) ? (
-                  <iframe
-                    title="File bài làm"
-                    src={previewAttachmentUrl}
-                    className="h-full w-full border-0 bg-white"
-                  />
-                ) : (() => {
-                  const filename = previewAttachmentUrl.split("/").pop() || "assignment_file";
-                  return (
-                    <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center text-slate-900 bg-white space-y-6">
-                      <div className="p-6 bg-indigo-50 border border-indigo-200 rounded-full text-indigo-600">
-                        <FileText className="h-16 w-16" />
-                      </div>
-                      <div className="space-y-2 max-w-md">
-                        <h4 className="text-base font-bold truncate px-4" title={filename}>{filename}</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                          Định dạng file này không hỗ trợ xem trực tiếp trực tuyến. Vui lòng tải file bài làm về thiết bị để xem chi tiết.
-                        </p>
-                      </div>
+      {previewAttachmentUrl && (() => {
+        const rawFilename = previewAttachmentUrl.split("/").pop() || "assignment_file";
+        const cleanFilename = rawFilename.replace(/^\d+-\d+-/, "");
+        const ext = "." + cleanFilename.split(".").pop()?.toLowerCase();
+        const isWord = [".doc", ".docx"].includes(ext);
+        const isExcel = [".xls", ".xlsx", ".csv"].includes(ext);
+        const isPowerPoint = [".ppt", ".pptx"].includes(ext);
+
+        return (
+          <ModalPortal>
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+                <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[86vh] shadow-2xl relative overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 bg-white gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isWord ? (
+                        <WordLogo className="h-4 w-4 shrink-0" />
+                      ) : isExcel ? (
+                        <ExcelLogo className="h-4 w-4 shrink-0" />
+                      ) : isPowerPoint ? (
+                        <PowerPointLogo className="h-4 w-4 shrink-0" />
+                      ) : ext === ".pdf" ? (
+                        <PdfLogo className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                      )}
+                      <h3 className="text-sm font-bold text-slate-900 truncate" title={cleanFilename}>
+                        {cleanFilename}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <a
                         href={previewAttachmentUrl}
-                        download
-                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer font-sans decoration-none"
+                        download={cleanFilename}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition flex items-center gap-1.5 shadow-xs decoration-none cursor-pointer"
                       >
-                        <Download className="h-4 w-4" /> Tải file bài làm xuống
+                        <Download className="h-3.5 w-3.5" /> Tải về máy
                       </a>
+                      <a
+                        href={previewAttachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-lg border border-slate-200 transition"
+                      >
+                        Mở tab mới
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewAttachmentUrl(null)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
                     </div>
-                  );
-                })()}
+                  </div>
+                  <div className="flex-1 bg-slate-900">
+                    {/\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(previewAttachmentUrl) ? (
+                      <div className="h-full w-full overflow-auto flex items-center justify-center p-4 bg-slate-900">
+                        <img src={previewAttachmentUrl} alt="File bài làm" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    ) : /\.(pdf|txt|html|htm)(\?|#|$)/i.test(previewAttachmentUrl) ? (
+                      <iframe
+                        title="File bài làm"
+                        src={previewAttachmentUrl}
+                        className="h-full w-full border-0 bg-white"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center text-slate-900 bg-white space-y-5">
+                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
+                          {isWord ? (
+                            <WordLogo className="h-16 w-16" />
+                          ) : isExcel ? (
+                            <ExcelLogo className="h-16 w-16" />
+                          ) : isPowerPoint ? (
+                            <PowerPointLogo className="h-16 w-16" />
+                          ) : (
+                            <FileText className="h-16 w-16 text-indigo-600" />
+                          )}
+                        </div>
+                        <div className="space-y-1.5 max-w-md">
+                          <div className="flex justify-center">
+                            {isWord && <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Word (.docx)</span>}
+                            {isExcel && <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Excel (.xlsx)</span>}
+                            {isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft PowerPoint (.pptx)</span>}
+                            {!isWord && !isExcel && !isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold font-mono uppercase tracking-wide">{ext.toUpperCase() || "TỆP ĐÍNH KÈM"}</span>}
+                          </div>
+                          <h4 className="text-base font-bold text-slate-900 truncate px-4" title={cleanFilename}>{cleanFilename}</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                            Tệp bài làm này đã được lưu trữ an toàn trên hệ thống. Bạn có thể tải tệp về thiết bị để xem chi tiết hoặc mở trong ứng dụng tương ứng.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <a
+                            href={previewAttachmentUrl}
+                            download={cleanFilename}
+                            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer font-sans decoration-none"
+                          >
+                            <Download className="h-4 w-4" /> Tải file bài làm xuống
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+            </ModalPortal>
+          );
+        })()}
 
       {/* Premium glassmorphic Course Details consultation modal */}
       {courseDetailId && (() => {

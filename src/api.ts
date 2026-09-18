@@ -73,13 +73,51 @@ export const api = {
   getAdminDashboard: () => apiFetch("/api/dashboard/admin"),
   getTeacherDashboard: () => apiFetch("/api/dashboard/teacher"),
   getStudentDashboard: () => apiFetch("/api/dashboard/student"),
-  uploadFile: async (file: File) => {
+  uploadFile: async (file: File, onProgress?: (percent: number) => void): Promise<{ url: string }> => {
     if (file.size >= MAX_UPLOAD_FILE_BYTES) {
       throw new Error(`Dung lượng tệp phải nhỏ hơn ${MAX_UPLOAD_FILE_LABEL}.`);
     }
     const formData = new FormData();
     formData.append("file", file);
-    return postMultipart<{ url: string }>("/api/upload", formData, "Tải tệp lên thất bại.");
+
+    if (!onProgress) {
+      return postMultipart<{ url: string }>("/api/upload", formData, "Tải tệp lên thất bại.");
+    }
+
+    return new Promise<{ url: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const csrfToken = getCsrfToken();
+      xhr.open("POST", "/api/upload");
+      xhr.withCredentials = true;
+      if (csrfToken) {
+        xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
+          onProgress(percent);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch {
+            reject(new Error("Phản hồi máy chủ không hợp lệ."));
+          }
+        } else {
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            reject(new Error(errData.error || `Tải tệp lên thất bại (HTTP ${xhr.status})`));
+          } catch {
+            reject(new Error(`Tải tệp lên thất bại (HTTP ${xhr.status})`));
+          }
+        }
+      };
+      xhr.onerror = () => reject(new Error("Lỗi kết nối mạng khi tải tệp lên."));
+      xhr.send(formData);
+    });
   },
   listSessionMaterials: (sessionId: string) => apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`),
   uploadSessionMaterial: (sessionId: string, type: "slide" | "document", file: File, title?: string) => {

@@ -44,6 +44,7 @@ import QuizConsole from "./student/QuizConsole";
 import AssignmentSubmit from "./student/AssignmentSubmit";
 import StudentOrders from "./student/StudentOrders";
 import { generateId, escapeHTML } from "../utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
 import ModalPortal from "./ModalPortal";
@@ -57,6 +58,7 @@ interface StudentPanelProps {
 
 export default function StudentPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS" }: StudentPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
+  const queryClient = useQueryClient();
 
 
   // Local navigation states
@@ -429,6 +431,22 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         localStore.submissions.unshift(submitted);
       }
       AppStore.hydrate({ ...localStore, submissions: [...localStore.submissions] });
+
+      // Optimistically update React Query cache so the UI transitions instantly (0ms)
+      queryClient.setQueryData(["store"], (old: LMSDataStore | undefined) => {
+        if (!old) return localStore;
+        const currentSubs = [...(old.submissions || [])];
+        const idx = currentSubs.findIndex(
+          sub => sub.assignmentId === submittingAssignmentId && sub.studentId === currentUser.id
+        );
+        if (idx >= 0) {
+          currentSubs[idx] = { ...currentSubs[idx], ...submitted };
+        } else {
+          currentSubs.unshift(submitted);
+        }
+        return { ...old, submissions: currentSubs };
+      });
+
       triggerToast("Đã nộp bài thành công!");
       setSubmissionCodeText("");
       setSubmittingAssignmentId(null);

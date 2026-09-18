@@ -6402,26 +6402,86 @@ app.use(express.json({
     req.rawBody = buf.toString("utf8");
   }
 }));
+function asyncHandler(handler2) {
+  return (req, res, next) => {
+    handler2(req, res, next).catch(next);
+  };
+}
+var UPLOAD_MIME_BY_EXT = {
+  ...MATERIAL_MIME_BY_EXT,
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm"
+};
+async function handleServeUpload(req, res) {
+  const filename = path5.basename(req.params.filename);
+  const localFile = path5.join(uploadDir, filename);
+  if (fs5.existsSync(localFile)) {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    const ext = path5.extname(filename).toLowerCase();
+    const mime = UPLOAD_MIME_BY_EXT[ext];
+    if (mime) res.setHeader("Content-Type", mime);
+    return res.sendFile(localFile);
+  }
+  try {
+    const download = await materialStorage.getDownload(`uploads/${filename}`, filename, { inline: true });
+    if (download.kind === "redirect") {
+      return res.redirect(302, download.url);
+    }
+    if (download.kind === "buffer") {
+      const ext = path5.extname(filename).toLowerCase();
+      const mime = download.mimeType || UPLOAD_MIME_BY_EXT[ext] || "application/octet-stream";
+      res.setHeader("Content-Type", mime);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      const encodedName = encodeURIComponent(filename);
+      const asciiName = filename.replace(/[^\x20-\x7E]/g, "_");
+      res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+      return res.send(download.buffer);
+    }
+    if (download.kind === "local" && fs5.existsSync(download.absolutePath)) {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      const ext = path5.extname(filename).toLowerCase();
+      const mime = UPLOAD_MIME_BY_EXT[ext];
+      if (mime) res.setHeader("Content-Type", mime);
+      return res.sendFile(download.absolutePath);
+    }
+  } catch (err) {
+    console.warn(`[uploads] Storage lookup notice for ${filename}:`, err?.message || err);
+  }
+  return res.status(404).json({ error: "T\u1EC7p \u0111\xEDnh k\xE8m kh\xF4ng t\u1ED3n t\u1EA1i ho\u1EB7c \u0111\xE3 b\u1ECB x\xF3a." });
+}
 app.use("/uploads", express.static(uploadDir, {
   setHeaders: (res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
   }
 }));
-app.post("/api/upload", requireCsrf, requireAuth, upload.single("file"), (req, res) => {
+app.get("/uploads/:filename", asyncHandler(handleServeUpload));
+app.get("/api/uploads/:filename", asyncHandler(handleServeUpload));
+app.post("/api/upload", requireCsrf, requireAuth, upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  try {
+    const fileBuffer = await fs5.promises.readFile(req.file.path);
+    const ext = path5.extname(req.file.filename).toLowerCase();
+    const mime = req.file.mimetype || UPLOAD_MIME_BY_EXT[ext] || "application/octet-stream";
+    await materialStorage.put(`uploads/${req.file.filename}`, fileBuffer, mime);
+  } catch (persistErr) {
+    console.warn("[upload] Persistent storage notice:", persistErr?.message || persistErr);
+  }
   res.json({ url: `/uploads/${req.file.filename}` });
-});
+}));
 app.use((req, _res, next) => {
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
     invalidateStoreCache();
   }
   next();
 });
-function asyncHandler(handler2) {
-  return (req, res, next) => {
-    handler2(req, res, next).catch(next);
-  };
-}
 async function createUserAccount(db, input, password) {
   const credential3 = hashPassword(password);
   const user = {
