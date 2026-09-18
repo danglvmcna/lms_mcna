@@ -316,7 +316,6 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               }
                               setSubmittingAssignmentId(a.id);
                               setSubmissionCodeText("");
-                              setExistingAttachment(null);
                             }}
                             disabled={isDeadlineExpired}
                             className="mcna-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
