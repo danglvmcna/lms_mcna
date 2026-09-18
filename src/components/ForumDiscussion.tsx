@@ -103,7 +103,6 @@ export default function ForumDiscussion({
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case "super_admin":
       case "admin":
       case "manager":
         return "bg-rose-50 text-rose-700 border border-rose-200";
@@ -118,8 +117,6 @@ export default function ForumDiscussion({
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case "super_admin":
-        return "Super Admin";
       case "admin":
         return "Admin";
       case "manager":

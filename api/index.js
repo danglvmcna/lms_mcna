@@ -713,7 +713,7 @@ var init_store = __esm({
         if (skipSync) return Promise.resolve();
         if (typeof sessionStorage !== "undefined") {
           const role = sessionStorage.getItem("e16_lms_role");
-          if (role && !["manager", "super_admin", "admin"].includes(role)) {
+          if (role && !["manager", "admin"].includes(role)) {
             return Promise.resolve();
           }
         }
@@ -7557,7 +7557,7 @@ app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
     res.status(500).json({ error: err.message || "Internal server error", stack: err.stack });
   }
 }));
-app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store2 = devMockStore || getInitialStore();
     return res.json({ ...dashboardFromStore(store2, req.user), auditLogs: [] });
@@ -7646,31 +7646,31 @@ async function sendReport(res, name, headers, rows, keys, format) {
   res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.xlsx"`);
   return res.send(workbook);
 }
-app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "csv");
   const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
   await audit(req, "export_attendance_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
   return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "csv");
 }));
-app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "xlsx");
   const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
   await audit(req, "export_attendance_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
   return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "xlsx");
 }));
-app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "csv");
   const rows = await getGradebookReportRows(pool, req.user, reportFiltersFromRequest(req));
   await audit(req, "export_gradebook_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
   return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "csv");
 }));
-app.get("/api/reports/gradebook.xlsx", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/reports/gradebook.xlsx", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "xlsx");
   const rows = await getGradebookReportRows(pool, req.user, reportFiltersFromRequest(req));
   await audit(req, "export_gradebook_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
   return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, rows, gradebookReportKeys, "xlsx");
 }));
-app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "admin", "manager", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     return res.json({
@@ -8002,7 +8002,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
   });
 }));
 app.get("/api/courses", requireAuth, asyncHandler(async (_req, res) => res.json(await coursesRepository.list(pool))));
-app.post("/api/courses", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.post("/api/courses", requireAuth, requireRole(["admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const body = req.body;
   const course = await coursesRepository.create(pool, {
     title: body.title,
@@ -8023,7 +8023,7 @@ app.post("/api/courses", requireAuth, requireRole(["admin", "super_admin"]), val
   await audit(req, "create_course", course.id, course.title);
   res.status(201).json(course);
 }));
-app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const existing = await coursesRepository.findById(pool, req.params.id);
   if (!existing) return res.status(404).json({ error: "Course not found." });
   const body = req.body;
@@ -8065,7 +8065,7 @@ app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin", "super
   await audit(req, "update_course", req.params.id, body.title);
   res.json(updated);
 }));
-app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.params.id)) return res.status(403).json({ error: "Permission denied." });
   const nextStatus = req.user.role === "teacher" ? "pending" : "published";
   const course = await coursesRepository.setStatus(pool, req.params.id, nextStatus);
@@ -8090,7 +8090,7 @@ app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin"]), asyncH
   }
   res.json(course);
 }));
-app.post("/api/courses/:id/reject", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.rejectCourse), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/reject", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.rejectCourse), asyncHandler(async (req, res) => {
   const course = await coursesRepository.setStatus(pool, req.params.id, "rejected", req.body.rejectionReason);
   if (!course) return res.status(404).json({ error: "Course not found." });
   invalidateStoreCache();
@@ -8101,7 +8101,7 @@ app.post("/api/courses/:id/reject", requireAuth, requireRole(["manager", "admin"
   }
   res.json(course);
 }));
-app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const courseId2 = req.params.id;
   const enrollmentsCountRes = await pool.query("SELECT COUNT(*) AS count FROM enrollments WHERE course_id = $1 AND status = 'active'", [courseId2]);
   const enrollmentsCount = Number(enrollmentsCountRes.rows[0].count);
@@ -8155,7 +8155,7 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin", "su
   await audit(req, "delete_course", courseId2, "Successfully performed cascading delete on course and related assets.");
   res.json({ ok: true });
 }));
-app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
+app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.body.courseId)) {
     return res.status(403).json({ error: "Permission denied." });
   }
@@ -8164,7 +8164,7 @@ app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin", "super_ad
   await audit(req, "add_lesson", lesson.id, lesson.title);
   res.status(201).json(lesson);
 }));
-app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
+app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
   const lessonRow = (await pool.query("SELECT course_id FROM lessons WHERE id = $1", [req.params.id])).rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, lessonRow.course_id)) {
@@ -8176,7 +8176,7 @@ app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin", "super
   await audit(req, "update_lesson", lesson.id, lesson.title);
   res.json(lesson);
 }));
-app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const lessonRes = await pool.query("SELECT * FROM lessons WHERE id = $1", [req.params.id]);
   const lessonRow = lessonRes.rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
@@ -8201,7 +8201,7 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   await audit(req, "enroll_course", result.course.id, result.course.title);
   res.status(201).json(result.enrollment);
 }));
-app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const enrollmentId = req.params.id;
   const chosenSectionId = typeof req.body?.sectionId === "string" && req.body.sectionId.trim() ? req.body.sectionId.trim() : void 0;
   const client2 = await pool.connect();
@@ -8244,7 +8244,7 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin", "su
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
   res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
 }));
-app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
+app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
   const sectionId = req.body.sectionId;
   const client2 = await pool.connect();
   let placement;
@@ -8273,7 +8273,7 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
   res.json({ enrollment, registration });
 }));
-app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const { placements } = req.body;
   if (!Array.isArray(placements)) {
     return res.status(400).json({ error: "M\u1EA3ng danh s\xE1ch x\u1EBFp l\u1EDBp placements l\xE0 b\u1EAFt bu\u1ED9c." });
@@ -8516,7 +8516,7 @@ app.delete("/api/lessons/:lessonId/note", requireAuth, requireRole(["student"]),
   await audit(req, "delete_lesson_note", req.params.lessonId, "Learner note deleted");
   return res.status(204).send();
 }));
-app.get("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const courseId2 = typeof req.query.courseId === "string" ? req.query.courseId : null;
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
@@ -8534,7 +8534,7 @@ app.get("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin",
   )).rows;
   return res.json(rows.map((row) => ({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || void 0, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at })));
 }));
-app.post("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.feedbackTemplate), asyncHandler(async (req, res) => {
+app.post("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.feedbackTemplate), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (req.body.courseId) {
@@ -8561,7 +8561,7 @@ app.post("/api/feedback-templates", requireAuth, requireRole(["teacher", "admin"
   await audit(req, "create_feedback_template", row.id, row.title);
   return res.status(201).json({ id: row.id, ownerUserId: row.owner_user_id, courseId: row.course_id || void 0, title: row.title, content: row.content, sortOrder: row.sort_order, isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at });
 }));
-app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const existing2 = (store.feedbackTemplates || []).find((item) => item.id === req.params.id);
@@ -8631,7 +8631,7 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
     client2.release();
   }
 }));
-app.delete("/api/certificates/:id", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/certificates/:id", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const client2 = await pool.connect();
   let committed = false;
   try {
@@ -8667,7 +8667,7 @@ app.post("/api/progress/toggle", requireAuth, requireRole(["student"]), validate
   await audit(req, "toggle_lesson_progress", req.body.lessonId, `completed=${result.row.completed}`);
   res.json(result.row);
 }));
-app.post("/api/quizzes", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.createQuiz), asyncHandler(async (req, res) => {
+app.post("/api/quizzes", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createQuiz), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.body.courseId)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, req.body.courseId])).rows[0];
@@ -8681,7 +8681,7 @@ app.post("/api/quizzes", requireAuth, requireRole(["teacher", "admin", "super_ad
   await audit(req, "create_quiz", quiz.id, quiz.title);
   res.status(201).json(quiz);
 }));
-app.put("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateQuiz), asyncHandler(async (req, res) => {
+app.put("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateQuiz), asyncHandler(async (req, res) => {
   const quiz = await quizzesRepository.findById(pool, req.params.id);
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
@@ -8697,7 +8697,7 @@ app.put("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin", "super
   await audit(req, "update_quiz", req.params.id, updated.title);
   res.json(updated);
 }));
-app.delete("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const quiz = await quizzesRepository.findById(pool, req.params.id);
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
@@ -8706,7 +8706,7 @@ app.delete("/api/quizzes/:id", requireAuth, requireRole(["teacher", "admin", "su
   await audit(req, "delete_quiz", req.params.id, quiz.title);
   res.json({ ok: true });
 }));
-app.post("/api/quizzes/:id/questions/bulk", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.bulkAddQuestions), asyncHandler(async (req, res) => {
+app.post("/api/quizzes/:id/questions/bulk", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.bulkAddQuestions), asyncHandler(async (req, res) => {
   const quiz = await quizzesRepository.findById(pool, req.params.id);
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
@@ -8718,7 +8718,7 @@ app.post("/api/quizzes/:id/questions/bulk", requireAuth, requireRole(["teacher",
   await audit(req, "bulk_add_quiz_questions", req.params.id, `Imported ${createdQuestions.length} questions`);
   res.status(201).json(createdQuestions);
 }));
-app.post("/api/quizzes/:id/questions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.addQuestion), asyncHandler(async (req, res) => {
+app.post("/api/quizzes/:id/questions", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.addQuestion), asyncHandler(async (req, res) => {
   const quiz = await quizzesRepository.findById(pool, req.params.id);
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
@@ -8726,7 +8726,7 @@ app.post("/api/quizzes/:id/questions", requireAuth, requireRole(["teacher", "adm
   await audit(req, "add_quiz_question", question.id, quiz.id);
   res.status(201).json(question);
 }));
-app.put("/api/questions/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.addQuestion), asyncHandler(async (req, res) => {
+app.put("/api/questions/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.addQuestion), asyncHandler(async (req, res) => {
   const question = (await pool.query("SELECT quiz_id FROM questions WHERE id = $1", [req.params.id])).rows[0];
   if (!question) return res.status(404).json({ error: "Question not found." });
   const quiz = await quizzesRepository.findById(pool, question.quiz_id);
@@ -8736,7 +8736,7 @@ app.put("/api/questions/:id", requireAuth, requireRole(["teacher", "admin", "sup
   await audit(req, "update_quiz_question", req.params.id, quiz.id);
   res.json(updated);
 }));
-app.delete("/api/questions/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/questions/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const question = (await pool.query("SELECT quiz_id FROM questions WHERE id = $1", [req.params.id])).rows[0];
   if (!question) return res.status(404).json({ error: "Question not found." });
   const quiz = await quizzesRepository.findById(pool, question.quiz_id);
@@ -8755,7 +8755,7 @@ app.post("/api/quizzes/submit", requireAuth, requireRole(["student"]), validateB
   await audit(req, "submit_quiz_attempt", result.row.quizId, `Score ${result.row.score}.`);
   res.status(201).json(result.row);
 }));
-app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
+app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.body.courseId)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, req.body.courseId])).rows[0];
@@ -8769,7 +8769,7 @@ app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin", "supe
   await audit(req, "create_assignment", assignment.id, assignment.title);
   res.status(201).json(assignment);
 }));
-app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
+app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
@@ -8785,7 +8785,7 @@ app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin", "s
   await audit(req, "update_assignment", req.params.id, updated.title);
   res.json(updated);
 }));
-app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
@@ -8823,7 +8823,7 @@ app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), valid
   await audit(req, "submit_assignment", result.row.id, result.row.assignmentId);
   res.status(201).json(result.row);
 }));
-app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
+app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const sub = store.submissions.find((s) => s.id === req.body.submissionId);
@@ -9085,7 +9085,7 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["admin"]), rateLimit
     created
   });
 }));
-app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manager", "super_admin", "admin"]), rateLimitResetPassword, asyncHandler(async (req, res) => {
+app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manager", "admin"]), rateLimitResetPassword, asyncHandler(async (req, res) => {
   const user = await usersRepository.findById(pool, req.params.id);
   if (!user) return res.status(404).json({ error: "User not found." });
   const { resetToken, expiresAt } = await issuePasswordResetToken(user.id, req.user.id);
@@ -9112,7 +9112,7 @@ app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manag
     message: emailSent ? `Li\xEAn k\u1EBFt \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u \u0111\xE3 \u0111\u01B0\u1EE3c g\u1EEDi t\u1EDBi email c\u1EE7a ng\u01B0\u1EDDi d\xF9ng: ${user.email}` : `Li\xEAn k\u1EBFt \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u \u0111\xE3 \u0111\u01B0\u1EE3c t\u1EA1o, nh\u01B0ng email g\u1EEDi li\xEAn k\u1EBFt ch\u01B0a th\xE0nh c\xF4ng. Vui l\xF2ng chuy\u1EC3n li\xEAn k\u1EBFt qua k\xEAnh n\u1ED9i b\u1ED9.`
   });
 }));
-app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["manager", "super_admin", "admin"]), asyncHandler(async (req, res) => {
+app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const userId = req.params.id;
   const user = await usersRepository.findById(pool, userId);
   if (!user) {
@@ -9155,7 +9155,7 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyn
   invalidateStoreCache();
   res.json({ ok: true, message: "Role updated successfully." });
 }));
-app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "super_admin", "admin"]), validateBody(schemas.setUserActive), asyncHandler(async (req, res) => {
+app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.setUserActive), asyncHandler(async (req, res) => {
   const user = await usersRepository.setActive(pool, req.params.id, req.body.isActive);
   if (!user) return res.status(404).json({ error: "User not found." });
   if (req.body.isActive === false && user.role === "student" && user.schoolEmail) {
@@ -9186,7 +9186,7 @@ app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, r
   invalidateStoreCache();
   res.status(204).send();
 }));
-app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user.role === "teacher") {
@@ -9209,7 +9209,7 @@ app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin", "
   await audit(req, "create_course_section", row.id, row.sectionCode);
   res.status(201).json(row);
 }));
-app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   const course = await coursesRepository.findById(pool, req.body.courseId);
@@ -9243,7 +9243,7 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
   await audit(req, "update_course_section", row.id, row.sectionCode);
   res.json(row);
 }));
-app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   if (req.user.role === "teacher" && existing.teacher_id !== req.user.id) {
@@ -9282,7 +9282,7 @@ app.patch("/api/course-registrations/:id/drop", requireAuth, requireRole(["stude
   invalidateStoreCache();
   res.json(registration);
 }));
-app.patch("/api/course-registrations/:id/approve", requireAuth, requireRole(["manager", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.patch("/api/course-registrations/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const client2 = await pool.connect();
   try {
     await client2.query("BEGIN");
@@ -9366,8 +9366,8 @@ var reviewTransactionHandler = asyncHandler(async (req, res) => {
   await audit(req, `finance_transaction_${req.body.status}`, req.params.id, req.body.notes || "");
   res.json(result);
 });
-app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
-app.patch("/api/payments/transactions/:id/review", requireAuth, requireRole(["manager", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
+app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
+app.patch("/api/payments/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 var paymentWebhookHandler = asyncHandler(async (req, res) => {
   const signature = req.header("X-Payment-Signature");
   if (!signature) {
@@ -9580,7 +9580,7 @@ app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (r
   if (!await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
   res.json(await sessionMaterialsRepository.listBySession(pool, session.id));
 }));
-app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin", "super_admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (!store.sessionMaterials) store.sessionMaterials = [];
@@ -9652,7 +9652,7 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
   await audit(req, "create_session_material", material.id, `${type}: ${material.title}`);
   res.status(201).json(material);
 }));
-app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const ids = req.body.materialIds || [];
@@ -9674,7 +9674,7 @@ app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["t
   invalidateStoreCache();
   res.json(materials);
 }));
-app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const mat = (store.sessionMaterials || []).find((m) => m.id === req.params.id);
@@ -9698,7 +9698,7 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "s
   await audit(req, "update_session_material", row.id, material?.title || row.title);
   res.json(material);
 }));
-app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (store.sessionMaterials) {
@@ -9815,7 +9815,7 @@ ${manifest}
   await archive.finalize();
   await audit(req, "download_session_material_bundle", session.id, `files=${fileMaterials.length};links=${links.length}`);
 }));
-app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user.role === "teacher" && course.teacherId !== req.user.id) return res.status(403).json({ error: "Permission denied." });
@@ -9845,7 +9845,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
   await audit(req, "create_attendance_session", session.id, session.courseId);
   res.status(201).json({ session, records });
 }));
-app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
+app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.params.id])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user.role === "teacher" && session.teacher_id !== req.user.id) return res.status(403).json({ error: "Permission denied." });
@@ -9854,7 +9854,7 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
   await audit(req, "update_attendance_session", req.params.id, updated.topic);
   res.json(updated);
 }));
-app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
+app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user.role === "teacher" && session.teacher_id !== req.user.id) return res.status(403).json({ error: "Permission denied." });
@@ -9882,7 +9882,7 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin
   await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
   res.json(record);
 }));
-app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.generateAttendanceLink), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.generateAttendanceLink), asyncHandler(async (req, res) => {
   const { courseId: courseId2, sectionId, topic } = req.body;
   const course = await coursesRepository.findById(pool, courseId2);
   if (!course) return res.status(404).json({ error: "Course not found." });
@@ -9993,7 +9993,7 @@ async function validateAttendanceManagerAccess(sessionId, user) {
   if (user.role === "teacher" && session.teacher_id !== user.id) return { session: null, error: "Permission denied.", status: 403 };
   return { session, error: null, status: 200 };
 }
-app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const access = await validateAttendanceManagerAccess(req.params.id, req.user);
   if (access.error) return res.status(access.status).json({ error: access.error });
   const session = access.session;
@@ -10019,7 +10019,7 @@ app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teac
   await audit(req, "open_attendance_qr", session.id, `interval=${qr.interval_seconds}s`);
   return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
 }));
-app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const access = await validateAttendanceManagerAccess(req.params.id, req.user);
   if (access.error) return res.status(access.status).json({ error: access.error });
   if (isDevMockDb) {
@@ -10033,7 +10033,7 @@ app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["te
   const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
   return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
 }));
-app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
   const access = await validateAttendanceManagerAccess(req.params.id, req.user);
   if (access.error) return res.status(access.status).json({ error: access.error });
   if (isDevMockDb) {
@@ -10277,7 +10277,7 @@ app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]
   await audit(req, "teacher_self_checkin", record.id, `Teacher: ${teacherId}, Section: ${sectionId}, Status: present`);
   res.status(201).json({ ok: true, record });
 }));
-app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const { courseId: courseId2, teacherId } = req.body;
   if (!courseId2 || !teacherId) {
     return res.status(400).json({ error: "Missing courseId or teacherId." });
@@ -10306,7 +10306,7 @@ app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin", "sup
   );
   res.json({ ok: true });
 }));
-app.post("/api/store/sync", requireAuth, requireRole(["admin", "super_admin", "manager"]), asyncHandler(async (req, res) => {
+app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     devMockStore = { ...devMockStore || getInitialStore(), ...req.body || {} };
     return res.json({ ok: true, mode: "dev-mock-synchronized" });
