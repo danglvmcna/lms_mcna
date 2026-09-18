@@ -1083,13 +1083,6 @@ export default function CourseBuilder(props: ComponentProps) {
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={handleOpenCreateSession}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Thêm buổi học
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleOpenEditSession(currentFolderSession)}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
