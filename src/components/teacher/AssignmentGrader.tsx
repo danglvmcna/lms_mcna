@@ -3,63 +3,10 @@ import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings
 import ModalPortal from "../ModalPortal";
 import { api } from "../../api";
 import { PowerPointLogo, WordLogo, ExcelLogo, PdfLogo } from "../icons/BrandLogos";
+import { parseSubmissionFiles, cleanSubmissionContent, renderSubmissionFileIcon, SubmissionFileInfo } from "../../submissionFiles";
 
 interface ComponentProps {
   [key: string]: any;
-}
-
-function getSubmissionFileDetails(sub: any) {
-  let url = sub?.attachmentUrl;
-  let filename = "";
-  if (sub?.content) {
-    const match = sub.content.match(/\[(?:Attachment|Tệp đính kèm):\s*([^\]]+)\]/i);
-    if (match) {
-      const val = match[1].trim();
-      if (val.includes("|")) {
-        const parts = val.split("|").map((p: string) => p.trim());
-        filename = parts[0];
-        const urlPart = parts.find((p: string) => p.startsWith("http://") || p.startsWith("https://") || p.startsWith("/"));
-        if (urlPart && !url) url = urlPart;
-      } else if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/")) {
-        if (!url) url = val;
-      } else {
-        filename = val;
-      }
-    }
-  }
-
-  if (url && !filename) {
-    const raw = url.split("/").pop() || "file_bai_lam";
-    filename = raw.replace(/^\d+-\d+-/, "");
-  }
-
-  const ext = filename ? "." + filename.split(".").pop()?.toLowerCase() : (url ? "." + url.split(".").pop()?.toLowerCase() : "");
-  const isWord = [".doc", ".docx"].includes(ext);
-  const isExcel = [".xls", ".xlsx", ".csv"].includes(ext);
-  const isPowerPoint = [".ppt", ".pptx"].includes(ext);
-  const isPdf = ext === ".pdf";
-  const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"].includes(ext);
-  const isZip = [".zip", ".rar", ".7z"].includes(ext);
-
-  return {
-    url,
-    filename: filename || (url ? "Tệp bài làm" : ""),
-    ext,
-    isWord,
-    isExcel,
-    isPowerPoint,
-    isPdf,
-    isImage,
-    isZip
-  };
-}
-
-function renderFileIcon(details: ReturnType<typeof getSubmissionFileDetails>, size = "h-4 w-4") {
-  if (details.isWord) return <WordLogo className={size} />;
-  if (details.isExcel) return <ExcelLogo className={size} />;
-  if (details.isPowerPoint) return <PowerPointLogo className={size} />;
-  if (details.isPdf) return <PdfLogo className={size} />;
-  return <FileText className={`${size} text-indigo-600`} />;
 }
 
 export default function AssignmentGrader(props: ComponentProps) {
@@ -376,35 +323,83 @@ export default function AssignmentGrader(props: ComponentProps) {
                                 <td className="mcna-td text-slate-500 font-mono text-[11px]">{new Date(sub.submittedAt).toLocaleDateString()}</td>
                                 <td className="mcna-td">
                                   {(() => {
-                                    const fileInfo = getSubmissionFileDetails(sub);
-                                    if (!fileInfo.url) {
+                                    const files = parseSubmissionFiles(sub.content, sub.attachmentUrl);
+                                    if (files.length === 0) {
                                       return <span className="text-[11px] text-slate-400 italic">Văn bản</span>;
                                     }
-                                    return (
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="flex items-center gap-1.5 max-w-[150px]" title={fileInfo.filename}>
-                                          {renderFileIcon(fileInfo, "h-4 w-4 shrink-0")}
-                                          <span className="text-xs font-medium text-slate-800 truncate">{fileInfo.filename}</span>
+                                    if (files.length === 1) {
+                                      const fileInfo = files[0];
+                                      return (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="flex items-center gap-1.5 max-w-[150px]" title={fileInfo.filename}>
+                                            {renderSubmissionFileIcon(fileInfo, "h-4 w-4 shrink-0")}
+                                            <span className="text-xs font-medium text-slate-800 truncate">{fileInfo.filename}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                                              className="p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer"
+                                              title="Xem file trực tiếp"
+                                            >
+                                              <Eye className="h-3.5 w-3.5" />
+                                            </button>
+                                            <a
+                                              href={fileInfo.url}
+                                              download={fileInfo.filename}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                                              title="Tải file về máy"
+                                            >
+                                              <Download className="h-3.5 w-3.5" />
+                                            </a>
+                                          </div>
                                         </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                          <button
-                                            type="button"
-                                            onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
-                                            className="p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer"
-                                            title="Xem file trực tiếp"
-                                          >
-                                            <Eye className="h-3.5 w-3.5" />
-                                          </button>
-                                          <a
-                                            href={fileInfo.url}
-                                            download
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
-                                            title="Tải file về máy"
-                                          >
-                                            <Download className="h-3.5 w-3.5" />
-                                          </a>
+                                      );
+                                    }
+                                    return (
+                                      <div className="space-y-1.5 max-w-[220px]">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[10px] font-mono">
+                                            {files.length} tệp
+                                          </span>
+                                          <div className="flex items-center gap-1">
+                                            {files.slice(0, 3).map((f, i) => (
+                                              <span key={i} title={f.filename}>{renderSubmissionFileIcon(f, "h-3.5 w-3.5")}</span>
+                                            ))}
+                                            {files.length > 3 && <span className="text-[10px] text-slate-400 font-bold">+{files.length - 3}</span>}
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          {files.map((f, idx) => (
+                                            <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition">
+                                              <div className="flex items-center gap-1 min-w-0">
+                                                {renderSubmissionFileIcon(f, "h-3.5 w-3.5 shrink-0")}
+                                                <span className="truncate max-w-[110px] font-medium text-slate-700" title={f.filename}>{f.filename}</span>
+                                              </div>
+                                              <div className="flex items-center gap-0.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setPreviewAttachmentUrl(f.url)}
+                                                  className="p-1 text-indigo-600 hover:text-indigo-800 rounded transition cursor-pointer"
+                                                  title="Xem trực tiếp"
+                                                >
+                                                  <Eye className="h-3 w-3" />
+                                                </button>
+                                                <a
+                                                  href={f.url}
+                                                  download={f.filename}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="p-1 text-slate-500 hover:text-slate-800 rounded transition cursor-pointer"
+                                                  title="Tải về"
+                                                >
+                                                  <Download className="h-3 w-3" />
+                                                </a>
+                                              </div>
+                                            </div>
+                                          ))}
                                         </div>
                                       </div>
                                     );
@@ -485,43 +480,54 @@ export default function AssignmentGrader(props: ComponentProps) {
                   <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1">
                     <span className="text-[10px] text-slate-500 block uppercase font-semibold">Nội dung bài làm ({stud?.name})</span>
                     <p className="text-slate-800 leading-relaxed font-mono whitespace-pre-wrap max-h-32 overflow-y-auto pr-1 text-xs">
-                      {sub?.content ? sub.content.replace(/\s*\[Attachment:[^\]]+\]/g, "").replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "") : ""}
+                      {sub?.content ? cleanSubmissionContent(sub.content) : ""}
                     </p>
 
                     {(() => {
-                      const fileInfo = getSubmissionFileDetails(sub);
-                      if (!fileInfo.url) return null;
+                      const files = parseSubmissionFiles(sub?.content, sub?.attachmentUrl);
+                      if (files.length === 0) return null;
 
                       return (
-                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            {renderFileIcon(fileInfo, "h-5 w-5 shrink-0")}
-                            <div className="min-w-0">
-                              <span className="text-[10px] text-slate-500 font-semibold uppercase block">Tệp đính kèm bài làm:</span>
-                              <span className="text-xs font-bold text-slate-800 truncate block max-w-xs" title={fileInfo.filename}>
-                                {fileInfo.filename}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              Xem trực tiếp
-                            </button>
-                            <a
-                              href={fileInfo.url}
-                              download
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans decoration-none"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              Tải về
-                            </a>
+                        <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+                          <span className="text-[10px] text-slate-500 font-semibold uppercase block">
+                            Tệp đính kèm bài làm ({files.length} tệp):
+                          </span>
+                          <div className="space-y-2">
+                            {files.map((fileInfo, fIdx) => (
+                              <div key={fIdx} className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {renderSubmissionFileIcon(fileInfo, "h-5 w-5 shrink-0")}
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-slate-800 truncate block max-w-sm" title={fileInfo.filename}>
+                                      {fileInfo.filename}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono uppercase">
+                                      {fileInfo.ext.replace(".", "").toUpperCase() || "TỆP ĐÍNH KÈM"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Xem trực tiếp
+                                  </button>
+                                  <a
+                                    href={fileInfo.url}
+                                    download={fileInfo.filename}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans decoration-none"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Tải về
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       );

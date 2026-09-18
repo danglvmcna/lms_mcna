@@ -2970,6 +2970,28 @@ app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin",
   res.json({ ok: true });
 }));
 app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), validateBody(schemas.submitAssignment), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const assignment = store.assignments.find(a => a.id === req.body.assignmentId);
+    if (!assignment) return res.status(404).json({ error: "Assignment not found." });
+    let sub = store.submissions.find(s => s.assignmentId === req.body.assignmentId && s.studentId === req.user!.id);
+    if (sub) {
+      sub.content = req.body.content;
+      sub.submittedAt = new Date().toISOString();
+      if (req.body.attachmentUrl) sub.attachmentUrl = req.body.attachmentUrl;
+    } else {
+      sub = {
+        id: "sub_" + Date.now(),
+        assignmentId: req.body.assignmentId,
+        studentId: req.user!.id,
+        content: req.body.content,
+        submittedAt: new Date().toISOString(),
+        attachmentUrl: req.body.attachmentUrl
+      };
+      store.submissions.unshift(sub);
+    }
+    return res.status(201).json(sub);
+  }
   const result = await assignmentsRepository.submit(pool, req.user!.id, req.body.assignmentId, req.body.content, req.body.attachmentUrl);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
@@ -2978,6 +3000,15 @@ app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), valid
 }));
 
 app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const store = devMockStore || getInitialStore();
+    const sub = store.submissions.find(s => s.id === req.body.submissionId);
+    if (!sub) return res.status(404).json({ error: "Submission not found." });
+    sub.score = req.body.score;
+    sub.feedback = req.body.feedback;
+    sub.gradedAt = new Date().toISOString();
+    return res.json(sub);
+  }
   const submission = await assignmentsRepository.findSubmissionForGrading(pool, req.body.submissionId);
   if (!submission) return res.status(404).json({ error: "Submission not found." });
   if (req.user!.role === "teacher" && submission.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });

@@ -1,7 +1,9 @@
 import React, { useRef, useState } from "react";
-import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Loader2 } from "lucide-react";
+import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert, Loader2, UploadCloud, Eye, Download } from "lucide-react";
 import { api } from "../../api";
 import ModalPortal from "../ModalPortal";
+import { parseSubmissionFiles, cleanSubmissionContent, formatBytes, renderSubmissionFileIcon, buildSubmissionFileInfo, SubmissionFileInfo } from "../../submissionFiles";
+import { PowerPointLogo, WordLogo, ExcelLogo, PdfLogo } from "../icons/BrandLogos";
 
 interface ComponentProps {
   [key: string]: any;
@@ -38,11 +40,7 @@ async function compressImageIfApplicable(file: File): Promise<File> {
         canvas.toBlob(
           (blob) => {
             if (blob && blob.size < file.size) {
-              const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
-                type: "image/jpeg",
-                lastModified: Date.now()
-              });
-              resolve(compressedFile);
+              resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
             } else {
               resolve(file);
             }
@@ -57,32 +55,6 @@ async function compressImageIfApplicable(file: File): Promise<File> {
     reader.onerror = () => resolve(file);
     reader.readAsDataURL(file);
   });
-}
-
-function getAttachmentInfo(attachmentUrl?: string, content?: string) {
-  let url = attachmentUrl;
-  let name = "";
-  if (content) {
-    const match = content.match(/\[(?:Attachment|Tệp đính kèm):\s*([^\]]+)\]/i);
-    if (match) {
-      const val = match[1].trim();
-      if (val.includes("|")) {
-        const parts = val.split("|").map(p => p.trim());
-        name = parts[0];
-        const urlPart = parts.find(p => p.startsWith("http://") || p.startsWith("https://") || p.startsWith("/"));
-        if (urlPart && !url) url = urlPart;
-      } else if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/")) {
-        if (!url) url = val;
-      } else {
-        name = val;
-      }
-    }
-  }
-  if (!name && url) {
-    const raw = url.split("/").pop() || "file_bai_lam";
-    name = raw.replace(/^\d+-\d+-/, "");
-  }
-  return { url, name: name || "Tệp đính kèm" };
 }
 
 export default function AssignmentSubmit(props: ComponentProps) {
@@ -148,25 +120,36 @@ export default function AssignmentSubmit(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
-  // Local file state for the submission modal
-  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
-  const [existingAttachment, setExistingAttachment] = useState<string | null>(null);
+  // Local multi-file state for the submission modal
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [existingFiles, setExistingFiles] = useState<SubmissionFileInfo[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string | null>(null);
   const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatusText, setUploadStatusText] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSubmissionFile(e.target.files?.[0] || null);
+  const handleFilesAdded = (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const removeExistingFile = (index: number) => {
+    setExistingFiles(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const handleSubmitWithFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingAssignment) return;
     const hasText = submissionCodeText.trim().length > 0;
-    const selectedFile = submissionFile;
-    const hasFile = selectedFile !== null;
-    if (!hasText && !hasFile && !existingAttachment) {
+    const hasFiles = selectedFiles.length > 0 || existingFiles.length > 0;
+    if (!hasText && !hasFiles) {
       triggerToast("Vui lòng nhập nội dung bài làm hoặc đính kèm tệp.");
       return;
     }
@@ -175,33 +158,39 @@ export default function AssignmentSubmit(props: ComponentProps) {
     setUploadProgress(null);
     setUploadStatusText("Đang xử lý bài nộp...");
     try {
-      let attachmentUrl = existingAttachment || undefined;
-      const selectedFileName = selectedFile?.name;
-      if (selectedFile) {
-        setUploadStatusText("Đang chuẩn bị và tối ưu tệp...");
-        const fileToUpload = await compressImageIfApplicable(selectedFile);
+      const uploadedFiles: { name: string; url: string }[] = [];
+      const totalFilesToUpload = selectedFiles.length;
 
-        setUploadStatusText("Đang tải tệp lên máy chủ...");
-        setUploadProgress(0);
+      for (let i = 0; i < totalFilesToUpload; i++) {
+        const file = selectedFiles[i];
+        setUploadStatusText(`Đang tối ưu tệp (${i + 1}/${totalFilesToUpload}): ${file.name}...`);
+        const fileToUpload = await compressImageIfApplicable(file);
+
+        setUploadStatusText(`Đang tải lên (${i + 1}/${totalFilesToUpload}): ${file.name}...`);
         const uploaded = await api.uploadFile(fileToUpload, (pct) => {
-          setUploadProgress(pct);
-          setUploadStatusText(`Đang tải tệp lên: ${pct}%`);
+          const overall = Math.round(((i * 100) + pct) / totalFilesToUpload);
+          setUploadProgress(overall);
+          setUploadStatusText(`Đang tải lên (${i + 1}/${totalFilesToUpload}): ${file.name} (${pct}%)`);
         });
-        attachmentUrl = uploaded.url;
+        uploadedFiles.push({ name: file.name, url: uploaded.url });
       }
 
       setUploadStatusText("Đang lưu bài nộp...");
-      let finalContent = submissionCodeText.trim().replace(/\s*\[(?:Attachment|Tệp đính kèm):[^\]]+\]/g, "").trim();
-      if (selectedFileName && attachmentUrl) {
-        finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${selectedFileName} | ${attachmentUrl}]`;
-      } else if (attachmentUrl) {
-        finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${attachmentUrl}]`;
+      const allFinalFiles = [
+        ...existingFiles.map(f => ({ name: f.filename, url: f.url })),
+        ...uploadedFiles
+      ];
+
+      let finalContent = cleanSubmissionContent(submissionCodeText);
+      for (const f of allFinalFiles) {
+        finalContent += (finalContent ? "\n\n" : "") + `[Attachment: ${f.name} | ${f.url}]`;
       }
 
-      const ok = await handleSendAssignmentSubmit(e, finalContent, attachmentUrl);
+      const primaryAttachmentUrl = allFinalFiles.length > 0 ? allFinalFiles[0].url : undefined;
+      const ok = await handleSendAssignmentSubmit(e, finalContent, primaryAttachmentUrl);
       if (ok !== false) {
-        setSubmissionFile(null);
-        setExistingAttachment(null);
+        setSelectedFiles([]);
+        setExistingFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     } catch (err: any) {
@@ -214,9 +203,6 @@ export default function AssignmentSubmit(props: ComponentProps) {
     }
   };
 
-  const cleanSubmissionContent = (content = "") =>
-    content.replace(/\s*\[Attachment:[^\]]+\]/g, "").replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "").trim();
-
   const openAssignmentSubmission = (assignment: any, submission?: any) => {
     const isDeadlineExpired = new Date(assignment.deadline).getTime() < Date.now();
     if (isDeadlineExpired && !submission) {
@@ -225,8 +211,8 @@ export default function AssignmentSubmit(props: ComponentProps) {
     }
     setSubmittingAssignmentId(assignment.id);
     setSubmissionCodeText(cleanSubmissionContent(submission?.content || ""));
-    setExistingAttachment(submission?.attachmentUrl || null);
-    setSubmissionFile(null);
+    setExistingFiles(parseSubmissionFiles(submission?.content, submission?.attachmentUrl));
+    setSelectedFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -442,21 +428,43 @@ export default function AssignmentSubmit(props: ComponentProps) {
                       )}
 
                       {(() => {
-                        const att = getAttachmentInfo(submission.attachmentUrl, submission.content);
-                        if (!att.url) return null;
+                        const files = parseSubmissionFiles(submission.content, submission.attachmentUrl);
+                        if (files.length === 0) return null;
                         return (
-                          <div className="flex items-center gap-2">
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition"
-                            >
-                              <FileText className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate max-w-xs">{att.name}</span>
-                              <span className="text-[10px] text-indigo-500 font-normal">(Xem / Tải về)</span>
-                            </a>
+                          <div className="space-y-1.5 pt-1">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase block">
+                              Tệp đính kèm ({files.length} tệp):
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {files.map((file, fIdx) => (
+                                <div key={fIdx} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium transition shadow-2xs">
+                                  {renderSubmissionFileIcon(file, "h-4 w-4 shrink-0")}
+                                  <span className="truncate max-w-[180px] font-semibold text-slate-800" title={file.filename}>
+                                    {file.filename}
+                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0 ml-1 border-l border-slate-200 pl-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewAttachmentUrl(file.url)}
+                                      className="p-1 rounded hover:bg-indigo-50 text-indigo-600 transition cursor-pointer"
+                                      title="Xem tệp trực tiếp"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </button>
+                                    <a
+                                      href={file.url}
+                                      download={file.filename}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1 rounded hover:bg-slate-200 text-slate-600 transition cursor-pointer"
+                                      title="Tải tệp về máy"
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                    </a>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         );
                       })()}
@@ -474,13 +482,17 @@ export default function AssignmentSubmit(props: ComponentProps) {
           </div>
         )}
 
-      {/* ASSIGNMENT ATTACHMENT MODAL SUBMISSION */}
+      {/* ASSIGNMENT MULTI-FILE MODAL SUBMISSION */}
       {submittingAssignmentId && (
         <ModalPortal>
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl p-6.5 w-full max-w-lg shadow-2xl relative mb-10 text-slate-900">
             <button
-              onClick={() => setSubmittingAssignmentId(null)}
+              onClick={() => {
+                setSubmittingAssignmentId(null);
+                setSelectedFiles([]);
+                setExistingFiles([]);
+              }}
               disabled={isSubmittingAssignment}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
             >
@@ -492,7 +504,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
             </h3>
 
             <p className="text-xs text-slate-500 leading-relaxed mb-4 font-sans">
-              Vui lòng soạn thảo hoặc dán mã nguồn, câu trả lời, nhận xét phân tích hoặc liên kết sản phẩm của bạn vào khung bên dưới. Sau khi hoàn thành, giảng viên sẽ chấm điểm và để lại nhận xét góp ý.
+              Soạn thảo câu trả lời hoặc đính kèm nhiều tệp bài làm (Word, Excel, PowerPoint, PDF, ảnh, ZIP...). Giảng viên sẽ chấm điểm và phản hồi nhận xét trực tiếp.
             </p>
 
             <form onSubmit={handleSubmitWithFileUpload} className="space-y-4">
@@ -502,43 +514,114 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   placeholder="Nhập mã nguồn HTML, tóm tắt giải pháp hay nội dung trả lời câu hỏi bài tập tự luận..."
                   value={submissionCodeText}
                   onChange={(e) => setSubmissionCodeText(e.target.value)}
-                  className="mcna-textarea font-mono h-36 max-h-48 mt-2"
+                  className="mcna-textarea font-mono h-32 max-h-44 mt-1.5"
                 />
               </div>
 
-              {/* File attachment */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Hoặc đính kèm tệp</label>
-                <label className={`mt-1.5 flex items-center gap-3 w-full px-4 py-3 border border-dashed rounded-xl cursor-pointer transition text-xs ${submissionFile ? "border-indigo-400 bg-indigo-50 text-indigo-700" : existingAttachment ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>
-                  <FileText className="h-4 w-4 shrink-0" />
-                  <span className="truncate">
-                    {submissionFile ? submissionFile.name : existingAttachment ? `Giữ tệp cũ: ${existingAttachment}` : "Chọn tệp đính kèm (PDF, DOCX, ZIP, ảnh...)"}
-                  </span>
+              {/* Multi-file attachment dropzone & list */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">Đính kèm các tệp bài làm</label>
+                  {(selectedFiles.length > 0 || existingFiles.length > 0) && (
+                    <span className="text-[11px] font-semibold text-indigo-600 font-mono">
+                      Tổng cộng: {existingFiles.length + selectedFiles.length} tệp
+                    </span>
+                  )}
+                </div>
+
+                {/* Dropzone */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    handleFilesAdded(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full p-4 border-2 border-dashed rounded-2xl cursor-pointer transition text-center flex flex-col items-center justify-center gap-1.5 ${
+                    isDragging
+                      ? "border-indigo-500 bg-indigo-50/80 text-indigo-700 scale-[0.99]"
+                      : "border-slate-300 bg-slate-50/70 hover:bg-slate-50 text-slate-600 hover:border-indigo-400"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-indigo-600">
+                    <UploadCloud className="h-5 w-5" />
+                  </div>
+                  <div className="text-xs">
+                    <span className="font-bold text-indigo-600 hover:underline">Nhấn để chọn tệp</span> hoặc kéo thả nhiều tệp vào đây
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Hỗ trợ: PDF, Word (DOCX), Excel (XLSX), PowerPoint (PPTX), ZIP, RAR, Ảnh... (cho phép chọn nhiều tệp)
+                  </p>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,.doc,.docx,.zip,.rar,.png,.jpg,.jpeg,.txt,.py,.js,.html,.css,.java,.cpp,.c"
-                    onChange={handleFileChange}
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.png,.jpg,.jpeg,.txt,.py,.js,.html,.css,.java,.cpp,.c"
+                    onChange={(e) => {
+                      handleFilesAdded(e.target.files);
+                      if (e.target) e.target.value = "";
+                    }}
                     className="hidden"
                   />
-                </label>
-                {submissionFile ? (
-                  <button
-                    type="button"
-                    onClick={() => { setSubmissionFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                    className="text-[10px] text-red-500 hover:text-red-700 flex items-center gap-1 mt-1 cursor-pointer"
-                  >
-                    <X className="h-3 w-3" /> Xóa tệp đính kèm mới
-                  </button>
-                ) : existingAttachment ? (
-                  <button
-                    type="button"
-                    onClick={() => setExistingAttachment(null)}
-                    className="text-[10px] text-red-500 hover:text-red-700 flex items-center gap-1 mt-1 cursor-pointer"
-                  >
-                    <X className="h-3 w-3" /> Gỡ bỏ tệp cũ
-                  </button>
-                ) : null}
+                </div>
+
+                {/* Existing & Selected Files list */}
+                {(existingFiles.length > 0 || selectedFiles.length > 0) && (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {/* Existing files */}
+                    {existingFiles.map((file, idx) => (
+                      <div key={`exist-${idx}`} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs transition">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {renderSubmissionFileIcon(file, "h-4 w-4 shrink-0")}
+                          <div className="min-w-0">
+                            <span className="font-semibold text-slate-800 truncate block max-w-xs" title={file.filename}>
+                              {file.filename}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 font-medium">Tệp đã nộp trước đó</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeExistingFile(idx)}
+                          className="p-1 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                          title="Gỡ bỏ tệp này"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* New files */}
+                    {selectedFiles.map((file, idx) => {
+                      const fileInfo = buildSubmissionFileInfo("", file.name);
+                      return (
+                        <div key={`new-${idx}`} className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-50/50 border border-indigo-200 text-xs transition">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {renderSubmissionFileIcon(fileInfo, "h-4 w-4 shrink-0")}
+                            <div className="min-w-0">
+                              <span className="font-semibold text-slate-800 truncate block max-w-xs" title={file.name}>
+                                {file.name}
+                              </span>
+                              <span className="text-[10px] text-indigo-600 font-mono">
+                                Mới • {formatBytes(file.size)}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedFile(idx)}
+                            className="p-1 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                            title="Xóa tệp này"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Upload progress & feedback */}
@@ -547,10 +630,10 @@ export default function AssignmentSubmit(props: ComponentProps) {
                   <div className="flex items-center justify-between text-indigo-900 font-medium">
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600 shrink-0" />
-                      <span>{uploadStatusText || "Đang xử lý bài làm..."}</span>
+                      <span className="truncate max-w-xs">{uploadStatusText || "Đang xử lý bài làm..."}</span>
                     </span>
                     {typeof uploadProgress === "number" && (
-                      <span className="font-mono font-bold text-indigo-700">{uploadProgress}%</span>
+                      <span className="font-mono font-bold text-indigo-700 shrink-0">{uploadProgress}%</span>
                     )}
                   </div>
                   {typeof uploadProgress === "number" && (
@@ -567,7 +650,11 @@ export default function AssignmentSubmit(props: ComponentProps) {
               <div className="pt-2 flex justify-end gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => { setSubmittingAssignmentId(null); setSubmissionFile(null); }}
+                  onClick={() => {
+                    setSubmittingAssignmentId(null);
+                    setSelectedFiles([]);
+                    setExistingFiles([]);
+                  }}
                   disabled={isSubmittingAssignment}
                   className="mcna-btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -593,6 +680,115 @@ export default function AssignmentSubmit(props: ComponentProps) {
         </div>
         </ModalPortal>
       )}
+
+      {/* STUDENT PREVIEW FILE ATTACHMENT MODAL */}
+      {previewAttachmentUrl && (() => {
+        const rawFilename = previewAttachmentUrl.split("/").pop() || "assignment_file";
+        const cleanFilename = rawFilename.replace(/^\d+-\d+-/, "");
+        const ext = "." + (cleanFilename.split(".").pop() || "").toLowerCase();
+        const isWord = [".doc", ".docx"].includes(ext);
+        const isExcel = [".xls", ".xlsx", ".csv"].includes(ext);
+        const isPowerPoint = [".ppt", ".pptx"].includes(ext);
+
+        return (
+          <ModalPortal>
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+              <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[86vh] shadow-2xl relative overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 bg-white gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isWord ? (
+                      <WordLogo className="h-4 w-4 shrink-0" />
+                    ) : isExcel ? (
+                      <ExcelLogo className="h-4 w-4 shrink-0" />
+                    ) : isPowerPoint ? (
+                      <PowerPointLogo className="h-4 w-4 shrink-0" />
+                    ) : ext === ".pdf" ? (
+                      <PdfLogo className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                    )}
+                    <h3 className="text-sm font-bold text-slate-900 truncate" title={cleanFilename}>
+                      {cleanFilename}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={previewAttachmentUrl}
+                      download={cleanFilename}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition flex items-center gap-1.5 shadow-xs decoration-none cursor-pointer"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Tải về máy
+                    </a>
+                    <a
+                      href={previewAttachmentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-lg border border-slate-200 transition"
+                    >
+                      Mở tab mới
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAttachmentUrl(null)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 bg-slate-900">
+                  {/\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(previewAttachmentUrl) ? (
+                    <div className="h-full w-full overflow-auto flex items-center justify-center p-4 bg-slate-900">
+                      <img src={previewAttachmentUrl} alt="File bài làm" className="max-h-full max-w-full object-contain" />
+                    </div>
+                  ) : /\.(pdf|txt|html|htm)(\?|#|$)/i.test(previewAttachmentUrl) ? (
+                    <iframe
+                      title="File bài làm"
+                      src={previewAttachmentUrl}
+                      className="h-full w-full border-0 bg-white"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center text-slate-900 bg-white space-y-5">
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
+                        {isWord ? (
+                          <WordLogo className="h-16 w-16" />
+                        ) : isExcel ? (
+                          <ExcelLogo className="h-16 w-16" />
+                        ) : isPowerPoint ? (
+                          <PowerPointLogo className="h-16 w-16" />
+                        ) : (
+                          <FileText className="h-16 w-16 text-indigo-600" />
+                        )}
+                      </div>
+                      <div className="space-y-1.5 max-w-md">
+                        <div className="flex justify-center">
+                          {isWord && <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Word (.docx)</span>}
+                          {isExcel && <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Excel (.xlsx)</span>}
+                          {isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft PowerPoint (.pptx)</span>}
+                          {!isWord && !isExcel && !isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold font-mono uppercase tracking-wide">{ext.toUpperCase() || "TỆP ĐÍNH KÈM"}</span>}
+                        </div>
+                        <h4 className="text-base font-bold text-slate-900 truncate px-4" title={cleanFilename}>{cleanFilename}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                          Tệp bài làm này đã được lưu trữ an toàn trên hệ thống. Bạn có thể tải tệp về thiết bị để xem chi tiết hoặc mở trong ứng dụng tương ứng.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={previewAttachmentUrl}
+                          download={cleanFilename}
+                          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer font-sans decoration-none"
+                        >
+                          <Download className="h-4 w-4" /> Tải file bài làm xuống
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </ModalPortal>
+        );
+      })()}
 
       {/* Hướng dẫn chuyển khoản học phí Modal */}
     </>
