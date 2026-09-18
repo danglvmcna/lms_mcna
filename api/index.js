@@ -1,17 +1,19 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
+// server.ts
+import express from "express";
+import path5 from "path";
+import multer from "multer";
+import { ZipArchive } from "archiver";
+import fs5 from "fs";
+import os3 from "os";
+import crypto4 from "crypto";
+import dotenv2 from "dotenv";
 
 // src/utils.ts
 function generateId(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
 }
+var MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024 * 1024;
+var YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 function extractYoutubeVideoId(input) {
   const value = String(input || "").trim();
   if (YOUTUBE_VIDEO_ID.test(value)) return value;
@@ -35,14 +37,7 @@ function extractYoutubeVideoId(input) {
   }
   return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
 }
-var MAX_UPLOAD_FILE_BYTES, YOUTUBE_VIDEO_ID, youtubeWatchUrl;
-var init_utils = __esm({
-  "src/utils.ts"() {
-    MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024 * 1024;
-    YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-    youtubeWatchUrl = (videoId) => `https://www.youtube.com/watch?v=${videoId}`;
-  }
-});
+var youtubeWatchUrl = (videoId) => `https://www.youtube.com/watch?v=${videoId}`;
 
 // src/authHash.ts
 function sha256(ascii) {
@@ -189,12 +184,13 @@ function verifyPassword(password, passwordHash, salt) {
   }
   return sha256(password) === passwordHash;
 }
-var init_authHash = __esm({
-  "src/authHash.ts"() {
-  }
-});
 
 // src/store.ts
+var STORAGE_KEY = "e16_lms_data";
+var credential = (password, salt) => hashPassword(password, salt);
+var ADMIN_CREDENTIAL = credential("admine16", "seed_admin");
+var TEACHER_CREDENTIAL = credential("teachere16", "seed_teacher");
+var STUDENT_CREDENTIAL = credential("studente16", "seed_student");
 function normalizeLegacyRoles(store) {
   store.users = store.users.map((user) => {
     const legacyRole = user.role;
@@ -628,151 +624,274 @@ function getInitialStore() {
     teacherAttendance: []
   };
 }
-var STORAGE_KEY, credential, ADMIN_CREDENTIAL, TEACHER_CREDENTIAL, STUDENT_CREDENTIAL, AppStore;
-var init_store = __esm({
-  "src/store.ts"() {
-    init_utils();
-    init_authHash();
-    STORAGE_KEY = "e16_lms_data";
-    credential = (password, salt) => hashPassword(password, salt);
-    ADMIN_CREDENTIAL = credential("admine16", "seed_admin");
-    TEACHER_CREDENTIAL = credential("teachere16", "seed_teacher");
-    STUDENT_CREDENTIAL = credential("studente16", "seed_student");
-    AppStore = class {
-      static {
-        this.storeInstance = null;
-      }
-      static {
-        this.syncPromise = null;
-      }
-      static hydrate(store) {
-        normalizeLegacyRoles(store);
-        this.storeInstance = store;
-        localStorage.removeItem(STORAGE_KEY);
-      }
-      static get() {
-        if (!this.storeInstance) {
-          localStorage.removeItem(STORAGE_KEY);
-          const raw = null;
-          if (raw) {
-            try {
-              this.storeInstance = JSON.parse(raw);
-              if (!this.storeInstance.transactions) {
-                this.storeInstance.transactions = [];
-              }
-              const initial = getInitialStore();
-              if (!this.storeInstance.users || this.storeInstance.users.length === 0) {
-                this.storeInstance.users = initial.users.map((user) => ({
-                  ...user,
-                  passwordHash: "",
-                  passwordSalt: void 0
-                }));
-              }
-              normalizeLegacyRoles(this.storeInstance);
-              if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
-              if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
-              if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
-              if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
-              if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
-              if (!this.storeInstance.teacherAttendance) this.storeInstance.teacherAttendance = initial.teacherAttendance || [];
-              const rolesToBackfill = ["admin"];
-              const hasAllRoles = rolesToBackfill.every((r) => this.storeInstance.users.some((u) => u.role === r));
-              if (!hasAllRoles) {
-                initial.users.forEach((u) => {
-                  if (!this.storeInstance.users.some((ex) => ex.email === u.email)) {
-                    this.storeInstance.users.push(u);
-                  }
-                });
-                this.storeInstance.courses.forEach((c) => {
-                  const matchedTemplate = initial.courses.find((ic) => ic.id === c.id);
-                  if (matchedTemplate) {
-                    if (c.price === void 0) c.price = matchedTemplate.price;
-                    if (!c.level) c.level = matchedTemplate.level;
-                    if (!c.tags) c.tags = matchedTemplate.tags;
-                  }
-                });
-                if (!this.storeInstance.transactions.length) {
-                  this.storeInstance.transactions = initial.transactions;
-                }
-              }
-            } catch (e) {
-              console.error("Failed to parse datastore. Seeding clean database.");
-              this.storeInstance = getInitialStore();
-              normalizeLegacyRoles(this.storeInstance);
-            }
-          } else {
-            this.storeInstance = getInitialStore();
-            normalizeLegacyRoles(this.storeInstance);
+var AppStore = class {
+  static {
+    this.storeInstance = null;
+  }
+  static {
+    this.syncPromise = null;
+  }
+  static hydrate(store) {
+    normalizeLegacyRoles(store);
+    this.storeInstance = store;
+    localStorage.removeItem(STORAGE_KEY);
+  }
+  static get() {
+    if (!this.storeInstance) {
+      localStorage.removeItem(STORAGE_KEY);
+      const raw = null;
+      if (raw) {
+        try {
+          this.storeInstance = JSON.parse(raw);
+          if (!this.storeInstance.transactions) {
+            this.storeInstance.transactions = [];
           }
-        }
-        return this.storeInstance;
-      }
-      static save(store, skipSync = false) {
-        this.storeInstance = store;
-        localStorage.removeItem(STORAGE_KEY);
-        if (skipSync) return Promise.resolve();
-        if (typeof sessionStorage !== "undefined") {
-          const role = sessionStorage.getItem("e16_lms_role");
-          if (role && !["manager", "admin"].includes(role)) {
-            return Promise.resolve();
+          const initial = getInitialStore();
+          if (!this.storeInstance.users || this.storeInstance.users.length === 0) {
+            this.storeInstance.users = initial.users.map((user) => ({
+              ...user,
+              passwordHash: "",
+              passwordSalt: void 0
+            }));
           }
-        }
-        if (typeof fetch !== "undefined") {
-          const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
-          this.syncPromise = fetch("/api/store/sync", {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-              ...csrfToken ? { "X-CSRF-Token": csrfToken } : {}
-            },
-            body: JSON.stringify(store)
-          }).then(async (res) => {
-            this.syncPromise = null;
-            if (!res.ok) {
-              const errData = await res.json().catch(() => ({}));
-              throw new Error(errData.error || `\u0110\u1ED3ng b\u1ED9 th\u1EA5t b\u1EA1i: status ${res.status}`);
+          normalizeLegacyRoles(this.storeInstance);
+          if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
+          if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
+          if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
+          if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
+          if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
+          if (!this.storeInstance.teacherAttendance) this.storeInstance.teacherAttendance = initial.teacherAttendance || [];
+          const rolesToBackfill = ["admin"];
+          const hasAllRoles = rolesToBackfill.every((r) => this.storeInstance.users.some((u) => u.role === r));
+          if (!hasAllRoles) {
+            initial.users.forEach((u) => {
+              if (!this.storeInstance.users.some((ex) => ex.email === u.email)) {
+                this.storeInstance.users.push(u);
+              }
+            });
+            this.storeInstance.courses.forEach((c) => {
+              const matchedTemplate = initial.courses.find((ic) => ic.id === c.id);
+              if (matchedTemplate) {
+                if (c.price === void 0) c.price = matchedTemplate.price;
+                if (!c.level) c.level = matchedTemplate.level;
+                if (!c.tags) c.tags = matchedTemplate.tags;
+              }
+            });
+            if (!this.storeInstance.transactions.length) {
+              this.storeInstance.transactions = initial.transactions;
             }
-            return res.json();
-          }).catch((err) => {
-            this.syncPromise = null;
-            throw err;
-          });
-          return this.syncPromise;
+          }
+        } catch (e) {
+          console.error("Failed to parse datastore. Seeding clean database.");
+          this.storeInstance = getInitialStore();
+          normalizeLegacyRoles(this.storeInstance);
         }
+      } else {
+        this.storeInstance = getInitialStore();
+        normalizeLegacyRoles(this.storeInstance);
+      }
+    }
+    return this.storeInstance;
+  }
+  static save(store, skipSync = false) {
+    this.storeInstance = store;
+    localStorage.removeItem(STORAGE_KEY);
+    if (skipSync) return Promise.resolve();
+    if (typeof sessionStorage !== "undefined") {
+      const role = sessionStorage.getItem("e16_lms_role");
+      if (role && !["manager", "admin"].includes(role)) {
         return Promise.resolve();
       }
-      static log(userId, action, target, detail) {
-        const store = this.get();
-        const logItem = {
-          id: generateId("log"),
-          userId,
-          action,
-          target,
-          detail,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        if (!store.auditLogs) store.auditLogs = [];
-        store.auditLogs.unshift(logItem);
-        this.save(store, true);
-      }
-      static notify(userId, type, message) {
-        const store = this.get();
-        const notification = {
-          id: generateId("note"),
-          userId,
-          type,
-          message,
-          isRead: false,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        if (!store.notifications) store.notifications = [];
-        store.notifications.unshift(notification);
-        this.save(store, true);
-      }
+    }
+    if (typeof fetch !== "undefined") {
+      const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
+      this.syncPromise = fetch("/api/store/sync", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...csrfToken ? { "X-CSRF-Token": csrfToken } : {}
+        },
+        body: JSON.stringify(store)
+      }).then(async (res) => {
+        this.syncPromise = null;
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `\u0110\u1ED3ng b\u1ED9 th\u1EA5t b\u1EA1i: status ${res.status}`);
+        }
+        return res.json();
+      }).catch((err) => {
+        this.syncPromise = null;
+        throw err;
+      });
+      return this.syncPromise;
+    }
+    return Promise.resolve();
+  }
+  static log(userId, action, target, detail) {
+    const store = this.get();
+    const logItem = {
+      id: generateId("log"),
+      userId,
+      action,
+      target,
+      detail,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (!store.auditLogs) store.auditLogs = [];
+    store.auditLogs.unshift(logItem);
+    this.save(store, true);
+  }
+  static notify(userId, type, message) {
+    const store = this.get();
+    const notification = {
+      id: generateId("note"),
+      userId,
+      type,
+      message,
+      isRead: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (!store.notifications) store.notifications = [];
+    store.notifications.unshift(notification);
+    this.save(store, true);
+  }
+};
+
+// src/dbMigrations.ts
+import fs from "fs";
+import path from "path";
+function getMigrationFiles() {
+  const migrationsDir = path.join(process.cwd(), "migrations", "postgres");
+  if (!fs.existsSync(migrationsDir)) return [];
+  return fs.readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort().map((file) => ({
+    file,
+    version: file.split("_")[0],
+    name: file,
+    sql: fs.readFileSync(path.join(migrationsDir, file), "utf8").trimStart()
+  }));
+}
+async function runMigrations(pool2) {
+  const applied = [];
+  const skipped = [];
+  await pool2.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  for (const migration of getMigrationFiles()) {
+    const existing = await pool2.query("SELECT version FROM schema_migrations WHERE version = $1", [migration.version]);
+    if (existing.rowCount) {
+      skipped.push(migration.name);
+      continue;
+    }
+    const client2 = await pool2.connect();
+    try {
+      await client2.query("BEGIN");
+      if (migration.sql) {
+        await client2.query(migration.sql);
+      }
+      await client2.query(
+        "INSERT INTO schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
+        [migration.version, migration.name]
+      );
+      await client2.query("COMMIT");
+      applied.push(migration.name);
+    } catch (error) {
+      await client2.query("ROLLBACK");
+      throw error;
+    } finally {
+      client2.release();
+    }
+  }
+  return { applied, skipped };
+}
+
+// src/server/db.ts
+import pg from "pg";
+import dotenv from "dotenv";
+dotenv.config();
+var dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/lms_mcna";
+if (dbUrl.includes("pooler.supabase.com:5432")) {
+  dbUrl = dbUrl.replace(":5432", ":6543");
+  if (!dbUrl.includes("pgbouncer=true")) {
+    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
+  }
+}
+var isLocalDb = Boolean(
+  dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1")
+);
+var pool = new pg.Pool({
+  connectionString: dbUrl,
+  max: process.env.VERCEL ? 3 : Number(process.env.PG_POOL_MAX || 10),
+  idleTimeoutMillis: 3e4,
+  connectionTimeoutMillis: 1e4,
+  ssl: isLocalDb ? void 0 : { rejectUnauthorized: false }
+});
+
+// src/server/redis.ts
+import Redis from "ioredis";
+var redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  lazyConnect: true,
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+  retryStrategy: () => null
+});
+redis.on("error", (error) => {
+  if (process.env.NODE_ENV === "production") {
+    console.error("[redis] connection error:", error);
   }
 });
+var isRedisUnavailable = false;
+var lastConnectAttempt = 0;
+var RECONNECT_COOLDOWN_MS = 6e4;
+var lastWarningLoggedAt = 0;
+var WARNING_COOLDOWN_MS = 3e5;
+async function safeRedis(operation, fallback) {
+  const now = Date.now();
+  const needsConnect = redis.status === "wait" || redis.status === "end" || redis.status === "close";
+  if (needsConnect && isRedisUnavailable && now - lastConnectAttempt < RECONNECT_COOLDOWN_MS) {
+    return fallback;
+  }
+  try {
+    if (needsConnect) {
+      lastConnectAttempt = now;
+      try {
+        await redis.connect();
+        isRedisUnavailable = false;
+      } catch (connErr) {
+        isRedisUnavailable = true;
+        throw connErr;
+      }
+    }
+    if (redis.status !== "ready") {
+      isRedisUnavailable = true;
+      return fallback;
+    }
+    const result = await operation();
+    isRedisUnavailable = false;
+    return result;
+  } catch (error) {
+    isRedisUnavailable = true;
+    if (now - lastWarningLoggedAt > WARNING_COOLDOWN_MS) {
+      lastWarningLoggedAt = now;
+      if (process.env.NODE_ENV === "production") {
+        console.error("[redis] Error during Redis operation in production, falling back:", error instanceof Error ? error.stack || error.message : error);
+      } else {
+        console.warn("[redis] Falling back because Redis is unavailable (throttled):", error instanceof Error ? error.message : error);
+      }
+    }
+    return fallback;
+  }
+}
+
+// src/server/ids.ts
+import crypto from "crypto";
+function generateId2(prefix) {
+  return `${prefix}_${crypto.randomBytes(6).toString("hex")}`;
+}
 
 // src/server/mappers.ts
 function normalizeRole(role) {
@@ -975,6 +1094,19 @@ function courseSectionFromRow(row) {
     groupChatUrl: row.group_chat_url || void 0
   };
 }
+var parseScheduleValue = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === void 0) return [];
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "[]") return [];
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 function parseSchedule(row) {
   const parsedSchedule = parseScheduleValue(row?.schedule);
   if (parsedSchedule.length > 0) return parsedSchedule;
@@ -982,456 +1114,6 @@ function parseSchedule(row) {
   if (parsedScheduleJson.length > 0) return parsedScheduleJson;
   return [];
 }
-var parseScheduleValue;
-var init_mappers = __esm({
-  "src/server/mappers.ts"() {
-    parseScheduleValue = (value) => {
-      if (Array.isArray(value)) return value;
-      if (value === null || value === void 0) return [];
-      if (typeof value !== "string") return [];
-      const trimmed = value.trim();
-      if (!trimmed || trimmed === "[]") return [];
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    };
-  }
-});
-
-// src/server/repositories/storeSnapshot.ts
-var storeSnapshot_exports = {};
-__export(storeSnapshot_exports, {
-  invalidateStoreCache: () => invalidateStoreCache,
-  limitStoreForRole: () => limitStoreForRole,
-  storeSnapshotFromDb: () => storeSnapshotFromDb
-});
-function invalidateStoreCache() {
-  cachedSnapshot = null;
-  lastCacheTime = 0;
-  cacheGeneration++;
-}
-async function storeSnapshotFromDb(db, forceBypassCache = false) {
-  const now = Date.now();
-  if (!forceBypassCache && cachedSnapshot && now - lastCacheTime < CACHE_TTL) {
-    return cachedSnapshot;
-  }
-  const generationAtStart = cacheGeneration;
-  const [
-    usersRes,
-    coursesRes,
-    lessonsRes,
-    enrollmentsRes,
-    lessonProgressRes,
-    quizzesRes,
-    questionsRes,
-    quizAttemptsRes,
-    assignmentsRes,
-    submissionsRes
-  ] = await Promise.all([
-    db.query("SELECT * FROM users"),
-    db.query("SELECT * FROM courses"),
-    db.query("SELECT * FROM lessons"),
-    db.query("SELECT * FROM enrollments"),
-    db.query("SELECT * FROM lesson_progress"),
-    db.query("SELECT * FROM quizzes"),
-    db.query("SELECT * FROM questions ORDER BY created_at ASC"),
-    db.query("SELECT * FROM quiz_attempts"),
-    db.query("SELECT * FROM assignments"),
-    db.query("SELECT * FROM submissions")
-  ]);
-  const [
-    auditLogsRes,
-    attendanceSessionsRes,
-    attendanceRecordsRes,
-    notificationsRes,
-    transactionsRes
-  ] = await Promise.all([
-    db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200"),
-    db.query("SELECT * FROM attendance_sessions"),
-    db.query("SELECT * FROM attendance_records"),
-    db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200"),
-    db.query("SELECT * FROM transactions ORDER BY created_at DESC")
-  ]);
-  const [
-    courseSectionsRes,
-    courseRegistrationsRes,
-    certificatesRes,
-    forumRepliesRes,
-    forumPostsRes,
-    teacherAttendanceRes,
-    sessionMaterialsRes
-  ] = await Promise.all([
-    db.query("SELECT * FROM course_sections"),
-    db.query("SELECT * FROM course_registrations"),
-    db.query("SELECT * FROM certificates"),
-    db.query("SELECT * FROM forum_replies"),
-    db.query("SELECT * FROM forum_posts"),
-    db.query("SELECT * FROM teacher_attendance"),
-    db.query("SELECT * FROM session_materials ORDER BY session_id, sort_order, created_at")
-  ]);
-  const users = usersRes.rows.map(toPublicUser);
-  const courses = coursesRes.rows.map(courseFromRow);
-  const lessons = lessonsRes.rows.map((row) => ({ id: row.id, courseId: row.course_id, title: row.title, content: row.content, videoUrl: row.video_url || void 0, order: row.lesson_order, duration: row.duration }));
-  const enrollments = enrollmentsRes.rows.map(enrollmentFromRow);
-  const lessonProgress = lessonProgressRes.rows.map((row) => ({ id: row.id, enrollmentId: row.enrollment_id, lessonId: row.lesson_id, completed: Boolean(row.completed), completedAt: row.completed_at || void 0 }));
-  const quizzes = quizzesRes.rows.map(quizFromRow);
-  const questions = questionsRes.rows.map(questionFromRow);
-  const quizAttempts = quizAttemptsRes.rows.map(quizAttemptFromRow);
-  const assignments = assignmentsRes.rows.map(assignmentFromRow);
-  const submissions = submissionsRes.rows.map(submissionFromRow);
-  const auditLogs = auditLogsRes.rows.map((row) => ({ id: row.id, userId: row.user_id, action: row.action, target: row.target, detail: row.detail || "", createdAt: row.created_at }));
-  const attendanceSessions = attendanceSessionsRes.rows.map((row) => ({
-    id: row.id,
-    courseId: row.course_id,
-    sectionId: row.section_id || void 0,
-    teacherId: row.teacher_id,
-    date: row.date || row.session_date,
-    topic: row.topic,
-    videoUrl: row.video_url || void 0,
-    recordingUrl: row.recording_url || void 0,
-    content: row.content || void 0,
-    code: row.code || void 0,
-    expiresAt: row.expires_at || void 0
-  }));
-  const attendanceRecords = attendanceRecordsRes.rows.map((row) => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || void 0, checkedInAt: row.checked_in_at || void 0, checkinMethod: row.checkin_method || void 0 }));
-  const sessionMaterials = sessionMaterialsRes.rows.map(sessionMaterialFromRow);
-  const notifications = notificationsRes.rows.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    type: row.type,
-    message: row.message,
-    isRead: Boolean(row.is_read),
-    createdAt: row.created_at,
-    relatedEntityType: row.related_entity_type || void 0,
-    relatedEntityId: row.related_entity_id || void 0
-  }));
-  const transactions = transactionsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, courseId: row.course_id || "", amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || void 0, processedBy: row.processed_by || void 0, notes: row.notes || void 0 }));
-  const courseSections = courseSectionsRes.rows.map(courseSectionFromRow);
-  const courseRegistrations = courseRegistrationsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || void 0, grade: row.grade || void 0, letterGrade: row.letter_grade || void 0, gradePoint: row.grade_point === null ? void 0 : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
-  const certificates = certificatesRes.rows.map((row) => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
-  const forumReplies = forumRepliesRes.rows.map((row) => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
-  const forumPosts = forumPostsRes.rows.map((row) => {
-    const postReplies = forumReplies.filter((r) => r.postId === row.id);
-    return { id: row.id, courseId: row.course_id, sectionId: row.section_id || void 0, authorId: row.author_id, title: row.title, content: row.content, replies: postReplies, createdAt: row.created_at };
-  });
-  const teacherAttendance = teacherAttendanceRes.rows.map((row) => ({
-    id: row.id,
-    teacherId: row.teacher_id,
-    courseId: row.course_id,
-    sectionId: row.section_id,
-    classDate: row.class_date,
-    slotTime: row.slot_time,
-    status: row.status,
-    checkedInAt: row.checked_in_at
-  }));
-  const snapshot = {
-    ...getInitialStore(),
-    users,
-    courses,
-    lessons,
-    enrollments,
-    lessonProgress,
-    quizzes,
-    questions,
-    quizAttempts,
-    assignments,
-    submissions,
-    auditLogs,
-    attendanceSessions,
-    attendanceRecords,
-    notifications,
-    transactions,
-    courseSections,
-    courseRegistrations,
-    certificates,
-    forumPosts,
-    teacherAttendance,
-    sessionMaterials
-  };
-  if (generationAtStart === cacheGeneration) {
-    cachedSnapshot = snapshot;
-    lastCacheTime = Date.now();
-  }
-  return snapshot;
-}
-function limitStoreForRole(store, user) {
-  const safeUser = (item) => ({ ...item, passwordHash: "" });
-  const sanitizeQuestion = (item) => ({ ...item, correctAnswer: "" });
-  const sanitizeLessonPreview = (item) => ({ ...item, content: "", videoUrl: void 0 });
-  const sanitizeAttendanceSession = (item) => ({ ...item, code: void 0 });
-  const baseScopedStore = () => ({
-    users: [],
-    courses: [],
-    lessons: [],
-    enrollments: [],
-    lessonProgress: [],
-    quizzes: [],
-    questions: [],
-    quizAttempts: [],
-    assignments: [],
-    submissions: [],
-    certificates: [],
-    notifications: [],
-    forumPosts: [],
-    auditLogs: [],
-    transactions: [],
-    attendanceSessions: [],
-    attendanceRecords: [],
-    courseSections: [],
-    courseRegistrations: [],
-    systemEvents: [],
-    teacherAttendance: [],
-    sessionMaterials: []
-  });
-  if (user.role === "admin") {
-    return {
-      ...store,
-      users: store.users.map(safeUser)
-    };
-  }
-  if (user.role === "teacher") {
-    const teacherCourseIds = new Set(store.courses.filter((course) => course.teacherId === user.id).map((course) => course.id));
-    const visibleEnrollments = store.enrollments.filter((item) => teacherCourseIds.has(item.courseId));
-    const visibleStudentIds = new Set(visibleEnrollments.map((item) => item.studentId));
-    const mySections = new Set(
-      (store.courseSections || []).filter((cs) => cs.teacherId === user.id).map((cs) => cs.id)
-    );
-    const visibleQuizIds = new Set(store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)).map((quiz) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
-    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => teacherCourseIds.has(session.courseId) || mySections.has(session.sectionId)).map((session) => session.id));
-    const visibleUserIds = /* @__PURE__ */ new Set([user.id]);
-    visibleStudentIds.forEach((studentId) => visibleUserIds.add(studentId));
-    return {
-      ...baseScopedStore(),
-      users: store.users.filter((item) => visibleUserIds.has(item.id)).map(safeUser),
-      courses: store.courses.filter((course) => teacherCourseIds.has(course.id)),
-      lessons: store.lessons.filter((lesson) => teacherCourseIds.has(lesson.courseId)),
-      enrollments: visibleEnrollments,
-      lessonProgress: store.lessonProgress.filter((item) => visibleEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
-      quizzes: store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)),
-      questions: store.questions.filter((question) => visibleQuizIds.has(question.quizId)),
-      quizAttempts: store.quizAttempts.filter((attempt) => visibleStudentIds.has(attempt.studentId) && visibleQuizIds.has(attempt.quizId)),
-      assignments: store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)),
-      submissions: store.submissions.filter((submission) => visibleStudentIds.has(submission.studentId) && visibleAssignmentIds.has(submission.assignmentId)),
-      attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)),
-      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
-      attendanceRecords: (store.attendanceRecords || []).filter((record) => visibleSessionIds.has(record.sessionId) && visibleStudentIds.has(record.studentId)),
-      notifications: (store.notifications || []).filter((item) => item.userId === user.id),
-      courseSections: (store.courseSections || []).filter((section) => mySections.has(section.id)),
-      courseRegistrations: (store.courseRegistrations || []).filter((registration) => visibleStudentIds.has(registration.studentId) || mySections.has(registration.sectionId)),
-      teacherAttendance: (store.teacherAttendance || []).filter((ta) => ta.teacherId === user.id),
-      certificates: (store.certificates || []).filter((cert) => teacherCourseIds.has(cert.courseId)),
-      forumPosts: (store.forumPosts || []).filter((post) => teacherCourseIds.has(post.courseId) && (!post.sectionId || mySections.has(post.sectionId)))
-    };
-  }
-  if (user.role === "student") {
-    const myEnrollments = store.enrollments.filter((item) => item.studentId === user.id);
-    const myCourseIds = new Set(myEnrollments.map((item) => item.courseId));
-    const activeCourseIds = new Set(myEnrollments.filter((item) => item.status === "active" || item.status === "completed").map((item) => item.courseId));
-    const publicCourseIds = new Set(store.courses.filter((course) => course.status === "published").map((course) => course.id));
-    const visibleCourseIds = /* @__PURE__ */ new Set([...publicCourseIds, ...myCourseIds]);
-    const visibleQuizzes = store.quizzes.filter((quiz) => activeCourseIds.has(quiz.courseId));
-    const visibleQuizIds = new Set(visibleQuizzes.map((quiz) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => activeCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
-    const myRegisteredSections = new Set(
-      (store.courseRegistrations || []).filter((cr) => cr.studentId === user.id && cr.status === "registered").map((cr) => cr.sectionId)
-    );
-    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => activeCourseIds.has(session.courseId) && (!session.sectionId || myRegisteredSections.has(session.sectionId))).map((session) => session.id));
-    const visibleTeacherIds = new Set(store.courses.filter((course) => visibleCourseIds.has(course.id)).map((course) => course.teacherId));
-    return {
-      ...baseScopedStore(),
-      users: store.users.filter((item) => item.id === user.id || visibleTeacherIds.has(item.id)).map(safeUser),
-      courses: store.courses.filter((course) => visibleCourseIds.has(course.id)),
-      lessons: store.lessons.filter((lesson) => visibleCourseIds.has(lesson.courseId)).map((lesson) => activeCourseIds.has(lesson.courseId) ? lesson : sanitizeLessonPreview(lesson)),
-      enrollments: myEnrollments,
-      lessonProgress: store.lessonProgress.filter((item) => myEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
-      quizzes: visibleQuizzes,
-      questions: store.questions.filter((question) => visibleQuizIds.has(question.quizId)).map(sanitizeQuestion),
-      quizAttempts: store.quizAttempts.filter((item) => item.studentId === user.id),
-      submissions: store.submissions.filter((item) => item.studentId === user.id),
-      assignments: store.assignments.filter((item) => visibleAssignmentIds.has(item.id)),
-      attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)).map(sanitizeAttendanceSession),
-      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
-      attendanceRecords: (store.attendanceRecords || []).filter((record) => record.studentId === user.id),
-      notifications: store.notifications.filter((item) => item.userId === user.id),
-      transactions: (store.transactions || []).filter((item) => item.studentId === user.id),
-      // Every open class is listed for registration, but meeting/group links only reach learners placed in that class.
-      courseSections: (store.courseSections || []).filter((section) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id)).map((section) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: void 0, groupChatUrl: void 0 }),
-      courseRegistrations: (store.courseRegistrations || []).filter((item) => item.studentId === user.id),
-      teacherAttendance: (store.teacherAttendance || []).filter((item) => activeCourseIds.has(item.courseId) && (!item.sectionId || myRegisteredSections.has(item.sectionId))),
-      certificates: (store.certificates || []).filter((cert) => cert.studentId === user.id),
-      forumPosts: (store.forumPosts || []).filter((post) => myCourseIds.has(post.courseId) && (!post.sectionId || myRegisteredSections.has(post.sectionId)))
-    };
-  }
-  return {
-    ...baseScopedStore(),
-    users: store.users.filter((item) => item.id === user.id).map(safeUser)
-  };
-}
-var cachedSnapshot, lastCacheTime, cacheGeneration, CACHE_TTL;
-var init_storeSnapshot = __esm({
-  "src/server/repositories/storeSnapshot.ts"() {
-    init_store();
-    init_mappers();
-    cachedSnapshot = null;
-    lastCacheTime = 0;
-    cacheGeneration = 0;
-    CACHE_TTL = 15e3;
-  }
-});
-
-// server.ts
-init_store();
-init_authHash();
-import express from "express";
-import path5 from "path";
-import multer from "multer";
-import { ZipArchive } from "archiver";
-import fs5 from "fs";
-import os3 from "os";
-import crypto4 from "crypto";
-import dotenv2 from "dotenv";
-
-// src/dbMigrations.ts
-import fs from "fs";
-import path from "path";
-function getMigrationFiles() {
-  const migrationsDir = path.join(process.cwd(), "migrations", "postgres");
-  if (!fs.existsSync(migrationsDir)) return [];
-  return fs.readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort().map((file) => ({
-    file,
-    version: file.split("_")[0],
-    name: file,
-    sql: fs.readFileSync(path.join(migrationsDir, file), "utf8").trimStart()
-  }));
-}
-async function runMigrations(pool2) {
-  const applied = [];
-  const skipped = [];
-  await pool2.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  for (const migration of getMigrationFiles()) {
-    const existing = await pool2.query("SELECT version FROM schema_migrations WHERE version = $1", [migration.version]);
-    if (existing.rowCount) {
-      skipped.push(migration.name);
-      continue;
-    }
-    const client2 = await pool2.connect();
-    try {
-      await client2.query("BEGIN");
-      if (migration.sql) {
-        await client2.query(migration.sql);
-      }
-      await client2.query(
-        "INSERT INTO schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
-        [migration.version, migration.name]
-      );
-      await client2.query("COMMIT");
-      applied.push(migration.name);
-    } catch (error) {
-      await client2.query("ROLLBACK");
-      throw error;
-    } finally {
-      client2.release();
-    }
-  }
-  return { applied, skipped };
-}
-
-// src/server/db.ts
-import pg from "pg";
-import dotenv from "dotenv";
-dotenv.config();
-var dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/lms_mcna";
-if (dbUrl.includes("pooler.supabase.com:5432")) {
-  dbUrl = dbUrl.replace(":5432", ":6543");
-  if (!dbUrl.includes("pgbouncer=true")) {
-    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
-  }
-}
-var isLocalDb = Boolean(
-  dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1")
-);
-var pool = new pg.Pool({
-  connectionString: dbUrl,
-  max: process.env.VERCEL ? 3 : Number(process.env.PG_POOL_MAX || 10),
-  idleTimeoutMillis: 3e4,
-  connectionTimeoutMillis: 1e4,
-  ssl: isLocalDb ? void 0 : { rejectUnauthorized: false }
-});
-
-// src/server/redis.ts
-import Redis from "ioredis";
-var redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
-  lazyConnect: true,
-  maxRetriesPerRequest: 1,
-  enableOfflineQueue: false,
-  retryStrategy: () => null
-});
-redis.on("error", (error) => {
-  if (process.env.NODE_ENV === "production") {
-    console.error("[redis] connection error:", error);
-  }
-});
-var isRedisUnavailable = false;
-var lastConnectAttempt = 0;
-var RECONNECT_COOLDOWN_MS = 6e4;
-var lastWarningLoggedAt = 0;
-var WARNING_COOLDOWN_MS = 3e5;
-async function safeRedis(operation, fallback) {
-  const now = Date.now();
-  const needsConnect = redis.status === "wait" || redis.status === "end" || redis.status === "close";
-  if (needsConnect && isRedisUnavailable && now - lastConnectAttempt < RECONNECT_COOLDOWN_MS) {
-    return fallback;
-  }
-  try {
-    if (needsConnect) {
-      lastConnectAttempt = now;
-      try {
-        await redis.connect();
-        isRedisUnavailable = false;
-      } catch (connErr) {
-        isRedisUnavailable = true;
-        throw connErr;
-      }
-    }
-    if (redis.status !== "ready") {
-      isRedisUnavailable = true;
-      return fallback;
-    }
-    const result = await operation();
-    isRedisUnavailable = false;
-    return result;
-  } catch (error) {
-    isRedisUnavailable = true;
-    if (now - lastWarningLoggedAt > WARNING_COOLDOWN_MS) {
-      lastWarningLoggedAt = now;
-      if (process.env.NODE_ENV === "production") {
-        console.error("[redis] Error during Redis operation in production, falling back:", error instanceof Error ? error.stack || error.message : error);
-      } else {
-        console.warn("[redis] Falling back because Redis is unavailable (throttled):", error instanceof Error ? error.message : error);
-      }
-    }
-    return fallback;
-  }
-}
-
-// src/server/ids.ts
-import crypto from "crypto";
-function generateId2(prefix) {
-  return `${prefix}_${crypto.randomBytes(6).toString("hex")}`;
-}
-
-// server.ts
-init_mappers();
 
 // src/server/validation.ts
 import { z } from "zod";
@@ -1725,11 +1407,7 @@ var schemas = {
   }).refine((value) => Boolean(value.enrollmentId || value.crmDealId), { message: "enrollmentId or crmDealId is required." })
 };
 
-// src/server/seedCore.ts
-init_store();
-
 // src/mockSeeds.ts
-init_authHash();
 var credential2 = (password, salt) => hashPassword(password, salt);
 function backfillMegaDemoData(storeInput) {
   const store = storeInput;
@@ -2051,7 +1729,6 @@ function backfillMegaDemoData(storeInput) {
 }
 
 // src/server/repositories/users.ts
-init_mappers();
 var usersRepository = {
   async normalizeLegacyRoles(db) {
     await db.query(`
@@ -2552,7 +2229,6 @@ var mcnaCatalog_default = {
 };
 
 // src/server/services/sectionSchedule.ts
-init_mappers();
 var normalizeDayText = (value) => String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 var DAY_INDEX_BY_NAME = {
   "chu nhat": 0,
@@ -3212,7 +2888,6 @@ async function seedAuthUsers(db) {
 }
 
 // src/server/repositories/courses.ts
-init_mappers();
 var coursesRepository = {
   async list(db) {
     return (await db.query("SELECT * FROM courses ORDER BY created_at DESC")).rows.map(courseFromRow);
@@ -3322,7 +2997,6 @@ var coursesRepository = {
 };
 
 // src/server/repositories/enrollments.ts
-init_mappers();
 var enrollmentsRepository = {
   async listForUser(db, user) {
     const result = user.role === "admin" ? await db.query("SELECT * FROM enrollments") : await db.query("SELECT * FROM enrollments WHERE student_id = $1", [user.id]);
@@ -3378,9 +3052,6 @@ var enrollmentsRepository = {
     return row ? enrollmentFromRow(row) : null;
   }
 };
-
-// src/server/repositories/quizzes.ts
-init_mappers();
 
 // src/server/services/email.ts
 import nodemailer from "nodemailer";
@@ -4711,8 +4382,274 @@ var financeRepository = {
   }
 };
 
-// server.ts
-init_storeSnapshot();
+// src/server/repositories/storeSnapshot.ts
+var cachedSnapshot = null;
+var lastCacheTime = 0;
+var cacheGeneration = 0;
+var CACHE_TTL = 15e3;
+function invalidateStoreCache() {
+  cachedSnapshot = null;
+  lastCacheTime = 0;
+  cacheGeneration++;
+}
+async function storeSnapshotFromDb(db, forceBypassCache = false) {
+  const now = Date.now();
+  if (!forceBypassCache && cachedSnapshot && now - lastCacheTime < CACHE_TTL) {
+    return cachedSnapshot;
+  }
+  const generationAtStart = cacheGeneration;
+  const [
+    usersRes,
+    coursesRes,
+    lessonsRes,
+    enrollmentsRes,
+    lessonProgressRes,
+    quizzesRes,
+    questionsRes,
+    quizAttemptsRes,
+    assignmentsRes,
+    submissionsRes
+  ] = await Promise.all([
+    db.query("SELECT * FROM users"),
+    db.query("SELECT * FROM courses"),
+    db.query("SELECT * FROM lessons"),
+    db.query("SELECT * FROM enrollments"),
+    db.query("SELECT * FROM lesson_progress"),
+    db.query("SELECT * FROM quizzes"),
+    db.query("SELECT * FROM questions ORDER BY created_at ASC"),
+    db.query("SELECT * FROM quiz_attempts"),
+    db.query("SELECT * FROM assignments"),
+    db.query("SELECT * FROM submissions")
+  ]);
+  const [
+    auditLogsRes,
+    attendanceSessionsRes,
+    attendanceRecordsRes,
+    notificationsRes,
+    transactionsRes
+  ] = await Promise.all([
+    db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200"),
+    db.query("SELECT * FROM attendance_sessions"),
+    db.query("SELECT * FROM attendance_records"),
+    db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200"),
+    db.query("SELECT * FROM transactions ORDER BY created_at DESC")
+  ]);
+  const [
+    courseSectionsRes,
+    courseRegistrationsRes,
+    certificatesRes,
+    forumRepliesRes,
+    forumPostsRes,
+    teacherAttendanceRes,
+    sessionMaterialsRes
+  ] = await Promise.all([
+    db.query("SELECT * FROM course_sections"),
+    db.query("SELECT * FROM course_registrations"),
+    db.query("SELECT * FROM certificates"),
+    db.query("SELECT * FROM forum_replies"),
+    db.query("SELECT * FROM forum_posts"),
+    db.query("SELECT * FROM teacher_attendance"),
+    db.query("SELECT * FROM session_materials ORDER BY session_id, sort_order, created_at")
+  ]);
+  const users = usersRes.rows.map(toPublicUser);
+  const courses = coursesRes.rows.map(courseFromRow);
+  const lessons = lessonsRes.rows.map((row) => ({ id: row.id, courseId: row.course_id, title: row.title, content: row.content, videoUrl: row.video_url || void 0, order: row.lesson_order, duration: row.duration }));
+  const enrollments = enrollmentsRes.rows.map(enrollmentFromRow);
+  const lessonProgress = lessonProgressRes.rows.map((row) => ({ id: row.id, enrollmentId: row.enrollment_id, lessonId: row.lesson_id, completed: Boolean(row.completed), completedAt: row.completed_at || void 0 }));
+  const quizzes = quizzesRes.rows.map(quizFromRow);
+  const questions = questionsRes.rows.map(questionFromRow);
+  const quizAttempts = quizAttemptsRes.rows.map(quizAttemptFromRow);
+  const assignments = assignmentsRes.rows.map(assignmentFromRow);
+  const submissions = submissionsRes.rows.map(submissionFromRow);
+  const auditLogs = auditLogsRes.rows.map((row) => ({ id: row.id, userId: row.user_id, action: row.action, target: row.target, detail: row.detail || "", createdAt: row.created_at }));
+  const attendanceSessions = attendanceSessionsRes.rows.map((row) => ({
+    id: row.id,
+    courseId: row.course_id,
+    sectionId: row.section_id || void 0,
+    teacherId: row.teacher_id,
+    date: row.date || row.session_date,
+    topic: row.topic,
+    videoUrl: row.video_url || void 0,
+    recordingUrl: row.recording_url || void 0,
+    content: row.content || void 0,
+    code: row.code || void 0,
+    expiresAt: row.expires_at || void 0
+  }));
+  const attendanceRecords = attendanceRecordsRes.rows.map((row) => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || void 0, checkedInAt: row.checked_in_at || void 0, checkinMethod: row.checkin_method || void 0 }));
+  const sessionMaterials = sessionMaterialsRes.rows.map(sessionMaterialFromRow);
+  const notifications = notificationsRes.rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    type: row.type,
+    message: row.message,
+    isRead: Boolean(row.is_read),
+    createdAt: row.created_at,
+    relatedEntityType: row.related_entity_type || void 0,
+    relatedEntityId: row.related_entity_id || void 0
+  }));
+  const transactions = transactionsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, courseId: row.course_id || "", amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || void 0, processedBy: row.processed_by || void 0, notes: row.notes || void 0 }));
+  const courseSections = courseSectionsRes.rows.map(courseSectionFromRow);
+  const courseRegistrations = courseRegistrationsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || void 0, grade: row.grade || void 0, letterGrade: row.letter_grade || void 0, gradePoint: row.grade_point === null ? void 0 : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
+  const certificates = certificatesRes.rows.map((row) => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
+  const forumReplies = forumRepliesRes.rows.map((row) => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
+  const forumPosts = forumPostsRes.rows.map((row) => {
+    const postReplies = forumReplies.filter((r) => r.postId === row.id);
+    return { id: row.id, courseId: row.course_id, sectionId: row.section_id || void 0, authorId: row.author_id, title: row.title, content: row.content, replies: postReplies, createdAt: row.created_at };
+  });
+  const teacherAttendance = teacherAttendanceRes.rows.map((row) => ({
+    id: row.id,
+    teacherId: row.teacher_id,
+    courseId: row.course_id,
+    sectionId: row.section_id,
+    classDate: row.class_date,
+    slotTime: row.slot_time,
+    status: row.status,
+    checkedInAt: row.checked_in_at
+  }));
+  const snapshot = {
+    ...getInitialStore(),
+    users,
+    courses,
+    lessons,
+    enrollments,
+    lessonProgress,
+    quizzes,
+    questions,
+    quizAttempts,
+    assignments,
+    submissions,
+    auditLogs,
+    attendanceSessions,
+    attendanceRecords,
+    notifications,
+    transactions,
+    courseSections,
+    courseRegistrations,
+    certificates,
+    forumPosts,
+    teacherAttendance,
+    sessionMaterials
+  };
+  if (generationAtStart === cacheGeneration) {
+    cachedSnapshot = snapshot;
+    lastCacheTime = Date.now();
+  }
+  return snapshot;
+}
+function limitStoreForRole(store, user) {
+  const safeUser = (item) => ({ ...item, passwordHash: "" });
+  const sanitizeQuestion = (item) => ({ ...item, correctAnswer: "" });
+  const sanitizeLessonPreview = (item) => ({ ...item, content: "", videoUrl: void 0 });
+  const sanitizeAttendanceSession = (item) => ({ ...item, code: void 0 });
+  const baseScopedStore = () => ({
+    users: [],
+    courses: [],
+    lessons: [],
+    enrollments: [],
+    lessonProgress: [],
+    quizzes: [],
+    questions: [],
+    quizAttempts: [],
+    assignments: [],
+    submissions: [],
+    certificates: [],
+    notifications: [],
+    forumPosts: [],
+    auditLogs: [],
+    transactions: [],
+    attendanceSessions: [],
+    attendanceRecords: [],
+    courseSections: [],
+    courseRegistrations: [],
+    systemEvents: [],
+    teacherAttendance: [],
+    sessionMaterials: []
+  });
+  if (user.role === "admin") {
+    return {
+      ...store,
+      users: store.users.map(safeUser)
+    };
+  }
+  if (user.role === "teacher") {
+    const teacherCourseIds = new Set(store.courses.filter((course) => course.teacherId === user.id).map((course) => course.id));
+    const visibleEnrollments = store.enrollments.filter((item) => teacherCourseIds.has(item.courseId));
+    const visibleStudentIds = new Set(visibleEnrollments.map((item) => item.studentId));
+    const mySections = new Set(
+      (store.courseSections || []).filter((cs) => cs.teacherId === user.id).map((cs) => cs.id)
+    );
+    const visibleQuizIds = new Set(store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)).map((quiz) => quiz.id));
+    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
+    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => teacherCourseIds.has(session.courseId) || mySections.has(session.sectionId)).map((session) => session.id));
+    const visibleUserIds = /* @__PURE__ */ new Set([user.id]);
+    visibleStudentIds.forEach((studentId) => visibleUserIds.add(studentId));
+    return {
+      ...baseScopedStore(),
+      users: store.users.filter((item) => visibleUserIds.has(item.id)).map(safeUser),
+      courses: store.courses.filter((course) => teacherCourseIds.has(course.id)),
+      lessons: store.lessons.filter((lesson) => teacherCourseIds.has(lesson.courseId)),
+      enrollments: visibleEnrollments,
+      lessonProgress: store.lessonProgress.filter((item) => visibleEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
+      quizzes: store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)),
+      questions: store.questions.filter((question) => visibleQuizIds.has(question.quizId)),
+      quizAttempts: store.quizAttempts.filter((attempt) => visibleStudentIds.has(attempt.studentId) && visibleQuizIds.has(attempt.quizId)),
+      assignments: store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)),
+      submissions: store.submissions.filter((submission) => visibleStudentIds.has(submission.studentId) && visibleAssignmentIds.has(submission.assignmentId)),
+      attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
+      attendanceRecords: (store.attendanceRecords || []).filter((record) => visibleSessionIds.has(record.sessionId) && visibleStudentIds.has(record.studentId)),
+      notifications: (store.notifications || []).filter((item) => item.userId === user.id),
+      courseSections: (store.courseSections || []).filter((section) => mySections.has(section.id)),
+      courseRegistrations: (store.courseRegistrations || []).filter((registration) => visibleStudentIds.has(registration.studentId) || mySections.has(registration.sectionId)),
+      teacherAttendance: (store.teacherAttendance || []).filter((ta) => ta.teacherId === user.id),
+      certificates: (store.certificates || []).filter((cert) => teacherCourseIds.has(cert.courseId)),
+      forumPosts: (store.forumPosts || []).filter((post) => teacherCourseIds.has(post.courseId) && (!post.sectionId || mySections.has(post.sectionId)))
+    };
+  }
+  if (user.role === "student") {
+    const myEnrollments = store.enrollments.filter((item) => item.studentId === user.id);
+    const myCourseIds = new Set(myEnrollments.map((item) => item.courseId));
+    const activeCourseIds = new Set(myEnrollments.filter((item) => item.status === "active" || item.status === "completed").map((item) => item.courseId));
+    const publicCourseIds = new Set(store.courses.filter((course) => course.status === "published").map((course) => course.id));
+    const visibleCourseIds = /* @__PURE__ */ new Set([...publicCourseIds, ...myCourseIds]);
+    const visibleQuizzes = store.quizzes.filter((quiz) => activeCourseIds.has(quiz.courseId));
+    const visibleQuizIds = new Set(visibleQuizzes.map((quiz) => quiz.id));
+    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => activeCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
+    const myRegisteredSections = new Set(
+      (store.courseRegistrations || []).filter((cr) => cr.studentId === user.id && cr.status === "registered").map((cr) => cr.sectionId)
+    );
+    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => activeCourseIds.has(session.courseId) && (!session.sectionId || myRegisteredSections.has(session.sectionId))).map((session) => session.id));
+    const visibleTeacherIds = new Set(store.courses.filter((course) => visibleCourseIds.has(course.id)).map((course) => course.teacherId));
+    return {
+      ...baseScopedStore(),
+      users: store.users.filter((item) => item.id === user.id || visibleTeacherIds.has(item.id)).map(safeUser),
+      courses: store.courses.filter((course) => visibleCourseIds.has(course.id)),
+      lessons: store.lessons.filter((lesson) => visibleCourseIds.has(lesson.courseId)).map((lesson) => activeCourseIds.has(lesson.courseId) ? lesson : sanitizeLessonPreview(lesson)),
+      enrollments: myEnrollments,
+      lessonProgress: store.lessonProgress.filter((item) => myEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
+      quizzes: visibleQuizzes,
+      questions: store.questions.filter((question) => visibleQuizIds.has(question.quizId)).map(sanitizeQuestion),
+      quizAttempts: store.quizAttempts.filter((item) => item.studentId === user.id),
+      submissions: store.submissions.filter((item) => item.studentId === user.id),
+      assignments: store.assignments.filter((item) => visibleAssignmentIds.has(item.id)),
+      attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)).map(sanitizeAttendanceSession),
+      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
+      attendanceRecords: (store.attendanceRecords || []).filter((record) => record.studentId === user.id),
+      notifications: store.notifications.filter((item) => item.userId === user.id),
+      transactions: (store.transactions || []).filter((item) => item.studentId === user.id),
+      // Every open class is listed for registration, but meeting/group links only reach learners placed in that class.
+      courseSections: (store.courseSections || []).filter((section) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id)).map((section) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: void 0, groupChatUrl: void 0 }),
+      courseRegistrations: (store.courseRegistrations || []).filter((item) => item.studentId === user.id),
+      teacherAttendance: (store.teacherAttendance || []).filter((item) => activeCourseIds.has(item.courseId) && (!item.sectionId || myRegisteredSections.has(item.sectionId))),
+      certificates: (store.certificates || []).filter((cert) => cert.studentId === user.id),
+      forumPosts: (store.forumPosts || []).filter((post) => myCourseIds.has(post.courseId) && (!post.sectionId || myRegisteredSections.has(post.sectionId)))
+    };
+  }
+  return {
+    ...baseScopedStore(),
+    users: store.users.filter((item) => item.id === user.id).map(safeUser)
+  };
+}
 
 // src/server/eventBus.ts
 var EventBus = class {
@@ -4749,7 +4686,6 @@ var EventBus = class {
 var eventBus = new EventBus();
 
 // src/server/repositories/courseRegistrations.ts
-init_mappers();
 var scheduleDateOnly = (slot) => {
   const value = slot?.specificDate || slot?.specific_date;
   return value ? String(value).slice(0, 10) : "";
@@ -5053,7 +4989,6 @@ var forumRepository = {
 };
 
 // src/server/repositories/sessionMaterials.ts
-init_mappers();
 var sessionMaterialsRepository = {
   newId() {
     return generateId2("mat");
@@ -5480,7 +5415,6 @@ async function deliverPendingCrmEvents() {
 }
 
 // src/server/repositories/sections.ts
-init_mappers();
 var scheduleDateOnly2 = (slot) => {
   const value = slot?.specificDate || slot?.specific_date;
   return value ? String(value).slice(0, 10) : "";
@@ -6013,9 +5947,6 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
   };
 }
 
-// server.ts
-init_utils();
-
 // src/server/eventHandlers.ts
 function registerEventHandlers() {
   eventBus.on("grade.saved", async ({ studentId, courseRegistrationId, grade }, pool2) => {
@@ -6051,9 +5982,6 @@ function startScheduler() {
 }
 async function runCrmOutboxJob() {
   return deliverPendingCrmEvents();
-}
-async function runAttendanceRiskJob() {
-  return { ok: true, message: "Attendance risk tracking disabled for online courses." };
 }
 async function runSchedulerTask(name, task) {
   try {
@@ -7372,9 +7300,6 @@ for (const method of ["get", "post"]) {
   app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
     res.json(await runCrmOutboxJob());
   }));
-  app[method]("/api/internal/jobs/attendance-risk", requireInternalJobSecret, asyncHandler(async (_req, res) => {
-    res.json(await runAttendanceRiskJob());
-  }));
 }
 app.use("/api", requireCsrf);
 app.get("/health", asyncHandler(async (_req, res) => {
@@ -7685,18 +7610,17 @@ app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "a
   const teacherFilter = req.user.role === "teacher" ? "AND EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = e.course_id AND cs.teacher_id = $1)" : "";
   const params = req.user.role === "teacher" ? [req.user.id] : [];
   const teacherCourseFilter = req.user.role === "teacher" ? "AND teacher_id = $1" : "";
-  const [enrollment, ungraded, pendingCourses, risks, crmFailures] = await Promise.all([
+  const [enrollment, ungraded, pendingCourses, crmFailures] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS count FROM enrollments e WHERE e.status IN ('pending', 'pending_payment') ${teacherFilter}`, params),
     pool.query(`SELECT COUNT(*)::int AS count FROM submissions s JOIN assignments a ON a.id = s.assignment_id ${req.user.role === "teacher" ? "JOIN courses c ON c.id = a.course_id" : ""} WHERE s.score IS NULL ${req.user.role === "teacher" ? "AND c.teacher_id = $1" : ""}`, params),
     pool.query(`SELECT COUNT(*)::int AS count FROM courses WHERE status = 'pending' ${teacherCourseFilter}`, params),
-    pool.query(`SELECT COUNT(*)::int AS count FROM attendance_risk_alerts WHERE status = 'open' ${req.user.role === "teacher" ? "AND section_id IN (SELECT id FROM course_sections WHERE teacher_id = $1)" : ""}`, params),
     pool.query("SELECT COUNT(*)::int AS count FROM crm_outbox WHERE status = 'failed'")
   ]);
   return res.json({
     pendingEnrollments: Number(enrollment.rows[0]?.count || 0),
     ungradedSubmissions: Number(ungraded.rows[0]?.count || 0),
     pendingCourses: Number(pendingCourses.rows[0]?.count || 0),
-    attendanceRisks: Number(risks.rows[0]?.count || 0),
+    attendanceRisks: 0,
     crmFailures: Number(crmFailures.rows[0]?.count || 0),
     generatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
@@ -9854,196 +9778,6 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
   await audit(req, "update_attendance_session", req.params.id, updated.topic);
   res.json(updated);
 }));
-app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-  if (req.user.role === "teacher" && session.teacher_id !== req.user.id) return res.status(403).json({ error: "Permission denied." });
-  const studentInSession = (await pool.query(
-    `SELECT 1 FROM course_registrations cr
-     JOIN attendance_sessions ats ON ats.section_id = cr.section_id
-     WHERE ats.id = $1 AND cr.student_id = $2 AND cr.status = 'registered'`,
-    [req.body.sessionId, req.body.studentId]
-  )).rows[0];
-  if (!studentInSession) return res.status(403).json({ error: "Student is not registered in this session's class." });
-  const existing = (await pool.query(
-    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
-    [req.body.sessionId, req.body.studentId]
-  )).rows[0];
-  const record = {
-    id: existing?.id || generateId2("atr"),
-    sessionId: req.body.sessionId,
-    studentId: req.body.studentId,
-    status: req.body.status,
-    note: req.body.note,
-    checkinMethod: "manual"
-  };
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  invalidateStoreCache();
-  await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
-  res.json(record);
-}));
-app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.generateAttendanceLink), asyncHandler(async (req, res) => {
-  const { courseId: courseId2, sectionId, topic } = req.body;
-  const course = await coursesRepository.findById(pool, courseId2);
-  if (!course) return res.status(404).json({ error: "Course not found." });
-  if (req.user.role === "teacher" && course.teacherId !== req.user.id) {
-    return res.status(403).json({ error: "Permission denied." });
-  }
-  const sectionValidation = await validateAttendanceSectionAccess(courseId2, sectionId, req.user);
-  if (sectionValidation.error) return res.status(sectionValidation.status).json({ error: sectionValidation.error });
-  const code = crypto4.randomBytes(3).toString("hex").toUpperCase();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1e3).toISOString();
-  const session = {
-    id: generateId2("ats"),
-    courseId: courseId2,
-    sectionId,
-    teacherId: req.user.role === "teacher" ? req.user.id : course.teacherId,
-    date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-    topic,
-    code,
-    expiresAt
-  };
-  const columns = (await pool.query(
-    "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id')"
-  )).rows.map((row) => row.column_name);
-  const sessionDateOnly = session.date.slice(0, 10);
-  if (columns.includes("session_date") && columns.includes("date")) {
-    await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [session.id, session.courseId, session.teacherId, sessionDateOnly, session.date, session.topic, session.code, session.expiresAt]
-    );
-  } else {
-    await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, teacher_id, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [session.id, session.courseId, session.teacherId, session.date, session.topic, session.code, session.expiresAt]
-    );
-  }
-  if (columns.includes("section_id") && sectionId) {
-    await pool.query("UPDATE attendance_sessions SET section_id = $1 WHERE id = $2", [sectionId, session.id]);
-  }
-  const enrollmentsRes = sectionId ? await pool.query(
-    "SELECT student_id FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-    [sectionId]
-  ) : await pool.query(
-    "SELECT student_id FROM enrollments WHERE course_id = $1 AND status = 'active'",
-    [courseId2]
-  );
-  const studentIds = enrollmentsRes.rows.map((row) => row.student_id);
-  const message = `[\u0110i\u1EC3m danh tr\u1EF1c tuy\u1EBFn] M\xF4n h\u1ECDc "${course.title}" \u0111ang ti\u1EBFn h\xE0nh \u0111i\u1EC3m danh tr\u1EF1c tuy\u1EBFn. H\xE3y click v\xE0o \u0111\xE2y \u0111\u1EC3 x\xE1c nh\u1EADn c\xF3 m\u1EB7t (Th\u1EDDi h\u1EA1n 5 ph\xFAt).`;
-  for (const studentId of studentIds) {
-    await notificationsRepository.create(pool, {
-      userId: studentId,
-      type: "attendance_link",
-      message,
-      relatedEntityType: "attendance_session",
-      relatedEntityId: session.id
-    });
-  }
-  await audit(req, "create_attendance_link", session.id, `Course: ${course.title}, Code: ${code}`);
-  res.status(201).json({ session, code, expiresAt });
-}));
-var ATTENDANCE_QR_INTERVAL_SECONDS = 30;
-var ATTENDANCE_QR_SECRET = process.env.ATTENDANCE_QR_SECRET || JWT_SECRET_VALUE;
-var devAttendanceQrSessions = /* @__PURE__ */ new Map();
-function encodeQrPart(value) {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
-}
-function signQrPart(encodedPayload) {
-  return crypto4.createHmac("sha256", ATTENDANCE_QR_SECRET).update(encodedPayload).digest("base64url");
-}
-function buildAttendanceQrToken(input) {
-  const bucket2 = input.bucket ?? Math.floor(Date.now() / 1e3 / input.intervalSeconds);
-  const expiresAt = (bucket2 + 1) * input.intervalSeconds;
-  const payload = encodeQrPart({
-    qrId: input.qrId,
-    sessionId: input.sessionId,
-    tokenVersion: input.tokenVersion,
-    bucket: bucket2,
-    exp: expiresAt
-  });
-  return { token: `${payload}.${signQrPart(payload)}`, expiresAt: new Date(expiresAt * 1e3).toISOString() };
-}
-function parseAttendanceQrToken(token) {
-  const [encodedPayload, signature] = String(token || "").split(".");
-  if (!encodedPayload || !signature) return null;
-  const expected = signQrPart(encodedPayload);
-  try {
-    if (!crypto4.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
-    if (!payload?.qrId || !payload?.sessionId || !Number.isInteger(payload.tokenVersion) || !Number.isInteger(payload.bucket) || payload.bucket < 0 || !Number.isFinite(payload.exp)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
-async function validateAttendanceManagerAccess(sessionId, user) {
-  if (isDevMockDb) {
-    const store = devMockStore || getInitialStore();
-    const item = (store.attendanceSessions || []).find((entry) => entry.id === sessionId);
-    if (!item) return { session: null, error: "Attendance session not found.", status: 404 };
-    const course = (store.courses || []).find((entry) => entry.id === item.courseId);
-    const ownerId = item.teacherId || course?.teacherId;
-    if (user.role === "teacher" && ownerId !== user.id) return { session: null, error: "Permission denied.", status: 403 };
-    return { session: { id: item.id, course_id: item.courseId, section_id: item.sectionId || null, teacher_id: ownerId }, error: null, status: 200 };
-  }
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
-  if (!session) return { session: null, error: "Attendance session not found.", status: 404 };
-  if (user.role === "teacher" && session.teacher_id !== user.id) return { session: null, error: "Permission denied.", status: 403 };
-  return { session, error: null, status: 200 };
-}
-app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  const session = access.session;
-  if (isDevMockDb) {
-    const previous = [...devAttendanceQrSessions.values()].find((item) => item.sessionId === session.id && !item.revokedAt);
-    const qr2 = { id: previous?.id || generateId2("qr"), sessionId: session.id, sectionId: session.section_id || null, tokenVersion: (previous?.tokenVersion || 0) + 1, intervalSeconds: ATTENDANCE_QR_INTERVAL_SECONDS };
-    devAttendanceQrSessions.set(qr2.id, qr2);
-    const current2 = buildAttendanceQrToken({ qrId: qr2.id, sessionId: session.id, tokenVersion: qr2.tokenVersion, intervalSeconds: qr2.intervalSeconds });
-    return res.status(201).json({ sessionId: session.id, token: current2.token, expiresAt: current2.expiresAt, intervalSeconds: qr2.intervalSeconds });
-  }
-  const qr = (await pool.query(
-    `INSERT INTO attendance_qr_sessions (id, attendance_session_id, section_id, interval_seconds, created_by)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (attendance_session_id) WHERE revoked_at IS NULL
-     DO UPDATE SET token_version = attendance_qr_sessions.token_version + 1,
-                   started_at = CURRENT_TIMESTAMP,
-                   expires_at = NULL,
-                   created_by = EXCLUDED.created_by
-     RETURNING *`,
-    [generateId2("qr"), session.id, session.section_id || null, ATTENDANCE_QR_INTERVAL_SECONDS, req.user.id]
-  )).rows[0];
-  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
-  await audit(req, "open_attendance_qr", session.id, `interval=${qr.interval_seconds}s`);
-  return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
-}));
-app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  if (isDevMockDb) {
-    const qr2 = [...devAttendanceQrSessions.values()].find((item) => item.sessionId === req.params.id && !item.revokedAt);
-    if (!qr2) return res.status(404).json({ error: "QR \u0111i\u1EC3m danh ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF." });
-    const current2 = buildAttendanceQrToken({ qrId: qr2.id, sessionId: req.params.id, tokenVersion: qr2.tokenVersion, intervalSeconds: qr2.intervalSeconds });
-    return res.json({ sessionId: req.params.id, token: current2.token, expiresAt: current2.expiresAt, intervalSeconds: qr2.intervalSeconds });
-  }
-  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE attendance_session_id = $1 AND revoked_at IS NULL LIMIT 1", [req.params.id])).rows[0];
-  if (!qr) return res.status(404).json({ error: "QR \u0111i\u1EC3m danh ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF." });
-  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
-  return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
-}));
-app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  if (isDevMockDb) {
-    for (const qr of devAttendanceQrSessions.values()) if (qr.sessionId === req.params.id && !qr.revokedAt) qr.revokedAt = (/* @__PURE__ */ new Date()).toISOString();
-    return res.json({ ok: true });
-  }
-  await pool.query("UPDATE attendance_qr_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE attendance_session_id = $1 AND revoked_at IS NULL", [req.params.id]);
-  await audit(req, "close_attendance_qr", req.params.id, "QR session revoked");
-  return res.json({ ok: true });
-}));
 var getVietnamTimeInfo = () => {
   const now = /* @__PURE__ */ new Date();
   const tzOffset = 7 * 60;
@@ -10150,161 +9884,6 @@ app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), 
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   await audit(req, "student_self_checkin", record.id, `Student: ${req.user.id}, Status: present`);
   res.json({ ok: true, record });
-}));
-app.post("/api/attendance/self-checkin/qr", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckinQr), asyncHandler(async (req, res) => {
-  const payload = parseAttendanceQrToken(req.body.token);
-  if (!payload) return res.status(400).json({ error: "QR \u0111i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7 ho\u1EB7c \u0111\xE3 b\u1ECB thay \u0111\u1ED5i." });
-  const nowSeconds = Math.floor(Date.now() / 1e3);
-  if (nowSeconds > payload.exp + 5 || Math.abs(Math.floor(nowSeconds / ATTENDANCE_QR_INTERVAL_SECONDS) - payload.bucket) > 1) {
-    return res.status(400).json({ error: "QR \u0111i\u1EC3m danh \u0111\xE3 h\u1EBFt h\u1EA1n. Vui l\xF2ng qu\xE9t m\xE3 \u0111ang hi\u1EC3n th\u1ECB tr\xEAn m\xE0n h\xECnh l\u1EDBp." });
-  }
-  if (isDevMockDb) {
-    const qr2 = devAttendanceQrSessions.get(payload.qrId);
-    if (!qr2 || qr2.revokedAt || qr2.sessionId !== payload.sessionId || qr2.tokenVersion !== payload.tokenVersion) return res.status(400).json({ error: "Phi\xEAn QR \u0111i\u1EC3m danh \u0111\xE3 b\u1ECB \u0111\xF3ng ho\u1EB7c \u0111\u1ED5i m\xE3." });
-    const store = devMockStore || getInitialStore();
-    const session2 = (store.attendanceSessions || []).find((item) => item.id === payload.sessionId);
-    if (!session2) return res.status(404).json({ error: "Attendance session not found." });
-    const registered = session2.sectionId ? (store.courseRegistrations || []).some((item) => item.studentId === req.user.id && item.sectionId === session2.sectionId && item.status === "registered") : (store.enrollments || []).some((item) => item.studentId === req.user.id && item.courseId === session2.courseId && ["active", "completed"].includes(item.status));
-    if (!registered) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y." });
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const records = store.attendanceRecords || [];
-    const existing2 = records.find((item) => item.sessionId === session2.id && item.studentId === req.user.id);
-    const record2 = { id: existing2?.id || generateId2("atr"), sessionId: session2.id, studentId: req.user.id, status: "present", note: "T\u1EF1 \u0111i\u1EC3m danh qua QR \u0111\u1ED9ng", checkedInAt: now, checkinMethod: "qr" };
-    devMockStore = { ...store, attendanceRecords: existing2 ? records.map((item) => item.id === existing2.id ? { ...item, ...record2 } : item) : [record2, ...records] };
-    return res.json({ ok: true, record: record2 });
-  }
-  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE id = $1 AND attendance_session_id = $2 AND revoked_at IS NULL", [payload.qrId, payload.sessionId])).rows[0];
-  if (!qr || Number(qr.token_version) !== Number(payload.tokenVersion)) return res.status(400).json({ error: "Phi\xEAn QR \u0111i\u1EC3m danh \u0111\xE3 b\u1ECB \u0111\xF3ng ho\u1EB7c \u0111\u1ED5i m\xE3." });
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [payload.sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-  if (session.section_id) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
-    if (section) {
-      const schedule = parseSchedule(section);
-      if (!isWithinSchedule(schedule)) return res.status(400).json({ error: "\u0110i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7: hi\u1EC7n t\u1EA1i kh\xF4ng n\u1EB1m trong khung gi\u1EDD h\u1ECDc c\u1EE7a l\u1EDBp." });
-    }
-    const registration = (await pool.query(
-      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
-      [req.user.id, session.section_id]
-    )).rows[0];
-    if (!registration) return res.status(403).json({ error: "B\u1EA1n ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y." });
-  } else {
-    const enrollment = (await pool.query(
-      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
-      [req.user.id, session.course_id]
-    )).rows[0];
-    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
-  }
-  const existing = (await pool.query("SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2", [session.id, req.user.id])).rows[0];
-  const record = {
-    id: existing?.id || generateId2("atr"),
-    sessionId: session.id,
-    studentId: req.user.id,
-    status: "present",
-    note: "T\u1EF1 \u0111i\u1EC3m danh qua QR \u0111\u1ED9ng",
-    checkedInAt: (/* @__PURE__ */ new Date()).toISOString(),
-    checkinMethod: "qr"
-  };
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  await audit(req, "student_qr_checkin", record.id, `Student: ${req.user.id}, Session: ${session.id}`);
-  invalidateStoreCache();
-  return res.json({ ok: true, record });
-}));
-app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]), validateBody(schemas.teacherCheckin), asyncHandler(async (req, res) => {
-  const { courseId: courseId2, sectionId, slotTime, classDate } = req.body;
-  const teacherId = req.user.id;
-  if (!isValidDateOnly(classDate)) {
-    return res.status(400).json({ error: "Ng\xE0y l\xEAn l\u1EDBp kh\xF4ng h\u1EE3p l\u1EC7. \u0110\u1ECBnh d\u1EA1ng y\xEAu c\u1EA7u l\xE0 YYYY-MM-DD." });
-  }
-  const parsedSlot = parseSlotTime(slotTime);
-  if (!parsedSlot) {
-    return res.status(400).json({ error: "Khung gi\u1EDD l\xEAn l\u1EDBp kh\xF4ng h\u1EE3p l\u1EC7. \u0110\u1ECBnh d\u1EA1ng y\xEAu c\u1EA7u l\xE0 HH:mm - HH:mm." });
-  }
-  const section = (await pool.query(
-    `SELECT cs.*, c.teacher_id AS course_teacher_id
-     FROM course_sections cs
-     JOIN courses c ON c.id = cs.course_id
-     WHERE cs.id = $1`,
-    [sectionId]
-  )).rows[0];
-  if (!section) return res.status(404).json({ error: "L\u1EDBp h\u1ECDc ph\u1EA7n kh\xF4ng t\u1ED3n t\u1EA1i." });
-  if (section.course_id !== courseId2) {
-    return res.status(400).json({ error: "L\u1EDBp h\u1ECDc ph\u1EA7n kh\xF4ng thu\u1ED9c m\xF4n h\u1ECDc \u0111\xE3 ch\u1ECDn." });
-  }
-  if (section.teacher_id !== teacherId) {
-    return res.status(403).json({ error: "B\u1EA1n kh\xF4ng ph\u1EA3i gi\u1EA3ng vi\xEAn \u0111\u01B0\u1EE3c ph\xE2n c\xF4ng cho l\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y." });
-  }
-  if (section.status === "cancelled") {
-    return res.status(400).json({ error: "Kh\xF4ng th\u1EC3 \u0111i\u1EC3m danh l\u1EDBp h\u1ECDc ph\u1EA7n \u0111\xE3 h\u1EE7y." });
-  }
-  const schedule = parseSchedule(section);
-  const matchedSlot = findScheduleSlot(schedule, classDate, parsedSlot.normalized);
-  if (!matchedSlot) {
-    return res.status(400).json({ error: "Ca l\xEAn l\u1EDBp kh\xF4ng kh\u1EDBp th\u1EDDi kh\xF3a bi\u1EC3u c\u1EE7a l\u1EDBp h\u1ECDc ph\u1EA7n." });
-  }
-  if (!isCurrentVietnamTimeWithinSlot(classDate, matchedSlot)) {
-    return res.status(400).json({ error: "\u0110i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7: Hi\u1EC7n t\u1EA1i kh\xF4ng n\u1EB1m trong khung gi\u1EDD h\u1ECDc \u0111\u01B0\u1EE3c l\xEAn l\u1ECBch c\u1EE7a l\u1EDBp n\xE0y!" });
-  }
-  const existing = (await pool.query(
-    "SELECT id FROM teacher_attendance WHERE teacher_id = $1 AND section_id = $2 AND class_date = $3 AND slot_time = $4",
-    [teacherId, sectionId, classDate, parsedSlot.normalized]
-  )).rows[0];
-  if (existing) {
-    return res.status(400).json({ error: "Gi\u1EA3ng vi\xEAn \u0111\xE3 \u0111i\u1EC3m danh cho ca h\u1ECDc n\xE0y r\u1ED3i!" });
-  }
-  const record = {
-    id: generateId2("tat"),
-    teacherId,
-    courseId: courseId2,
-    sectionId,
-    classDate,
-    slotTime: parsedSlot.normalized,
-    status: "present",
-    checkedInAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  const insertRes = await pool.query(
-    `INSERT INTO teacher_attendance (id, teacher_id, course_id, section_id, class_date, slot_time, status, checked_in_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT DO NOTHING
-     RETURNING id`,
-    [record.id, record.teacherId, record.courseId, record.sectionId, record.classDate, record.slotTime, record.status, record.checkedInAt]
-  );
-  if (insertRes.rowCount === 0) {
-    return res.status(400).json({ error: "Gi\u1EA3ng vi\xEAn \u0111\xE3 \u0111i\u1EC3m danh cho ca h\u1ECDc n\xE0y r\u1ED3i." });
-  }
-  const { invalidateStoreCache: invalidateStoreCache2 } = await Promise.resolve().then(() => (init_storeSnapshot(), storeSnapshot_exports));
-  invalidateStoreCache2();
-  await audit(req, "teacher_self_checkin", record.id, `Teacher: ${teacherId}, Section: ${sectionId}, Status: present`);
-  res.status(201).json({ ok: true, record });
-}));
-app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
-  const { courseId: courseId2, teacherId } = req.body;
-  if (!courseId2 || !teacherId) {
-    return res.status(400).json({ error: "Missing courseId or teacherId." });
-  }
-  const course = await coursesRepository.findById(pool, courseId2);
-  if (!course) return res.status(404).json({ error: "Course not found." });
-  const teacher = (await pool.query("SELECT * FROM users WHERE id = $1 AND role = 'teacher'", [teacherId])).rows[0];
-  if (!teacher) return res.status(404).json({ error: "Teacher not found." });
-  const sectionsRes = await pool.query(
-    "SELECT section_code FROM course_sections WHERE course_id = $1 AND teacher_id = $2 AND status != 'cancelled'",
-    [courseId2, teacherId]
-  );
-  const sectionCodes = sectionsRes.rows.map((r) => r.section_code);
-  const sectionCodesText = sectionCodes.length > 0 ? ` (L\u1EDBp: ${sectionCodes.join(", ")})` : "";
-  await notificationsRepository.createNotification(
-    pool,
-    teacherId,
-    "danger",
-    `C\u1EA2NH C\xC1O H\u1ECCC V\u1EE4: M\xF4n h\u1ECDc "${course.title}"${sectionCodesText} ch\u01B0a c\xF3 b\u1EA5t k\u1EF3 bu\u1ED5i \u0111i\u1EC3m danh n\xE0o. Y\xEAu c\u1EA7u gi\u1EA3ng vi\xEAn c\u1EADp nh\u1EADt \u0111i\u1EC3m danh ngay l\u1EADp t\u1EE9c!`
-  );
-  await audit(
-    req,
-    "warning_attendance_compliance",
-    courseId2,
-    `G\u1EEDi c\u1EA3nh c\xE1o ch\u01B0a \u0111i\u1EC3m danh cho gi\u1EA3ng vi\xEAn ${teacher.name} (${teacherId})`
-  );
-  res.json({ ok: true });
 }));
 app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {

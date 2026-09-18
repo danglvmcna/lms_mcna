@@ -165,7 +165,7 @@ import { verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
-import { startScheduler, runCrmOutboxJob, runAttendanceRiskJob } from "./src/server/scheduler";
+import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
 import { getAttendanceReportRows, getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
 
@@ -1393,9 +1393,6 @@ for (const method of ["get", "post"] as const) {
   app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
     res.json(await runCrmOutboxJob());
   }));
-  app[method]("/api/internal/jobs/attendance-risk", requireInternalJobSecret, asyncHandler(async (_req, res) => {
-    res.json(await runAttendanceRiskJob());
-  }));
 }
 
 app.use("/api", requireCsrf);
@@ -1711,18 +1708,17 @@ app.get("/api/admin/operations/summary", requireAuth, requireRole(["teacher", "a
   const teacherFilter = req.user!.role === "teacher" ? "AND EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = e.course_id AND cs.teacher_id = $1)" : "";
   const params = req.user!.role === "teacher" ? [req.user!.id] : [];
   const teacherCourseFilter = req.user!.role === "teacher" ? "AND teacher_id = $1" : "";
-  const [enrollment, ungraded, pendingCourses, risks, crmFailures] = await Promise.all([
+  const [enrollment, ungraded, pendingCourses, crmFailures] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS count FROM enrollments e WHERE e.status IN ('pending', 'pending_payment') ${teacherFilter}`, params),
     pool.query(`SELECT COUNT(*)::int AS count FROM submissions s JOIN assignments a ON a.id = s.assignment_id ${req.user!.role === "teacher" ? "JOIN courses c ON c.id = a.course_id" : ""} WHERE s.score IS NULL ${req.user!.role === "teacher" ? "AND c.teacher_id = $1" : ""}`, params),
     pool.query(`SELECT COUNT(*)::int AS count FROM courses WHERE status = 'pending' ${teacherCourseFilter}`, params),
-    pool.query(`SELECT COUNT(*)::int AS count FROM attendance_risk_alerts WHERE status = 'open' ${req.user!.role === "teacher" ? "AND section_id IN (SELECT id FROM course_sections WHERE teacher_id = $1)" : ""}`, params),
     pool.query("SELECT COUNT(*)::int AS count FROM crm_outbox WHERE status = 'failed'")
   ]);
   return res.json({
     pendingEnrollments: Number(enrollment.rows[0]?.count || 0),
     ungradedSubmissions: Number(ungraded.rows[0]?.count || 0),
     pendingCourses: Number(pendingCourses.rows[0]?.count || 0),
-    attendanceRisks: Number(risks.rows[0]?.count || 0),
+    attendanceRisks: 0,
     crmFailures: Number(crmFailures.rows[0]?.count || 0),
     generatedAt: new Date().toISOString()
   });
@@ -4165,222 +4161,6 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
   res.json(updated);
 }));
 
-app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-  if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
-  const studentInSession = (await pool.query(
-    `SELECT 1 FROM course_registrations cr
-     JOIN attendance_sessions ats ON ats.section_id = cr.section_id
-     WHERE ats.id = $1 AND cr.student_id = $2 AND cr.status = 'registered'`,
-    [req.body.sessionId, req.body.studentId]
-  )).rows[0];
-  if (!studentInSession) return res.status(403).json({ error: "Student is not registered in this session's class." });
-  const existing = (await pool.query(
-    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
-    [req.body.sessionId, req.body.studentId]
-  )).rows[0];
-  const record = {
-    id: existing?.id || generateId("atr"),
-    sessionId: req.body.sessionId,
-    studentId: req.body.studentId,
-    status: req.body.status,
-    note: req.body.note,
-    checkinMethod: "manual" as const
-  };
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  invalidateStoreCache();
-  await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
-  res.json(record);
-}));
-
-app.post("/api/attendance/sessions/generate-link", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.generateAttendanceLink), asyncHandler(async (req, res) => {
-  const { courseId, sectionId, topic } = req.body;
-  const course = await coursesRepository.findById(pool, courseId);
-  if (!course) return res.status(404).json({ error: "Course not found." });
-  if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) {
-    return res.status(403).json({ error: "Permission denied." });
-  }
-  const sectionValidation = await validateAttendanceSectionAccess(courseId, sectionId, req.user!);
-  if (sectionValidation.error) return res.status(sectionValidation.status!).json({ error: sectionValidation.error });
-
-  // Generate unique 6-character random uppercase code
-  const code = crypto.randomBytes(3).toString("hex").toUpperCase();
-  // 5 minutes expiry
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-  const session = {
-    id: generateId("ats"),
-    courseId,
-    sectionId,
-    teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
-    date: new Date().toISOString().slice(0, 10),
-    topic,
-    code,
-    expiresAt
-  };
-
-  // Insert session into database
-  const columns = (await pool.query(
-    "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'section_id')"
-  )).rows.map(row => row.column_name);
-  const sessionDateOnly = session.date.slice(0, 10);
-
-  if (columns.includes("session_date") && columns.includes("date")) {
-    await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [session.id, session.courseId, session.teacherId, sessionDateOnly, session.date, session.topic, session.code, session.expiresAt]
-    );
-  } else {
-    await pool.query(
-      `INSERT INTO attendance_sessions (id, course_id, teacher_id, date, topic, code, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [session.id, session.courseId, session.teacherId, session.date, session.topic, session.code, session.expiresAt]
-    );
-  }
-  if (columns.includes("section_id") && sectionId) {
-    await pool.query("UPDATE attendance_sessions SET section_id = $1 WHERE id = $2", [sectionId, session.id]);
-  }
-
-  // Fetch active students for the selected section when provided, otherwise for the course.
-  const enrollmentsRes = sectionId
-    ? await pool.query(
-        "SELECT student_id FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-        [sectionId]
-      )
-    : await pool.query(
-        "SELECT student_id FROM enrollments WHERE course_id = $1 AND status = 'active'",
-        [courseId]
-      );
-  const studentIds = enrollmentsRes.rows.map(row => row.student_id);
-
-  // Send check-in notifications to all active students in class
-  const message = `[Điểm danh trực tuyến] Môn học "${course.title}" đang tiến hành điểm danh trực tuyến. Hãy click vào đây để xác nhận có mặt (Thời hạn 5 phút).`;
-
-  for (const studentId of studentIds) {
-    await notificationsRepository.create(pool, {
-      userId: studentId,
-      type: "attendance_link",
-      message,
-      relatedEntityType: "attendance_session",
-      relatedEntityId: session.id
-    });
-  }
-
-  await audit(req, "create_attendance_link", session.id, `Course: ${course.title}, Code: ${code}`);
-
-  res.status(201).json({ session, code, expiresAt });
-}));
-
-const ATTENDANCE_QR_INTERVAL_SECONDS = 30;
-const ATTENDANCE_QR_SECRET = process.env.ATTENDANCE_QR_SECRET || JWT_SECRET_VALUE;
-const devAttendanceQrSessions = new Map<string, { id: string; sessionId: string; sectionId?: string | null; tokenVersion: number; intervalSeconds: number; revokedAt?: string }>();
-
-function encodeQrPart(value: unknown) {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
-}
-
-function signQrPart(encodedPayload: string) {
-  return crypto.createHmac("sha256", ATTENDANCE_QR_SECRET).update(encodedPayload).digest("base64url");
-}
-
-function buildAttendanceQrToken(input: { qrId: string; sessionId: string; tokenVersion: number; intervalSeconds: number; bucket?: number }) {
-  const bucket = input.bucket ?? Math.floor(Date.now() / 1000 / input.intervalSeconds);
-  const expiresAt = (bucket + 1) * input.intervalSeconds;
-  const payload = encodeQrPart({
-    qrId: input.qrId,
-    sessionId: input.sessionId,
-    tokenVersion: input.tokenVersion,
-    bucket,
-    exp: expiresAt
-  });
-  return { token: `${payload}.${signQrPart(payload)}`, expiresAt: new Date(expiresAt * 1000).toISOString() };
-}
-
-function parseAttendanceQrToken(token: string) {
-  const [encodedPayload, signature] = String(token || "").split(".");
-  if (!encodedPayload || !signature) return null;
-  const expected = signQrPart(encodedPayload);
-  try {
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
-    if (!payload?.qrId || !payload?.sessionId || !Number.isInteger(payload.tokenVersion) || !Number.isInteger(payload.bucket) || payload.bucket < 0 || !Number.isFinite(payload.exp)) return null;
-    return payload as { qrId: string; sessionId: string; tokenVersion: number; bucket: number; exp: number };
-  } catch {
-    return null;
-  }
-}
-
-async function validateAttendanceManagerAccess(sessionId: string, user: User) {
-  if (isDevMockDb) {
-    const store = devMockStore || getInitialStore();
-    const item: any = (store.attendanceSessions || []).find((entry: any) => entry.id === sessionId);
-    if (!item) return { session: null, error: "Attendance session not found.", status: 404 };
-    const course = (store.courses || []).find((entry: any) => entry.id === item.courseId);
-    const ownerId = item.teacherId || course?.teacherId;
-    if (user.role === "teacher" && ownerId !== user.id) return { session: null, error: "Permission denied.", status: 403 };
-    return { session: { id: item.id, course_id: item.courseId, section_id: item.sectionId || null, teacher_id: ownerId }, error: null, status: 200 };
-  }
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
-  if (!session) return { session: null, error: "Attendance session not found.", status: 404 };
-  if (user.role === "teacher" && session.teacher_id !== user.id) return { session: null, error: "Permission denied.", status: 403 };
-  return { session, error: null, status: 200 };
-}
-
-app.post("/api/attendance/sessions/:id/qr/open", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  const session = access.session!;
-  if (isDevMockDb) {
-    const previous = [...devAttendanceQrSessions.values()].find(item => item.sessionId === session.id && !item.revokedAt);
-    const qr = { id: previous?.id || generateId("qr"), sessionId: session.id, sectionId: session.section_id || null, tokenVersion: (previous?.tokenVersion || 0) + 1, intervalSeconds: ATTENDANCE_QR_INTERVAL_SECONDS };
-    devAttendanceQrSessions.set(qr.id, qr);
-    const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.tokenVersion, intervalSeconds: qr.intervalSeconds });
-    return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.intervalSeconds });
-  }
-  const qr = (await pool.query(
-    `INSERT INTO attendance_qr_sessions (id, attendance_session_id, section_id, interval_seconds, created_by)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (attendance_session_id) WHERE revoked_at IS NULL
-     DO UPDATE SET token_version = attendance_qr_sessions.token_version + 1,
-                   started_at = CURRENT_TIMESTAMP,
-                   expires_at = NULL,
-                   created_by = EXCLUDED.created_by
-     RETURNING *`,
-    [generateId("qr"), session.id, session.section_id || null, ATTENDANCE_QR_INTERVAL_SECONDS, req.user!.id]
-  )).rows[0];
-  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: session.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
-  await audit(req, "open_attendance_qr", session.id, `interval=${qr.interval_seconds}s`);
-  return res.status(201).json({ sessionId: session.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
-}));
-
-app.get("/api/attendance/sessions/:id/qr/current", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  if (isDevMockDb) {
-    const qr = [...devAttendanceQrSessions.values()].find(item => item.sessionId === req.params.id && !item.revokedAt);
-    if (!qr) return res.status(404).json({ error: "QR điểm danh chưa được mở." });
-    const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.tokenVersion, intervalSeconds: qr.intervalSeconds });
-    return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.intervalSeconds });
-  }
-  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE attendance_session_id = $1 AND revoked_at IS NULL LIMIT 1", [req.params.id])).rows[0];
-  if (!qr) return res.status(404).json({ error: "QR điểm danh chưa được mở." });
-  const current = buildAttendanceQrToken({ qrId: qr.id, sessionId: req.params.id, tokenVersion: qr.token_version, intervalSeconds: qr.interval_seconds });
-  return res.json({ sessionId: req.params.id, token: current.token, expiresAt: current.expiresAt, intervalSeconds: qr.interval_seconds });
-}));
-
-app.post("/api/attendance/sessions/:id/qr/close", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
-  const access = await validateAttendanceManagerAccess(req.params.id, req.user!);
-  if (access.error) return res.status(access.status).json({ error: access.error });
-  if (isDevMockDb) {
-    for (const qr of devAttendanceQrSessions.values()) if (qr.sessionId === req.params.id && !qr.revokedAt) qr.revokedAt = new Date().toISOString();
-    return res.json({ ok: true });
-  }
-  await pool.query("UPDATE attendance_qr_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE attendance_session_id = $1 AND revoked_at IS NULL", [req.params.id]);
-  await audit(req, "close_attendance_qr", req.params.id, "QR session revoked");
-  return res.json({ ok: true });
-}));
 
 
 const getVietnamTimeInfo = () => {
@@ -4512,185 +4292,7 @@ app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), 
   res.json({ ok: true, record });
 }));
 
-app.post("/api/attendance/self-checkin/qr", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckinQr), asyncHandler(async (req, res) => {
-  const payload = parseAttendanceQrToken(req.body.token);
-  if (!payload) return res.status(400).json({ error: "QR điểm danh không hợp lệ hoặc đã bị thay đổi." });
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  if (nowSeconds > payload.exp + 5 || Math.abs(Math.floor(nowSeconds / ATTENDANCE_QR_INTERVAL_SECONDS) - payload.bucket) > 1) {
-    return res.status(400).json({ error: "QR điểm danh đã hết hạn. Vui lòng quét mã đang hiển thị trên màn hình lớp." });
-  }
 
-  if (isDevMockDb) {
-    const qr = devAttendanceQrSessions.get(payload.qrId);
-    if (!qr || qr.revokedAt || qr.sessionId !== payload.sessionId || qr.tokenVersion !== payload.tokenVersion) return res.status(400).json({ error: "Phiên QR điểm danh đã bị đóng hoặc đổi mã." });
-    const store = devMockStore || getInitialStore();
-    const session: any = (store.attendanceSessions || []).find((item: any) => item.id === payload.sessionId);
-    if (!session) return res.status(404).json({ error: "Attendance session not found." });
-    const registered = session.sectionId
-      ? (store.courseRegistrations || []).some((item: any) => item.studentId === req.user!.id && item.sectionId === session.sectionId && item.status === "registered")
-      : (store.enrollments || []).some((item: any) => item.studentId === req.user!.id && item.courseId === session.courseId && ["active", "completed"].includes(item.status));
-    if (!registered) return res.status(403).json({ error: "Bạn chưa được xếp vào lớp học phần này." });
-    const now = new Date().toISOString();
-    const records = store.attendanceRecords || [];
-    const existing = records.find((item: any) => item.sessionId === session.id && item.studentId === req.user!.id);
-    const record = { id: existing?.id || generateId("atr"), sessionId: session.id, studentId: req.user!.id, status: "present" as const, note: "Tự điểm danh qua QR động", checkedInAt: now, checkinMethod: "qr" as const };
-    devMockStore = { ...store, attendanceRecords: existing ? records.map((item: any) => item.id === existing.id ? { ...item, ...record } : item) : [record, ...records] };
-    return res.json({ ok: true, record });
-  }
-
-  const qr = (await pool.query("SELECT * FROM attendance_qr_sessions WHERE id = $1 AND attendance_session_id = $2 AND revoked_at IS NULL", [payload.qrId, payload.sessionId])).rows[0];
-  if (!qr || Number(qr.token_version) !== Number(payload.tokenVersion)) return res.status(400).json({ error: "Phiên QR điểm danh đã bị đóng hoặc đổi mã." });
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [payload.sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-
-  if (session.section_id) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
-    if (section) {
-      const schedule = parseSchedule(section);
-      if (!isWithinSchedule(schedule)) return res.status(400).json({ error: "Điểm danh không hợp lệ: hiện tại không nằm trong khung giờ học của lớp." });
-    }
-    const registration = (await pool.query(
-      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
-      [req.user!.id, session.section_id]
-    )).rows[0];
-    if (!registration) return res.status(403).json({ error: "Bạn chưa được xếp vào lớp học phần này." });
-  } else {
-    const enrollment = (await pool.query(
-      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
-      [req.user!.id, session.course_id]
-    )).rows[0];
-    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
-  }
-
-  const existing = (await pool.query("SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2", [session.id, req.user!.id])).rows[0];
-  const record = {
-    id: existing?.id || generateId("atr"),
-    sessionId: session.id,
-    studentId: req.user!.id,
-    status: "present" as const,
-    note: "Tự điểm danh qua QR động",
-    checkedInAt: new Date().toISOString(),
-    checkinMethod: "qr" as const
-  };
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  await audit(req, "student_qr_checkin", record.id, `Student: ${req.user!.id}, Session: ${session.id}`);
-  invalidateStoreCache();
-  return res.json({ ok: true, record });
-}));
-
-app.post("/api/attendance/teacher-checkin", requireAuth, requireRole(["teacher"]), validateBody(schemas.teacherCheckin), asyncHandler(async (req, res) => {
-  const { courseId, sectionId, slotTime, classDate } = req.body;
-  const teacherId = req.user!.id;
-
-  if (!isValidDateOnly(classDate)) {
-    return res.status(400).json({ error: "Ngày lên lớp không hợp lệ. Định dạng yêu cầu là YYYY-MM-DD." });
-  }
-  const parsedSlot = parseSlotTime(slotTime);
-  if (!parsedSlot) {
-    return res.status(400).json({ error: "Khung giờ lên lớp không hợp lệ. Định dạng yêu cầu là HH:mm - HH:mm." });
-  }
-
-  // Validate schedule slot matching
-  const section = (await pool.query(
-    `SELECT cs.*, c.teacher_id AS course_teacher_id
-     FROM course_sections cs
-     JOIN courses c ON c.id = cs.course_id
-     WHERE cs.id = $1`,
-    [sectionId]
-  )).rows[0];
-  if (!section) return res.status(404).json({ error: "Lớp học phần không tồn tại." });
-  if (section.course_id !== courseId) {
-    return res.status(400).json({ error: "Lớp học phần không thuộc môn học đã chọn." });
-  }
-  if (section.teacher_id !== teacherId) {
-    return res.status(403).json({ error: "Bạn không phải giảng viên được phân công cho lớp học phần này." });
-  }
-  if (section.status === "cancelled") {
-    return res.status(400).json({ error: "Không thể điểm danh lớp học phần đã hủy." });
-  }
-
-  const schedule = parseSchedule(section);
-  const matchedSlot = findScheduleSlot(schedule, classDate, parsedSlot.normalized);
-  if (!matchedSlot) {
-    return res.status(400).json({ error: "Ca lên lớp không khớp thời khóa biểu của lớp học phần." });
-  }
-  if (!isCurrentVietnamTimeWithinSlot(classDate, matchedSlot)) {
-    return res.status(400).json({ error: "Điểm danh không hợp lệ: Hiện tại không nằm trong khung giờ học được lên lịch của lớp này!" });
-  }
-
-  // Check if teacher already checked in for this section/date/slot.
-  const existing = (await pool.query(
-    "SELECT id FROM teacher_attendance WHERE teacher_id = $1 AND section_id = $2 AND class_date = $3 AND slot_time = $4",
-    [teacherId, sectionId, classDate, parsedSlot.normalized]
-  )).rows[0];
-
-  if (existing) {
-    return res.status(400).json({ error: "Giảng viên đã điểm danh cho ca học này rồi!" });
-  }
-
-  const record = {
-    id: generateId("tat"),
-    teacherId,
-    courseId,
-    sectionId,
-    classDate,
-    slotTime: parsedSlot.normalized,
-    status: "present" as const,
-    checkedInAt: new Date().toISOString()
-  };
-
-  const insertRes = await pool.query(
-    `INSERT INTO teacher_attendance (id, teacher_id, course_id, section_id, class_date, slot_time, status, checked_in_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT DO NOTHING
-     RETURNING id`,
-    [record.id, record.teacherId, record.courseId, record.sectionId, record.classDate, record.slotTime, record.status, record.checkedInAt]
-  );
-  if (insertRes.rowCount === 0) {
-    return res.status(400).json({ error: "Giảng viên đã điểm danh cho ca học này rồi." });
-  }
-
-  const { invalidateStoreCache } = await import("./src/server/repositories/storeSnapshot");
-  invalidateStoreCache();
-
-  await audit(req, "teacher_self_checkin", record.id, `Teacher: ${teacherId}, Section: ${sectionId}, Status: present`);
-
-  res.status(201).json({ ok: true, record });
-}));
-
-app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
-  const { courseId, teacherId } = req.body;
-  if (!courseId || !teacherId) {
-    return res.status(400).json({ error: "Missing courseId or teacherId." });
-  }
-  const course = await coursesRepository.findById(pool, courseId);
-  if (!course) return res.status(404).json({ error: "Course not found." });
-  const teacher = (await pool.query("SELECT * FROM users WHERE id = $1 AND role = 'teacher'", [teacherId])).rows[0];
-  if (!teacher) return res.status(404).json({ error: "Teacher not found." });
-
-  const sectionsRes = await pool.query(
-    "SELECT section_code FROM course_sections WHERE course_id = $1 AND teacher_id = $2 AND status != 'cancelled'",
-    [courseId, teacherId]
-  );
-  const sectionCodes = sectionsRes.rows.map((r: any) => r.section_code);
-  const sectionCodesText = sectionCodes.length > 0 ? ` (Lớp: ${sectionCodes.join(", ")})` : "";
-
-  await notificationsRepository.createNotification(
-    pool,
-    teacherId,
-    "danger",
-    `CẢNH CÁO HỌC VỤ: Môn học "${course.title}"${sectionCodesText} chưa có bất kỳ buổi điểm danh nào. Yêu cầu giảng viên cập nhật điểm danh ngay lập tức!`
-  );
-
-  await audit(
-    req,
-    "warning_attendance_compliance",
-    courseId,
-    `Gửi cảnh cáo chưa điểm danh cho giảng viên ${teacher.name} (${teacherId})`
-  );
-
-  res.json({ ok: true });
-}));
 
 app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {

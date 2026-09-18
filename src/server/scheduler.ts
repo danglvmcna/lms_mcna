@@ -11,10 +11,6 @@ export async function runCrmOutboxJob() {
   return deliverPendingCrmEvents();
 }
 
-/** @deprecated Attendance tracking is disabled for online courses */
-export async function runAttendanceRiskJob() {
-  return { ok: true, message: "Attendance risk tracking disabled for online courses." };
-}
 
 async function runSchedulerTask(name: string, task: () => Promise<unknown>) {
   try {
