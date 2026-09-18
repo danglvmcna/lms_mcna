@@ -5246,6 +5246,11 @@ async function enqueueCrmEvent(db, type, data, origin = "lms") {
     "INSERT INTO crm_outbox (id, event_type, payload, created_at) VALUES ($1, $2, $3, clock_timestamp())",
     [id, type, JSON.stringify(payload)]
   );
+  setTimeout(() => {
+    void deliverPendingCrmEvents().catch((err) => {
+      console.warn("[crm-outbox] opportunistic delivery error:", err?.message || err);
+    });
+  }, 500);
   return id;
 }
 async function buildEnrollmentEventData(db, enrollmentId) {
