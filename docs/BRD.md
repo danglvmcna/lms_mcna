@@ -1,7 +1,7 @@
 # Tài liệu yêu cầu nghiệp vụ E16 LMS/SIS
 
 > ⚠️ **TÀI LIỆU LƯU TRỮ — KHÔNG CÒN HIỆU LỰC.** Đây là BRD của hệ thống SIS đại học E16 mà repo này đã rời bỏ.
-> Không dùng làm căn cứ khi phát triển. Tham chiếu hiện hành: `docs/bao-cao-phan-tich-repo.md` và `docs/crm-integration.md`.
+> **Tài liệu BRD chính thức hiện hành:** [`docs/BRD-MCNA-LMS.md`](./BRD-MCNA-LMS.md). Tham chiếu kỹ thuật: [`docs/bao-cao-phan-tich-repo.md`](./bao-cao-phan-tich-repo.md) và [`docs/crm-integration.md`](./crm-integration.md).
 
 Phiên bản: 2.1
 Ngày cập nhật: 2026-09-14

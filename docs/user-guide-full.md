@@ -1,6 +1,9 @@
 # Hướng dẫn sử dụng đầy đủ E16 LMS/SIS
 
-Phiên bản tài liệu: 2026-06-15
+> ⚠️ **TÀI LIỆU LƯU TRỮ LỊCH SỬ:** Tài liệu này phản ánh cấu trúc cũ của hệ thống SIS với 8 vai trò (`super_admin`, `parent`, `advisor`, `finance`...). 
+> Hệ thống MCNA LMS hiện hành đã chuẩn hóa về **3 vai trò chính thức** (`admin`, `teacher`, `student`). Xem chi tiết tại `docs/bao-cao-phan-tich-repo.md` và `docs/crm-integration.md`.
+
+Phiên bản tài liệu: 2026-06-15 (Lưu trữ)
 
 Tài liệu này hướng dẫn sử dụng các chức năng chính của hệ thống E16 LMS/SIS cho Ban quản trị, Admin quản lý lớp, Giảng viên, Học viên, Phụ huynh, bộ phận tài chính/vận hành và Cố vấn học tập.
 
