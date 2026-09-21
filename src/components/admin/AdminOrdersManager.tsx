@@ -175,102 +175,163 @@ export default function AdminOrdersManager({
     return new Intl.NumberFormat("vi-VN").format(amount) + "\u00A0đ";
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return "HV";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "HV";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const getAvatarColor = (name?: string) => {
+    const styles = [
+      "bg-slate-100 text-slate-700 border-slate-200",
+      "bg-sky-50 text-sky-700 border-sky-200/80",
+      "bg-indigo-50 text-indigo-700 border-indigo-200/80",
+      "bg-emerald-50 text-emerald-700 border-emerald-200/80",
+      "bg-amber-50 text-amber-800 border-amber-200/80",
+      "bg-purple-50 text-purple-700 border-purple-200/80",
+    ];
+    if (!name) return styles[0];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return styles[Math.abs(hash) % styles.length];
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <span className="text-[11px] font-mono font-semibold tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80 uppercase inline-block">
-            QUẢN LÝ BÁN KHÓA HỌC & ĐƠN HÀNG
-          </span>
-          <h2 className="text-xl font-bold text-slate-900 mt-2">Đơn hàng & Ghi danh Khóa học</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Xác nhận chuyển khoản học phí, kích hoạt tài khoản và xếp lớp 1-chạm.</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            Học viên & Đơn hàng
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Quản lý học viên, khóa học và trạng thái học tập.
+          </p>
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="mcna-card p-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Tổng đơn đăng ký</p>
-          <h3 className="text-2xl font-bold font-mono text-slate-900 mt-1">{orders.length}</h3>
+      {/* KPI Metric Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
+          <p className="text-xs font-medium text-slate-500">Tổng đơn đăng ký</p>
+          <div className="flex items-baseline justify-between mt-2">
+            <h3 className="text-2xl font-bold font-mono text-slate-900">{orders.length}</h3>
+            <span className="text-xs text-slate-400 font-mono">100%</span>
+          </div>
         </div>
-        <div className="mcna-card p-4 bg-amber-50/40 border-amber-200/80">
-          <p className="text-xs text-amber-800 uppercase tracking-wider font-semibold">Chờ thanh toán</p>
-          <h3 className="text-2xl font-bold font-mono text-amber-900 mt-1">{pendingPaymentCount}</h3>
+
+        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-500">Chờ thanh toán</p>
+            {pendingPaymentCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </div>
+          <div className="flex items-baseline justify-between mt-2">
+            <h3 className="text-2xl font-bold font-mono text-amber-900">{pendingPaymentCount}</h3>
+            <span className="text-xs text-amber-700 font-medium">Cần xác nhận</span>
+          </div>
         </div>
-        <div className="mcna-card p-4 bg-indigo-50/40 border-indigo-200/80">
-          <p className="text-xs text-indigo-800 uppercase tracking-wider font-semibold">Chờ xếp lớp</p>
-          <h3 className="text-2xl font-bold font-mono text-indigo-900 mt-1">{pendingPlacementCount}</h3>
+
+        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-500">Chờ xếp lớp</p>
+            {pendingPlacementCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-sky-500" />
+            )}
+          </div>
+          <div className="flex items-baseline justify-between mt-2">
+            <h3 className="text-2xl font-bold font-mono text-sky-900">{pendingPlacementCount}</h3>
+            <span className="text-xs text-sky-700 font-medium">Chờ phân bổ</span>
+          </div>
         </div>
-        <div className="mcna-card p-4 bg-emerald-50/40 border-emerald-200/80">
-          <p className="text-xs text-emerald-800 uppercase tracking-wider font-semibold">Đã kích hoạt / Doanh thu</p>
-          <h3 className="text-base sm:text-lg xl:text-xl font-bold font-mono text-emerald-900 mt-1 whitespace-nowrap" title={formatMoney(totalRevenue)}>
-            {formatMoney(totalRevenue)}
-          </h3>
-          <span className="text-xs text-emerald-700 font-medium block mt-1">{activeCount} học viên đang học</span>
+
+        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
+          <p className="text-xs font-medium text-slate-500">Đang học / Doanh thu</p>
+          <div className="mt-2">
+            <h3 className="text-lg sm:text-xl font-bold font-mono text-slate-900 truncate" title={formatMoney(totalRevenue)}>
+              {formatMoney(totalRevenue)}
+            </h3>
+            <span className="text-xs text-emerald-700 font-medium block mt-1">
+              {activeCount} học viên đang học
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
-        <div className="relative flex-1">
-          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
+      {/* Filter and Search Bar Toolbar */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm theo tên học viên, SĐT, email, tên khóa..."
-            className="mcna-input mcna-input-search !pl-9"
+            placeholder="Tìm theo tên học viên, SĐT, email, mã đơn..."
+            className="mcna-input mcna-input-search !pl-9 w-full bg-slate-50/50 focus:bg-white"
           />
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="mcna-select"
+            className="mcna-select text-xs sm:text-sm"
           >
             <option value="all">Tất cả trạng thái ({orders.length})</option>
-            <option value="pending_payment">Chờ xác nhận đóng tiền ({pendingPaymentCount})</option>
+            <option value="pending_payment">Chờ thanh toán ({pendingPaymentCount})</option>
             <option value="pending">Chờ xếp lớp ({pendingPlacementCount})</option>
-            <option value="active">Đã kích hoạt ({activeCount})</option>
+            <option value="active">Đang học ({activeCount})</option>
           </select>
-        </div>
-        <select
-          value={courseFilter}
-          onChange={e => setCourseFilter(e.target.value)}
-          className="mcna-select min-w-48"
-          aria-label="Lọc đơn theo khóa học"
-        >
-          <option value="all">Tất cả khóa học</option>
-          {courses
-            .filter(course => orders.some(order => order.courseId === course.id))
-            .sort((a, b) => a.title.localeCompare(b.title, "vi"))
-            .map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
-        </select>
-      </div>
 
-      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-        <span>Hiển thị {filteredOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredOrders.length)} / {filteredOrders.length} đơn</span>
-        {(search || statusFilter !== "all" || courseFilter !== "all") && (
-          <button
-            type="button"
-            onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}
-            className="font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+          <select
+            value={courseFilter}
+            onChange={e => setCourseFilter(e.target.value)}
+            className="mcna-select text-xs sm:text-sm max-w-[220px]"
+            aria-label="Lọc đơn theo khóa học"
           >
-            Xóa bộ lọc
-          </button>
-        )}
+            <option value="all">Tất cả khóa học</option>
+            {courses
+              .filter(course => orders.some(order => order.courseId === course.id))
+              .sort((a, b) => a.title.localeCompare(b.title, "vi"))
+              .map(course => (
+                <option key={course.id} value={course.id}>{course.title}</option>
+              ))}
+          </select>
+
+          {(search || statusFilter !== "all" || courseFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition shrink-0 cursor-pointer"
+            >
+              Đặt lại
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Orders Table */}
+      {/* Integrated Result Count */}
+      <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+        <span>
+          {filteredOrders.length === 0
+            ? "Không có học viên nào phù hợp"
+            : `Hiển thị ${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, filteredOrders.length)} trong tổng số ${filteredOrders.length} học viên`}
+        </span>
+      </div>
+
+      {/* Orders Data Table */}
       <div className="mcna-table-wrapper">
         <table className="mcna-table min-w-[900px]">
           <thead className="mcna-thead">
             <tr>
-              <th className="mcna-th pl-4 min-w-[190px]">Học viên</th>
-              <th className="mcna-th min-w-[250px]">Khóa học</th>
-              <th className="mcna-th min-w-[150px] whitespace-nowrap">Lớp & Lịch học</th>
-              <th className="mcna-th text-right whitespace-nowrap min-w-[130px]">Số tiền</th>
+              <th className="mcna-th pl-4 min-w-[220px]">Học viên</th>
+              <th className="mcna-th min-w-[240px]">Khóa học</th>
+              <th className="mcna-th min-w-[170px] whitespace-nowrap">Lớp học</th>
+              <th className="mcna-th text-right whitespace-nowrap min-w-[130px]">Học phí</th>
               <th className="mcna-th text-center whitespace-nowrap min-w-[140px]">Trạng thái</th>
               <th className="mcna-th text-right pr-4 whitespace-nowrap min-w-[140px]">Hành động</th>
             </tr>
@@ -278,92 +339,128 @@ export default function AdminOrdersManager({
           <tbody className="divide-y divide-slate-100 font-sans">
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-slate-400">
-                  Không tìm thấy đơn đăng ký nào phù hợp.
+                <td colSpan={6} className="py-12 text-center text-slate-400">
+                  <div className="max-w-xs mx-auto space-y-2">
+                    <p className="text-sm font-medium text-slate-600">Không tìm thấy học viên</p>
+                    <p className="text-xs text-slate-400">
+                      Không có kết quả nào khớp với bộ lọc hoặc từ khóa tìm kiếm hiện tại.
+                    </p>
+                    {(search || statusFilter !== "all" || courseFilter !== "all") && (
+                      <button
+                        type="button"
+                        onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}
+                        className="mcna-btn-secondary !h-8 !px-3 !text-xs mt-2"
+                      >
+                        Xóa bộ lọc
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ) : (
               paginatedOrders.map(order => {
                 const isPending = order.status === "pending_payment" || order.status === "pending";
-                const isActive = order.status === "active";
                 const activeSection = order.currentSection || order.requestedSection;
 
                 return (
-                  <tr key={order.id} className="hover:bg-slate-50/60 transition">
-                    <td className="mcna-td pl-4">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-slate-900 text-sm">
-                          {order.student?.name || "Học viên"}
+                  <tr key={order.id} className="hover:bg-slate-50/70 transition-colors group">
+                    {/* Column 1: Học viên (Primary Identity) */}
+                    <td className="mcna-td pl-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-[38px] h-[38px] rounded-full flex items-center justify-center font-mono font-semibold text-xs shrink-0 border select-none ${getAvatarColor(order.student?.name)}`}
+                        >
+                          {getInitials(order.student?.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 text-sm truncate">
+                            {order.student?.name || "Chưa đặt tên"}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                            <span>{order.student?.email || "—"}</span>
+                            {order.student?.phone && (
+                              <>
+                                <span className="text-slate-300 font-bold">·</span>
+                                <span className="font-mono text-slate-500">{order.student?.phone}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Column 2: Khóa học */}
+                    <td className="mcna-td py-3.5">
+                      <div className="min-w-0 max-w-xs">
+                        <span className="font-semibold text-slate-900 text-sm block leading-snug line-clamp-2">
+                          {order.course?.title || "Khóa học chưa xác định"}
                         </span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-                          <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" /> {order.student?.email || "—"}
-                        </span>
-                        {order.student?.phone && (
-                          <span className="text-xs text-slate-600 flex items-center gap-1.5 mt-0.5 font-mono">
-                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" /> {order.student?.phone}
+                        {order.course?.category && (
+                          <span className="text-xs text-slate-500 font-normal block mt-0.5 truncate">
+                            {order.course.category}
                           </span>
                         )}
                       </div>
                     </td>
 
-                    <td className="mcna-td">
-                      <span className="font-semibold text-slate-900 text-sm block leading-snug">
-                        {order.course?.title || "Khóa học"}
-                      </span>
-                      <span className="text-xs text-indigo-600 font-medium block mt-1">
-                        {order.course?.category}
-                      </span>
-                    </td>
-
-                    <td className="mcna-td whitespace-nowrap">
+                    {/* Column 3: Lớp học */}
+                    <td className="mcna-td py-3.5 whitespace-nowrap">
                       {activeSection ? (
                         <div>
-                          <span className="mcna-badge-primary font-mono text-xs">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
                             {activeSection.sectionCode}
                           </span>
                           {activeSection.openingDate && (
-                            <span className="text-xs text-slate-500 block mt-1.5">
-                              Khai giảng: {new Date(activeSection.openingDate).toLocaleDateString("vi-VN")}
+                            <span className="text-xs text-slate-500 block mt-1">
+                              Khai giảng · {new Date(activeSection.openingDate).toLocaleDateString("vi-VN")}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-slate-400 italic text-xs">Chưa chọn lớp</span>
+                        <span className="text-slate-400 text-xs italic">Chưa chọn lớp</span>
                       )}
                     </td>
 
-                    <td className="mcna-td text-right font-mono font-bold text-slate-900 text-sm md:text-base whitespace-nowrap">
-                      {formatMoney(order.price)}
+                    {/* Column 4: Học phí */}
+                    <td className="mcna-td py-3.5 text-right whitespace-nowrap">
+                      <span className="font-mono font-semibold text-slate-900 text-sm md:text-base">
+                        {formatMoney(order.price)}
+                      </span>
                     </td>
 
-                    <td className="mcna-td text-center whitespace-nowrap">
+                    {/* Column 5: Trạng thái */}
+                    <td className="mcna-td py-3.5 text-center whitespace-nowrap">
                       {order.status === "pending_payment" && (
-                        <span className="mcna-badge-warning inline-flex items-center gap-1.5 text-xs">
-                          <Clock className="h-3.5 w-3.5 shrink-0" /> Chờ thanh toán
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/60">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                          Chờ thanh toán
                         </span>
                       )}
                       {order.status === "pending" && (
-                        <span className="mcna-badge-primary inline-flex items-center gap-1.5 text-xs">
-                          <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Chờ xếp lớp
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200/60">
+                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+                          Chờ xếp lớp
                         </span>
                       )}
                       {order.status === "active" && (
-                        <span className="mcna-badge-success inline-flex items-center gap-1.5 text-xs">
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0" /> Đang học
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          Đang học
                         </span>
                       )}
                     </td>
 
-                    <td className="mcna-td text-right pr-4 whitespace-nowrap">
+                    {/* Column 6: Hành động */}
+                    <td className="mcna-td py-3.5 text-right pr-4 whitespace-nowrap">
                       {isPending ? (
                         <button
                           onClick={() => handleQuickActivate(order)}
                           disabled={activatingId === order.id}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg transition text-xs shadow-xs inline-flex items-center gap-1.5 ml-auto cursor-pointer"
+                          className="mcna-btn-primary !h-8 !px-3 !text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                           title="Xác nhận thanh toán và kích hoạt vào lớp"
                         >
-                          <Check className="h-4 w-4 shrink-0" />
-                          <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt 1-chạm"}</span>
+                          <Check className="h-3.5 w-3.5" />
+                          <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt"}</span>
                         </button>
                       ) : (
                         <span className="text-xs text-slate-500 inline-flex items-center justify-end gap-1.5 font-medium whitespace-nowrap">
@@ -382,13 +479,15 @@ export default function AdminOrdersManager({
 
       {pageCount > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-          <p className="text-xs text-slate-600">Trang {safePage} / {pageCount}</p>
+          <p className="text-xs text-slate-500">
+            Trang <span className="font-semibold text-slate-700">{safePage}</span> / {pageCount}
+          </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPage(current => Math.max(1, current - 1))}
               disabled={safePage === 1}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+              className="mcna-btn-secondary !h-8 !px-3 !text-xs inline-flex items-center gap-1.5 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Trước
             </button>
@@ -396,7 +495,7 @@ export default function AdminOrdersManager({
               type="button"
               onClick={() => setPage(current => Math.min(pageCount, current + 1))}
               disabled={safePage === pageCount}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+              className="mcna-btn-secondary !h-8 !px-3 !text-xs inline-flex items-center gap-1.5 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
             >
               Sau <ChevronRight className="h-3.5 w-3.5" />
             </button>

@@ -415,26 +415,26 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       {/* Main Administrative Header Area */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-transparent">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Cổng Điều hành & Hồ sơ Học vụ</h2>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Cổng Điều hành & Hồ sơ Học vụ</h2>
           <p className="text-xs md:text-sm text-slate-500 mt-1">Phân quyền giám sát cấu trúc khóa học, chuyên cần học sinh và trạng thái thanh toán học phí.</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <button 
             onClick={() => setShowImportModal(true)}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
-            <Upload className="h-4 w-4 text-slate-500" /> Nhập CSV Users
+            <Upload className="h-4 w-4 text-slate-500" /> Nhập CSV
           </button>
           <button 
             onClick={handleExportDataStore}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="h-4 w-4 text-slate-500" /> Sao lưu JSON
           </button>
           <button 
             onClick={() => setShowAddUserModal(true)}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+            className="mcna-btn-primary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <UserPlus className="h-4 w-4" /> Tạo người dùng
           </button>
@@ -443,30 +443,47 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
       {/* Grid counters stat cards metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
-          <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Nhân khẩu học (Tổng tài khoản)</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-1">{totalUsersCount}</h3>
+        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
+          <p className="text-xs text-slate-500 font-medium">Tổng tài khoản người dùng</p>
+          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalUsersCount}</h3>
         </div>
-        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
-          <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Khóa học môn giảng dạy</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-1">{totalCoursesCount}</h3>
+        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
+          <p className="text-xs text-slate-500 font-medium">Tổng khóa học môn giảng dạy</p>
+          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalCoursesCount}</h3>
         </div>
-        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
-          <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Đăng ký lớp học niên khóa</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-1">{totalEnrollmentsCount}</h3>
+        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
+          <p className="text-xs text-slate-500 font-medium">Lượt đăng ký lớp học</p>
+          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalEnrollmentsCount}</h3>
         </div>
       </div>
 
       {operationsSummary && (
-        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-sky-50 p-4 shadow-xs">
-          <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-800">Bảng điều hành hôm nay</p><p className="mt-1 text-[10px] text-slate-500">Các việc cần xử lý được tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-50">Làm mới</button></div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-900">Bảng điều hành hôm nay</p>
+              <p className="mt-0.5 text-xs text-slate-500">Các việc cần xử lý được tổng hợp từ LMS và CRM.</p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} 
+              className="mcna-btn-secondary !h-7 !px-2.5 !text-xs"
+            >
+              Làm mới
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
             {[
               ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments, "text-amber-700"],
               ["Bài chưa chấm", operationsSummary.ungradedSubmissions, "text-rose-700"],
               ["Khóa chờ duyệt", operationsSummary.pendingCourses, "text-indigo-700"],
               ["CRM giao thất bại", operationsSummary.crmFailures, "text-slate-700"]
-            ].map(([label, value, color]) => <div key={String(label)} className="rounded-xl border border-slate-200 bg-white/90 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className={`mt-1 text-xl font-bold font-mono ${color}`}>{value}</p></div>)}
+            ].map(([label, value, color]) => (
+              <div key={String(label)} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                <p className="text-xs text-slate-500 font-medium">{label}</p>
+                <p className={`mt-1.5 text-xl font-bold font-mono ${color}`}>{value}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -475,24 +492,29 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         
         {/* Left Column navbar structured sections */}
-        <div className="w-full lg:w-64 flex-shrink-0 space-y-4">
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3 text-xs space-y-3 shadow-xs">
+        <div className="w-full lg:w-60 flex-shrink-0 space-y-4">
+          <div className="bg-white border border-slate-200/80 rounded-xl p-2 text-xs space-y-3 shadow-xs">
             <div className="space-y-1">
-              <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5 py-1">
                 ĐIỀU HÀNH & BÁN HÀNG
               </span>
               <button
                 onClick={() => setActiveSubTab("orders")}
-                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
-                  activeSubTab === "orders" ? "bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100/80 shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "orders" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                 }`}
               >
-                <span className="flex items-center gap-2"><ShoppingBag className={`h-4 w-4 ${activeSubTab === "orders" ? "text-emerald-600" : "text-slate-400"}`} /> Đơn hàng & Ghi danh</span>
+                <span className="flex items-center gap-2">
+                  <ShoppingBag className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "orders" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Đơn hàng & Ghi danh
+                </span>
                 {(() => {
                   const pendingCount = (store.enrollments || []).filter((e: any) => e.status === "pending_payment" || e.status === "pending").length;
                   if (pendingCount === 0) return null;
                   return (
-                    <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-1.5 py-0.5 rounded-md font-mono border border-amber-200/60">
+                    <span className="bg-amber-50 text-amber-700 font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-200/80 font-medium">
                       {pendingCount}
                     </span>
                   );
@@ -500,46 +522,66 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               </button>
               <button
                 onClick={() => setActiveSubTab("course_section_mgmt")}
-                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
-                  activeSubTab === "course_section_mgmt" ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "course_section_mgmt" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                 }`}
               >
-                <span className="flex items-center gap-2"><BookOpen className={`h-4 w-4 ${activeSubTab === "course_section_mgmt" ? "text-indigo-600" : "text-slate-400"}`} /> Khóa học & Lớp học</span>
+                <span className="flex items-center gap-2">
+                  <BookOpen className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "course_section_mgmt" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Khóa học & Lớp học
+                </span>
               </button>
               <button
                 onClick={() => setActiveSubTab("approval")}
-                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
-                  activeSubTab === "approval" ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "approval" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                 }`}
               >
-                <span className="flex items-center gap-2"><GraduationCap className={`h-4 w-4 ${activeSubTab === "approval" ? "text-indigo-600" : "text-slate-400"}`} /> Duyệt khóa học</span>
+                <span className="flex items-center gap-2">
+                  <GraduationCap className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "approval" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Duyệt khóa học
+                </span>
                 {pendingCourses.length > 0 && (
-                  <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-1.5 py-0.5 rounded-md font-mono border border-amber-200/60">
+                  <span className="bg-amber-50 text-amber-700 font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-200/80 font-medium">
                     {pendingCourses.length}
                   </span>
                 )}
               </button>
             </div>
 
-            <div className="space-y-1 border-t border-slate-100 pt-2.5">
-              <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5">
+            <div className="space-y-1 border-t border-slate-100 pt-2">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5 py-1">
                 HỆ THỐNG & TÀI KHOẢN
               </span>
               <button
                 onClick={() => setActiveSubTab("users")}
-                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
-                  activeSubTab === "users" ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "users" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                 }`}
               >
-                <span className="flex items-center gap-2"><Users className={`h-4 w-4 ${activeSubTab === "users" ? "text-indigo-600" : "text-slate-400"}`} /> Quản lý Người dùng</span>
+                <span className="flex items-center gap-2">
+                  <Users className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "users" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Quản lý Người dùng
+                </span>
               </button>
               <button
                 onClick={() => setActiveSubTab("audit")}
-                className={`w-full text-left py-2.5 px-3 rounded-xl transition font-medium flex items-center justify-between cursor-pointer ${
-                  activeSubTab === "audit" ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "audit" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                 }`}
               >
-                <span className="flex items-center gap-2"><Database className={`h-4 w-4 ${activeSubTab === "audit" ? "text-indigo-600" : "text-slate-400"}`} /> Nhật ký hệ thống</span>
+                <span className="flex items-center gap-2">
+                  <Database className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "audit" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Nhật ký hệ thống
+                </span>
               </button>
             </div>
           </div>

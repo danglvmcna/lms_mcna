@@ -521,27 +521,27 @@ function AppShell() {
             </div>
 
             {/* USER PROFILE DROPDOWN MENU / POPOVER */}
-            <div className="relative w-full py-4 border-b border-slate-100">
+            <div className="relative w-full py-3 border-b border-slate-100">
               {/* Dropdown Menu Popup */}
               {userDropdownOpen && (
-                <div className={`absolute top-full mt-2 z-50 bg-white border border-slate-200 rounded-2xl p-2 shadow-2xl text-slate-800 w-60 animate-in fade-in slide-in-from-top-2 duration-150 ${
+                <div className={`absolute top-full mt-1.5 z-50 bg-white border border-slate-200/90 rounded-xl p-1.5 shadow-lg text-slate-800 w-60 animate-in fade-in slide-in-from-top-1 duration-150 ${
                   isSidebarCollapsed ? "left-0" : "left-0 right-0 w-full"
                 }`}>
                   {/* Scoped Profile Header Info */}
-                  <div className="px-3 py-2 border-b border-slate-100 mb-1 text-xs text-left">
-                    <p className="font-mono text-[9px] text-indigo-600 font-extrabold uppercase tracking-wider mb-0.5">
+                  <div className="px-2.5 py-2 border-b border-slate-100 mb-1 text-xs text-left">
+                    <p className="font-mono text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">
                       {roleLabel(currentUser.role)}
                     </p>
-                    <h6 className="font-bold text-slate-900 truncate text-xs">{currentUser.name}</h6>
-                    <p className="text-[10px] text-slate-500 truncate font-mono mt-0.5">{currentUser.email}</p>
+                    <h6 className="font-semibold text-slate-900 truncate text-xs">{currentUser.name}</h6>
+                    <p className="text-[11px] text-slate-500 truncate font-mono mt-0.5">{currentUser.email}</p>
                   </div>
 
                   {/* Action Buttons */}
                   <button
                     onClick={() => { setShowProfileModal(true); setUserDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition flex items-center gap-2 cursor-pointer"
                   >
-                    <Fingerprint className="h-4 w-4 text-indigo-600" />
+                    <Fingerprint className="h-4 w-4 text-slate-400" />
                     <span>Xem lý lịch cá nhân</span>
                   </button>
 
@@ -555,9 +555,9 @@ function AppShell() {
                       setNewPassword("");
                       setConfirmPassword("");
                     }}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition flex items-center gap-2 cursor-pointer"
                   >
-                    <Lock className="h-4 w-4 text-amber-500" />
+                    <Lock className="h-4 w-4 text-slate-400" />
                     <span>Đổi mật khẩu tài khoản</span>
                   </button>
 
@@ -565,7 +565,7 @@ function AppShell() {
 
                   <button
                     onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Đăng xuất phiên</span>
@@ -576,21 +576,21 @@ function AppShell() {
               {/* Main Profile Trigger Button */}
               <button
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className={`w-full flex items-center gap-3 p-2 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-2xl transition duration-150 cursor-pointer ${
-                  isSidebarCollapsed ? "justify-center p-1.5 h-11 w-11" : "text-left"
+                className={`w-full flex items-center gap-2.5 p-2 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-xl transition duration-150 cursor-pointer shadow-2xs ${
+                  isSidebarCollapsed ? "justify-center p-1.5 h-10 w-10" : "text-left"
                 }`}
                 title={currentUser.name}
               >
                 {/* Avatar circle */}
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm shrink-0 uppercase font-mono">
+                <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center font-bold text-xs text-white shadow-2xs shrink-0 uppercase font-mono">
                   {currentUser.name.slice(0, 2)}
                 </div>
 
                 {/* User Details */}
                 {!isSidebarCollapsed && (
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-900 truncate leading-none">{currentUser.name}</p>
-                    <span className="text-[9px] font-mono font-medium tracking-wider text-indigo-600 truncate block mt-1 uppercase">
+                    <p className="text-xs font-semibold text-slate-900 truncate leading-tight">{currentUser.name}</p>
+                    <span className="text-[10px] font-mono font-medium text-slate-500 truncate block mt-0.5 uppercase">
                       {roleLabel(currentUser.role)}
                     </span>
                   </div>
@@ -598,7 +598,7 @@ function AppShell() {
 
                 {/* Arrow indicator */}
                 {!isSidebarCollapsed && (
-                  <ChevronDown className={`h-4 w-4 text-slate-400 transform transition-transform duration-200 ${
+                  <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transform transition-transform duration-200 ${
                     userDropdownOpen ? "rotate-180" : ""
                   }`} />
                 )}
