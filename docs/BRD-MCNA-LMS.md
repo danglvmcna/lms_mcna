@@ -81,6 +81,10 @@ Hệ thống đã chuẩn hóa toàn bộ về **3 vai trò duy nhất** (ràng 
 - Mỗi chứng chỉ mang một mã kiểm định độc bản dạng mã hex (ví dụ: `MCNA-CERT-XXXXXX`).
 - Trang tra cứu và xác thực chứng chỉ công khai tại `/verify/certificate/:code`, hỗ trợ chia sẻ lên hồ sơ LinkedIn với 1-click.
 
+### 3.7. Tinh giản Nghiệp vụ: Bỏ hoàn toàn Điểm danh (Attendance Decommissioned)
+- Tính năng **Điểm danh chuyên cần** (học viên nhập mã check-in 6 ký tự, giáo viên cảnh báo vắng mặt, báo cáo tỷ lệ chuyên cần) đã chính thức được **gỡ bỏ hoàn toàn** khỏi hệ thống LMS để tinh gọn trải nghiệm học tập thực chiến.
+- Bảng `attendance_sessions` tiếp tục đóng vai trò danh mục **Buổi học (Class Sessions)**: quản lý lịch học, tiêu đề chuyên đề, nội dung bài giảng, link Zoom, video recording xem lại và tài liệu đính kèm (`session_materials`).
+
 ---
 
 ## 4. Tích hợp CRM MCNA (Transactional Outbox)

@@ -600,7 +600,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
             Không gian Giảng dạy & Đào tạo
           </h2>
           <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Quản lý giáo án, bài giảng, điểm danh ca học, lưu trữ video recording và chấm điểm bài nộp của học viên.
+            Quản lý giáo án, bài giảng, lưu trữ video recording và chấm điểm bài nộp của học viên.
           </p>
         </div>
       </div>

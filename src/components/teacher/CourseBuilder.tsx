@@ -634,7 +634,7 @@ export default function CourseBuilder(props: ComponentProps) {
       const targetSectionId = newSessionSectionId.trim() || undefined;
       const sessionDateIso = newSessionDate ? new Date(newSessionDate).toISOString() : new Date().toISOString();
 
-      // 1. Lưu AttendanceSession (quản lý thư mục buổi, tài liệu, điểm danh, recording)
+      // 1. Lưu AttendanceSession (quản lý thư mục buổi học, tài liệu, recording)
       await api.saveAttendance({
         courseId: activeCourse.id,
         sectionId: targetSectionId,

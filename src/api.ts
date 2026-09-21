@@ -177,17 +177,6 @@ export const api = {
   updateCourseSection: (sectionId: string, payload: unknown) => apiFetch(`/api/course-sections/${sectionId}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteCourseSection: (sectionId: string) => apiFetch(`/api/course-sections/${sectionId}`, { method: "DELETE" }),
   saveAttendance: (payload: unknown) => apiFetch("/api/attendance/sessions", { method: "POST", body: JSON.stringify(payload) }),
-  updateAttendanceRecord: (payload: unknown) => apiFetch("/api/attendance/records", { method: "PATCH", body: JSON.stringify(payload) }),
-  generateAttendanceLink: (payload: { courseId: string; sectionId?: string; topic: string }) => apiFetch<{ session: any; code: string; expiresAt: string }>("/api/attendance/sessions/generate-link", { method: "POST", body: JSON.stringify(payload) }),
-  selfCheckin: (payload: { sessionId: string; code: string }) => apiFetch<{ ok: boolean; record: any }>("/api/attendance/self-checkin", { method: "POST", body: JSON.stringify(payload) }),
-  openAttendanceQr: (sessionId: string) => apiFetch<{ sessionId: string; token: string; expiresAt: string; intervalSeconds: number }>(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/open`, { method: "POST" }),
-  getAttendanceQr: (sessionId: string) => apiFetch<{ sessionId: string; token: string; expiresAt: string; intervalSeconds: number }>(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/current`),
-  closeAttendanceQr: (sessionId: string) => apiFetch(`/api/attendance/sessions/${encodeURIComponent(sessionId)}/qr/close`, { method: "POST" }),
-  selfCheckinQr: (payload: { token: string }) => apiFetch<{ ok: boolean; record: any }>("/api/attendance/self-checkin/qr", { method: "POST", body: JSON.stringify(payload) }),
-  getAttendanceReportUrl: (format: "csv" | "xlsx", filters: Record<string, string | undefined> = {}) => {
-    const params = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
-    return `/api/reports/attendance.${format}${params.toString() ? `?${params.toString()}` : ""}`;
-  },
   getGradebookReportUrl: (format: "csv" | "xlsx", filters: Record<string, string | undefined> = {}) => {
     const params = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
     return `/api/reports/gradebook.${format}${params.toString() ? `?${params.toString()}` : ""}`;
@@ -204,8 +193,7 @@ export const api = {
   markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
   resetPassword: (userId: string) => apiFetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }),
-  teacherCheckin: (payload: { courseId: string; sectionId: string; slotTime: string; classDate: string }) => apiFetch<{ ok: boolean; record: any }>("/api/attendance/teacher-checkin", { method: "POST", body: JSON.stringify(payload) }),
-  warnTeacher: (payload: { courseId: string; teacherId: string }) => apiFetch<{ ok: boolean }>("/api/attendance/warn-teacher", { method: "POST", body: JSON.stringify(payload) }),
+
   createForumPost: (courseId: string, payload: { title: string; content: string; sectionId?: string }) => apiFetch(`/api/courses/${courseId}/forum`, { method: "POST", body: JSON.stringify({ courseId, ...payload }) }),
   createForumReply: (postId: string, payload: { content: string }) => apiFetch(`/api/forum/posts/${postId}/replies`, { method: "POST", body: JSON.stringify(payload) }),
   updateAssignment: (id: string, payload: unknown) => apiFetch(`/api/assignments/${id}`, { method: "PUT", body: JSON.stringify(payload) }),

@@ -1321,18 +1321,6 @@ var schemas = {
     meetingUrl: z.string().trim().optional().nullable(),
     groupChatUrl: z.string().trim().optional().nullable()
   }),
-  generateAttendanceLink: z.object({
-    courseId: z.string().trim().min(1),
-    sectionId: z.string().trim().min(1).optional(),
-    topic: z.string().trim().min(1)
-  }),
-  selfCheckin: z.object({
-    sessionId: z.string().trim().min(1),
-    code: z.string().trim().min(1)
-  }),
-  selfCheckinQr: z.object({
-    token: z.string().trim().min(20).max(2e3)
-  }),
   lessonNote: z.object({
     content: z.string().max(2e4)
   }),
@@ -1340,12 +1328,6 @@ var schemas = {
     title: z.string().trim().min(1).max(120),
     content: z.string().trim().min(1).max(2e3),
     courseId: z.string().trim().min(1).optional()
-  }),
-  teacherCheckin: z.object({
-    courseId: z.string().trim().min(1),
-    sectionId: z.string().trim().min(1),
-    slotTime: z.string().trim().min(1),
-    classDate: z.string().trim().min(1)
   }),
   createForumPost: z.object({
     courseId: z.string().trim().min(1),
@@ -6016,70 +5998,6 @@ var actorScope = (actor, conditions, values) => {
     conditions.push(`cs.teacher_id = $${values.length}`);
   }
 };
-async function getAttendanceReportRows(db, actor, filters = {}) {
-  const values = [];
-  const conditions = ["cr.status = 'registered'"];
-  actorScope(actor, conditions, values);
-  if (filters.courseId) addFilter(conditions, values, "c.id = $VALUE", filters.courseId);
-  if (filters.sectionId) addFilter(conditions, values, "cs.id = $VALUE", filters.sectionId);
-  const dateFromParam = filters.from ? (values.push(filters.from), values.length) : null;
-  const dateToParam = filters.to ? (values.push(filters.to), values.length) : null;
-  if (filters.search) {
-    values.push(`%${filters.search}%`);
-    conditions.push(`(u.name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR cs.section_code ILIKE $${values.length})`);
-  }
-  const result = await db.query(
-    `SELECT
-       u.id AS student_id,
-       u.name AS student_name,
-       u.email AS student_email,
-       u.phone AS student_phone,
-       c.id AS course_id,
-       c.title AS course_title,
-       cs.id AS section_id,
-       cs.section_code,
-       COUNT(DISTINCT ats.id)::int AS total_sessions,
-       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status IN ('present', 'late', 'excused'))::int AS attended_sessions,
-       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'present')::int AS present_sessions,
-       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'late')::int AS late_sessions,
-       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'absent' OR ar.id IS NULL)::int AS absent_sessions,
-       COUNT(DISTINCT ats.id) FILTER (WHERE ar.status = 'excused')::int AS excused_sessions,
-       COALESCE(ROUND(
-         COUNT(DISTINCT ats.id) FILTER (WHERE ar.status IN ('present', 'late', 'excused'))::numeric
-         * 100 / NULLIF(COUNT(DISTINCT ats.id), 0)
-       ), 100)::int AS attendance_percent
-     FROM course_registrations cr
-     JOIN users u ON u.id = cr.student_id
-     JOIN course_sections cs ON cs.id = cr.section_id
-     JOIN courses c ON c.id = cs.course_id
-     LEFT JOIN attendance_sessions ats
-       ON ats.course_id = c.id
-      AND (ats.section_id = cs.id OR ats.section_id IS NULL)
-      ${dateFromParam || dateToParam ? `AND ${dateFromParam ? `substring(ats.date from '^\\d{4}-\\d{2}-\\d{2}')::date >= $${dateFromParam}::date` : "TRUE"} ${dateToParam ? `AND substring(ats.date from '^\\d{4}-\\d{2}-\\d{2}')::date <= $${dateToParam}::date` : ""}` : ""}
-     LEFT JOIN attendance_records ar ON ar.session_id = ats.id AND ar.student_id = cr.student_id
-     WHERE ${conditions.filter((item) => !item.includes("substring(ats.date")).join(" AND ")}
-     GROUP BY u.id, u.name, u.email, u.phone, c.id, c.title, cs.id, cs.section_code
-     ORDER BY c.title, cs.section_code, u.name`,
-    values
-  );
-  return result.rows.map((row) => ({
-    studentId: row.student_id,
-    studentName: row.student_name,
-    studentEmail: row.student_email,
-    studentPhone: row.student_phone || "",
-    courseId: row.course_id,
-    courseTitle: row.course_title,
-    sectionId: row.section_id,
-    sectionCode: row.section_code,
-    totalSessions: Number(row.total_sessions || 0),
-    attendedSessions: Number(row.attended_sessions || 0),
-    presentSessions: Number(row.present_sessions || 0),
-    lateSessions: Number(row.late_sessions || 0),
-    absentSessions: Number(row.absent_sessions || 0),
-    excusedSessions: Number(row.excused_sessions || 0),
-    attendancePercent: Number(row.attendance_percent ?? 100)
-  }));
-}
 async function getGradebookReportRows(db, actor, filters = {}) {
   const values = [];
   const conditions = ["cr.status = 'registered'"];
@@ -7513,32 +7431,6 @@ var reportFiltersFromRequest = (req) => ({
   to: typeof req.query.to === "string" ? req.query.to : void 0,
   search: typeof req.query.search === "string" ? req.query.search.trim() : void 0
 });
-var attendanceReportHeaders = [
-  "H\u1ECD t\xEAn",
-  "Email",
-  "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i",
-  "Kh\xF3a h\u1ECDc",
-  "M\xE3 l\u1EDBp",
-  "T\u1ED5ng bu\u1ED5i",
-  "C\xF3 m\u1EB7t",
-  "\u0110i mu\u1ED9n",
-  "V\u1EAFng",
-  "C\xF3 ph\xE9p",
-  "T\u1EF7 l\u1EC7 chuy\xEAn c\u1EA7n (%)"
-];
-var attendanceReportKeys = [
-  "studentName",
-  "studentEmail",
-  "studentPhone",
-  "courseTitle",
-  "sectionCode",
-  "totalSessions",
-  "presentSessions",
-  "lateSessions",
-  "absentSessions",
-  "excusedSessions",
-  "attendancePercent"
-];
 var gradebookReportHeaders = [
   "H\u1ECD t\xEAn",
   "Email",
@@ -7579,18 +7471,6 @@ async function sendReport(res, name, headers, rows, keys, format) {
   res.setHeader("Content-Disposition", `attachment; filename="${name}-${dateLabel}.xlsx"`);
   return res.send(workbook);
 }
-app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
-  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "csv");
-  const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
-  await audit(req, "export_attendance_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
-  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "csv");
-}));
-app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
-  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "xlsx");
-  const rows = await getAttendanceReportRows(pool, req.user, reportFiltersFromRequest(req));
-  await audit(req, "export_attendance_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
-  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "xlsx");
-}));
 app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "csv");
   const rows = await getGradebookReportRows(pool, req.user, reportFiltersFromRequest(req));
@@ -9785,113 +9665,6 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
   invalidateStoreCache();
   await audit(req, "update_attendance_session", req.params.id, updated.topic);
   res.json(updated);
-}));
-var getVietnamTimeInfo = () => {
-  const now = /* @__PURE__ */ new Date();
-  const tzOffset = 7 * 60;
-  const localTime = new Date(now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60 * 1e3);
-  const yyyy = localTime.getFullYear();
-  const mm = String(localTime.getMonth() + 1).padStart(2, "0");
-  const dd = String(localTime.getDate()).padStart(2, "0");
-  const dateStr = `${yyyy}-${mm}-${dd}`;
-  const day = localTime.getDay();
-  const dayStr = day === 0 ? "Ch\u1EE7 Nh\u1EADt" : `Th\u1EE9 ${day === 1 ? "Hai" : day === 2 ? "Ba" : day === 3 ? "T\u01B0" : day === 4 ? "N\u0103m" : day === 5 ? "S\xE1u" : "B\u1EA3y"}`;
-  const hh = String(localTime.getHours()).padStart(2, "0");
-  const min = String(localTime.getMinutes()).padStart(2, "0");
-  const timeStr = `${hh}:${min}`;
-  return { dateStr, dayStr, timeStr };
-};
-var VIETNAMESE_DAYS = ["Ch\u1EE7 Nh\u1EADt", "Th\u1EE9 Hai", "Th\u1EE9 Ba", "Th\u1EE9 T\u01B0", "Th\u1EE9 N\u0103m", "Th\u1EE9 S\xE1u", "Th\u1EE9 B\u1EA3y"];
-var timeToMins = (time) => {
-  const [h, m] = String(time || "").split(":").map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
-  return h * 60 + m;
-};
-var parseSlotTime = (slotTime) => {
-  const match = String(slotTime || "").trim().match(/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/);
-  if (!match) return null;
-  return { startTime: match[1], endTime: match[2], normalized: `${match[1]} - ${match[2]}` };
-};
-var isValidDateOnly = (value) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
-};
-var dayOfWeekForDate = (dateStr) => {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return VIETNAMESE_DAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-};
-var findScheduleSlot = (schedule, classDate, slotTime) => {
-  if (!Array.isArray(schedule) || schedule.length === 0 || !isValidDateOnly(classDate)) return null;
-  const parsedSlot = parseSlotTime(slotTime);
-  if (!parsedSlot) return null;
-  const requestedDay = dayOfWeekForDate(classDate);
-  return schedule.find((slot) => {
-    if (`${slot.startTime} - ${slot.endTime}` !== parsedSlot.normalized) return false;
-    if (slot.specificDate) return String(slot.specificDate).slice(0, 10) === classDate;
-    return slot.dayOfWeek === requestedDay;
-  }) || null;
-};
-var isCurrentVietnamTimeWithinSlot = (classDate, slot) => {
-  const { dateStr, timeStr } = getVietnamTimeInfo();
-  if (dateStr !== classDate) return false;
-  const currentMins = timeToMins(timeStr);
-  const startMins = timeToMins(slot.startTime);
-  const endMins = timeToMins(slot.endTime);
-  return Number.isFinite(currentMins) && currentMins >= startMins && currentMins <= endMins;
-};
-var isWithinSchedule = (schedule) => {
-  if (!Array.isArray(schedule) || schedule.length === 0) return true;
-  const { dateStr } = getVietnamTimeInfo();
-  return schedule.some((slot) => findScheduleSlot([slot], dateStr, `${slot.startTime} - ${slot.endTime}`) && isCurrentVietnamTimeWithinSlot(dateStr, slot));
-};
-app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckin), asyncHandler(async (req, res) => {
-  const { sessionId, code } = req.body;
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-  if (!session.code || session.code !== code) {
-    return res.status(400).json({ error: "M\xE3 \u0111i\u1EC3m danh kh\xF4ng ch\xEDnh x\xE1c ho\u1EB7c kh\xF4ng kh\u1EA3 d\u1EE5ng." });
-  }
-  if (session.expires_at && new Date(session.expires_at) < /* @__PURE__ */ new Date()) {
-    return res.status(400).json({ error: "M\xE3 \u0111i\u1EC3m danh \u0111\xE3 h\u1EBFt h\u1EA1n (Ch\u1EC9 c\xF3 gi\xE1 tr\u1ECB trong 5 ph\xFAt)." });
-  }
-  if (session.section_id) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
-    if (section) {
-      const schedule = parseSchedule(section);
-      if (!isWithinSchedule(schedule)) {
-        return res.status(400).json({ error: "\u0110i\u1EC3m danh kh\xF4ng h\u1EE3p l\u1EC7: Hi\u1EC7n t\u1EA1i kh\xF4ng n\u1EB1m trong khung gi\u1EDD h\u1ECDc \u0111\u01B0\u1EE3c l\xEAn l\u1ECBch c\u1EE7a l\u1EDBp n\xE0y!" });
-      }
-    }
-    const registration = (await pool.query(
-      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
-      [req.user.id, session.section_id]
-    )).rows[0];
-    if (!registration) return res.status(403).json({ error: "Permission denied for this class section." });
-  } else {
-    const enrollment = (await pool.query(
-      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status = 'active'",
-      [req.user.id, session.course_id]
-    )).rows[0];
-    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
-  }
-  const existing = (await pool.query(
-    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
-    [sessionId, req.user.id]
-  )).rows[0];
-  const record = {
-    id: existing?.id || generateId2("atr"),
-    sessionId,
-    studentId: req.user.id,
-    status: "present",
-    note: "T\u1EF1 \u0111i\u1EC3m danh qua link",
-    checkedInAt: (/* @__PURE__ */ new Date()).toISOString(),
-    checkinMethod: "link"
-  };
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  await audit(req, "student_self_checkin", record.id, `Student: ${req.user.id}, Status: present`);
-  res.json({ ok: true, record });
 }));
 app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {

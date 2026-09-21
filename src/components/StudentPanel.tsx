@@ -36,7 +36,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import NotificationInbox from "./NotificationInbox";
-import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceRecord, AttendanceSession } from "../types";
+import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceSession } from "../types";
 import { AppStore } from "../store";
 import CourseCatalog from "./student/CourseCatalog";
 import MyLearningWorkspace from "./student/MyLearningWorkspace";
@@ -82,7 +82,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
 
 
-  // Periodic polling every 30s while on the notifications tab to catch new attendance links
+  // Periodic polling every 30s while on the notifications tab to refresh notifications
   useEffect(() => {
     if (activeSubTab !== "notifications") return;
     const interval = setInterval(() => {
@@ -460,20 +460,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     }
   };
 
-  const handleSelfCheckinSubmit = async (sessionId: string, code: string, notificationId: string) => {
-    if (!code.trim()) {
-      triggerToast("Vui lòng nhập mã điểm danh 6 ký tự!");
-      return;
-    }
-    try {
-      await api.selfCheckin({ sessionId, code: code.trim().toUpperCase() });
-      triggerToast("Điểm danh thành công! Trạng thái: Có mặt");
-      await api.markNotificationRead(notificationId);
-      void onRefreshData();
-    } catch (err: any) {
-      triggerToast(err.message || "Điểm danh thất bại.");
-    }
-  };
 
   const handleMarkNotificationRead = async (id: string) => {
     setLocallyReadNotificationIds(prev => new Set(prev).add(id));

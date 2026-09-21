@@ -208,18 +208,6 @@ export const schemas = {
     groupChatUrl: z.string().trim().optional().nullable()
   }),
 
-  generateAttendanceLink: z.object({
-    courseId: z.string().trim().min(1),
-    sectionId: z.string().trim().min(1).optional(),
-    topic: z.string().trim().min(1)
-  }),
-  selfCheckin: z.object({
-    sessionId: z.string().trim().min(1),
-    code: z.string().trim().min(1)
-  }),
-  selfCheckinQr: z.object({
-    token: z.string().trim().min(20).max(2000)
-  }),
   lessonNote: z.object({
     content: z.string().max(20000)
   }),
@@ -227,12 +215,6 @@ export const schemas = {
     title: z.string().trim().min(1).max(120),
     content: z.string().trim().min(1).max(2000),
     courseId: z.string().trim().min(1).optional()
-  }),
-  teacherCheckin: z.object({
-    courseId: z.string().trim().min(1),
-    sectionId: z.string().trim().min(1),
-    slotTime: z.string().trim().min(1),
-    classDate: z.string().trim().min(1)
   }),
   createForumPost: z.object({
     courseId: z.string().trim().min(1),

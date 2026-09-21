@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, Inbox, Search, Check } from "lucide-react";
+import { Bell, CheckCheck, Inbox, Search } from "lucide-react";
 import { api } from "../api";
 import { LMSDataStore, Notification, User } from "../types";
 
@@ -60,11 +60,6 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Student checkin states
-  const [checkinCodes, setCheckinCodes] = useState<Record<string, string>>({});
-  const [checkinSuccess, setCheckinSuccess] = useState<Record<string, boolean>>({});
-  const [checkinLoading, setCheckinLoading] = useState<Record<string, boolean>>({});
 
   // Local state to keep track of notifications marked read in the current view session
   const [locallyMarkedReadIds, setLocallyMarkedReadIds] = useState<Set<string>>(new Set());
@@ -141,24 +136,7 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
     }
   };
 
-  const handleSelfCheckinSubmit = async (sessionId: string, code: string, notificationId: string) => {
-    if (!code.trim()) {
-      setError("Vui lòng nhập mã điểm danh 6 ký tự!");
-      return;
-    }
-    setCheckinLoading(prev => ({ ...prev, [notificationId]: true }));
-    setError(null);
-    try {
-      await api.selfCheckin({ sessionId, code: code.trim().toUpperCase() });
-      setCheckinSuccess(prev => ({ ...prev, [sessionId]: true }));
-      await api.markNotificationRead(notificationId);
-      onRefreshData();
-    } catch (err: any) {
-      setError(err.message || "Điểm danh thất bại.");
-    } finally {
-      setCheckinLoading(prev => ({ ...prev, [notificationId]: false }));
-    }
-  };
+
 
   return (
     <div className="space-y-4">
@@ -242,11 +220,7 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
           return (
             <button
               key={note.id}
-              onClick={() => {
-                if (note.type !== "attendance_link") {
-                  markRead(note);
-                }
-              }}
+              onClick={() => markRead(note)}
               className={`w-full text-left rounded-2xl border p-4 transition cursor-pointer ${
                 isNoteRead
                   ? "bg-white border-slate-200/80 hover:bg-slate-50/80 shadow-2xs"
@@ -267,55 +241,9 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                     {!isNoteRead && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">Chưa đọc</span>}
                   </div>
                   <p className="mt-1.5 text-xs text-slate-700 leading-relaxed font-sans">{note.message}</p>
-
-                {/* Inline checkin form for students directly in their notifications */}
-                {note.type === "attendance_link" && note.relatedEntityId && (() => {
-                  const hasCheckedIn = (store.attendanceRecords || []).some(
-                    r => r.sessionId === note.relatedEntityId && 
-                         r.studentId === currentUser.id && 
-                         r.status === "present"
-                  );
-                  
-                  if (hasCheckedIn || checkinSuccess[note.relatedEntityId]) {
-                    return (
-                      <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-medium flex items-center gap-1.5 w-fit font-sans text-xs">
-                        <span>✅ Bạn đã xác nhận điểm danh thành công!</span>
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <div 
-                      onClick={(e) => e.stopPropagation()} 
-                      className="mt-2.5 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center gap-2 max-w-sm shadow-2xs"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Mã Code (6 ký tự)"
-                        value={checkinCodes[note.id] || ""}
-                        onChange={(e) => setCheckinCodes(prev => ({ ...prev, [note.id]: e.target.value }))}
-                        maxLength={6}
-                        className="w-32 px-2.5 py-1.5 bg-white text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-center font-mono font-bold uppercase placeholder-slate-400 text-xs shadow-2xs"
-                      />
-                      <button
-                        onClick={() => handleSelfCheckinSubmit(note.relatedEntityId!, checkinCodes[note.id] || "", note.id)}
-                        disabled={checkinLoading[note.id]}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-150 text-xs shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs flex items-center gap-1.5"
-                      >
-                        {checkinLoading[note.id] ? "Đang xử lý..." : (
-                          <>
-                            <Check className="h-3.5 w-3.5" />
-                            Xác nhận Có mặt
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })()}
-
+                </div>
               </div>
-            </div>
-          </button>
+            </button>
         )})}
 
         {notifications.length === 0 && (

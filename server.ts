@@ -167,7 +167,7 @@ import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
 import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
-import { getAttendanceReportRows, getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
+import { getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
@@ -1643,14 +1643,6 @@ const reportFiltersFromRequest = (req: express.Request) => ({
   search: typeof req.query.search === "string" ? req.query.search.trim() : undefined
 });
 
-const attendanceReportHeaders = [
-  "Họ tên", "Email", "Số điện thoại", "Khóa học", "Mã lớp", "Tổng buổi",
-  "Có mặt", "Đi muộn", "Vắng", "Có phép", "Tỷ lệ chuyên cần (%)"
-];
-const attendanceReportKeys = [
-  "studentName", "studentEmail", "studentPhone", "courseTitle", "sectionCode", "totalSessions",
-  "presentSessions", "lateSessions", "absentSessions", "excusedSessions", "attendancePercent"
-];
 const gradebookReportHeaders = [
   "Họ tên", "Email", "Số điện thoại", "Khóa học", "Mã lớp", "Bài đã hoàn thành",
   "Tổng bài", "Điểm bài tập (%)", "Điểm quiz (%)", "Điểm tổng (%)", "Xếp loại", "Điểm hệ 4"
@@ -1673,19 +1665,6 @@ async function sendReport(res: express.Response, name: string, headers: string[]
   return res.send(workbook);
 }
 
-app.get("/api/reports/attendance.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
-  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "csv");
-  const rows = await getAttendanceReportRows(pool, req.user!, reportFiltersFromRequest(req));
-  await audit(req, "export_attendance_report", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
-  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "csv");
-}));
-
-app.get("/api/reports/attendance.xlsx", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
-  if (isDevMockDb) return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, [], attendanceReportKeys, "xlsx");
-  const rows = await getAttendanceReportRows(pool, req.user!, reportFiltersFromRequest(req));
-  await audit(req, "export_attendance_report_xlsx", req.query.sectionId?.toString() || req.query.courseId?.toString() || "all", `rows=${rows.length}`);
-  return sendReport(res, "bao-cao-diem-danh", attendanceReportHeaders, rows, attendanceReportKeys, "xlsx");
-}));
 
 app.get("/api/reports/gradebook.csv", requireAuth, requireRole(["teacher", "admin", "manager"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) return sendReport(res, "so-diem-tong-hop", gradebookReportHeaders, [], gradebookReportKeys, "csv");
@@ -4170,135 +4149,6 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
 }));
 
 
-
-const getVietnamTimeInfo = () => {
-  const now = new Date();
-  const tzOffset = 7 * 60; // Vietnam is UTC+7
-  const localTime = new Date(now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60 * 1000);
-
-  const yyyy = localTime.getFullYear();
-  const mm = String(localTime.getMonth() + 1).padStart(2, "0");
-  const dd = String(localTime.getDate()).padStart(2, "0");
-  const dateStr = `${yyyy}-${mm}-${dd}`;
-
-  const day = localTime.getDay();
-  const dayStr = day === 0 ? "Chủ Nhật" : `Thứ ${day === 1 ? "Hai" : day === 2 ? "Ba" : day === 3 ? "Tư" : day === 4 ? "Năm" : day === 5 ? "Sáu" : "Bảy"}`;
-
-  const hh = String(localTime.getHours()).padStart(2, "0");
-  const min = String(localTime.getMinutes()).padStart(2, "0");
-  const timeStr = `${hh}:${min}`;
-
-  return { dateStr, dayStr, timeStr };
-};
-
-const VIETNAMESE_DAYS = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
-
-const timeToMins = (time: string) => {
-  const [h, m] = String(time || "").split(":").map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
-  return h * 60 + m;
-};
-
-const parseSlotTime = (slotTime: string) => {
-  const match = String(slotTime || "").trim().match(/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/);
-  if (!match) return null;
-  return { startTime: match[1], endTime: match[2], normalized: `${match[1]} - ${match[2]}` };
-};
-
-const isValidDateOnly = (value: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
-};
-
-const dayOfWeekForDate = (dateStr: string) => {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return VIETNAMESE_DAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-};
-
-const findScheduleSlot = (schedule: any[], classDate: string, slotTime: string) => {
-  if (!Array.isArray(schedule) || schedule.length === 0 || !isValidDateOnly(classDate)) return null;
-  const parsedSlot = parseSlotTime(slotTime);
-  if (!parsedSlot) return null;
-  const requestedDay = dayOfWeekForDate(classDate);
-
-  return schedule.find(slot => {
-    if (`${slot.startTime} - ${slot.endTime}` !== parsedSlot.normalized) return false;
-    if (slot.specificDate) return String(slot.specificDate).slice(0, 10) === classDate;
-    return slot.dayOfWeek === requestedDay;
-  }) || null;
-};
-
-const isCurrentVietnamTimeWithinSlot = (classDate: string, slot: any) => {
-  const { dateStr, timeStr } = getVietnamTimeInfo();
-  if (dateStr !== classDate) return false;
-  const currentMins = timeToMins(timeStr);
-  const startMins = timeToMins(slot.startTime);
-  const endMins = timeToMins(slot.endTime);
-  return Number.isFinite(currentMins) && currentMins >= startMins && currentMins <= endMins;
-};
-
-const isWithinSchedule = (schedule: any[]): boolean => {
-  if (!Array.isArray(schedule) || schedule.length === 0) return true;
-  const { dateStr } = getVietnamTimeInfo();
-  return schedule.some(slot => findScheduleSlot([slot], dateStr, `${slot.startTime} - ${slot.endTime}`) && isCurrentVietnamTimeWithinSlot(dateStr, slot));
-};
-
-app.post("/api/attendance/self-checkin", requireAuth, requireRole(["student"]), validateBody(schemas.selfCheckin), asyncHandler(async (req, res) => {
-  const { sessionId, code } = req.body;
-  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [sessionId])).rows[0];
-  if (!session) return res.status(404).json({ error: "Attendance session not found." });
-
-  if (!session.code || session.code !== code) {
-    return res.status(400).json({ error: "Mã điểm danh không chính xác hoặc không khả dụng." });
-  }
-
-  if (session.expires_at && new Date(session.expires_at) < new Date()) {
-    return res.status(400).json({ error: "Mã điểm danh đã hết hạn (Chỉ có giá trị trong 5 phút)." });
-  }
-
-  if (session.section_id) {
-    const section = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [session.section_id])).rows[0];
-    if (section) {
-      const schedule = parseSchedule(section);
-      if (!isWithinSchedule(schedule)) {
-        return res.status(400).json({ error: "Điểm danh không hợp lệ: Hiện tại không nằm trong khung giờ học được lên lịch của lớp này!" });
-      }
-    }
-    const registration = (await pool.query(
-      "SELECT id FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status = 'registered'",
-      [req.user!.id, session.section_id]
-    )).rows[0];
-    if (!registration) return res.status(403).json({ error: "Permission denied for this class section." });
-  } else {
-    const enrollment = (await pool.query(
-      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status = 'active'",
-      [req.user!.id, session.course_id]
-    )).rows[0];
-    if (!enrollment) return res.status(403).json({ error: "Active enrollment required for attendance check-in." });
-  }
-
-  // Record presence for this student
-  const existing = (await pool.query(
-    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
-    [sessionId, req.user!.id]
-  )).rows[0];
-
-  const record = {
-    id: existing?.id || generateId("atr"),
-    sessionId,
-    studentId: req.user!.id,
-    status: "present" as const,
-    note: "Tự điểm danh qua link",
-    checkedInAt: new Date().toISOString(),
-    checkinMethod: "link" as const
-  };
-
-  await attendanceRepository.bulkMarkRecords(pool, [record]);
-  await audit(req, "student_self_checkin", record.id, `Student: ${req.user!.id}, Status: present`);
-  res.json({ ok: true, record });
-}));
 
 
 
