@@ -7555,7 +7555,7 @@ app.get("/api/public/courses", rateLimitPublicCatalog, asyncHandler(async (_req,
     }));
   }
   const rows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
-  res.setHeader("Cache-Control", "public, max-age=30");
+  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
   res.json(rows.map(publicCourseFromRow));
 }));
 app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (req, res) => {
@@ -7612,15 +7612,17 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
       }))
     });
   }
-  const courseRow = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [req.params.id])).rows[0];
+  const courseId2 = req.params.id;
+  const [courseRes, sectionRows, lessonRes] = await Promise.all([
+    pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' AND c.id = $1`, [courseId2]),
+    listOpenSectionRows([courseId2]),
+    pool.query("SELECT id, title, duration, lesson_order FROM lessons WHERE course_id = $1 ORDER BY lesson_order ASC", [courseId2])
+  ]);
+  const courseRow = courseRes.rows[0];
   if (!courseRow) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc." });
-  const sectionRows = await listOpenSectionRows([courseRow.id]);
   const sessionRows = sectionRows.length ? (await pool.query("SELECT * FROM attendance_sessions WHERE section_id = ANY($1)", [sectionRows.map((row) => row.id)])).rows : [];
-  const lessonRows = (await pool.query(
-    "SELECT id, title, duration, lesson_order FROM lessons WHERE course_id = $1 ORDER BY lesson_order ASC",
-    [courseRow.id]
-  )).rows;
-  res.setHeader("Cache-Control", "public, max-age=30");
+  const lessonRows = lessonRes.rows;
+  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
   res.json({
     course: publicCourseFromRow(courseRow),
     sections: sectionRows.map((row) => publicCourseSectionFromRow(row, sessionRows.filter((session) => session.section_id === row.id))),

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Calendar, ChevronDown, Clock, MapPin, Search, User as UserIcon, Users } from "lucide-react";
 import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
@@ -24,7 +24,7 @@ function syncCourseParam(courseId: string | null) {
   const url = new URL(window.location.href);
   if (courseId) url.searchParams.set("course", courseId);
   else url.searchParams.delete("course");
-  window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+  window.history.replaceState(null, "", url.toString());
 }
 
 /** Landing page for visitors: published courses, their open classes and session schedule. */
@@ -37,6 +37,8 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId || null);
   const [detail, setDetail] = useState<PublicCourseDetail | null>(null);
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
+
+  const courseDetailCache = useRef<Map<string, PublicCourseDetail>>(new Map());
 
   const [retryTrigger, setRetryTrigger] = useState(0);
 
@@ -51,18 +53,33 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
 
   useEffect(() => {
     syncCourseParam(selectedCourseId);
-    setDetail(null);
     setExpandedSectionId(null);
-    if (!selectedCourseId) return;
+    if (!selectedCourseId) {
+      setDetail(null);
+      return;
+    }
+
+    const cached = courseDetailCache.current.get(selectedCourseId);
+    if (cached) {
+      setDetail(cached);
+    } else {
+      setDetail(null);
+    }
+
     let cancelled = false;
     api.getPublicCourse(selectedCourseId)
       .then(result => {
-        if (!cancelled) setDetail(result);
+        if (!cancelled) {
+          courseDetailCache.current.set(selectedCourseId, result);
+          setDetail(result);
+        }
       })
       .catch((err: any) => {
         if (cancelled) return;
-        setError(err.message || "Không tìm thấy khóa học.");
-        setSelectedCourseId(null);
+        if (!cached) {
+          setError(err.message || "Không tìm thấy khóa học.");
+          setSelectedCourseId(null);
+        }
       });
     window.scrollTo({ top: 0 });
     return () => {
