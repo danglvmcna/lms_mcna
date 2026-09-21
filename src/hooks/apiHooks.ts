@@ -59,7 +59,11 @@ export function useStoreSnapshot(enabled = true) {
       return hydrateStore(await api.getStore());
     },
     enabled,
-    staleTime: 20_000
+    initialData: () => {
+      const existing = AppStore.get();
+      return (existing && existing.users && existing.users.length > 0) ? existing : undefined;
+    },
+    staleTime: 60_000
   });
 }
 

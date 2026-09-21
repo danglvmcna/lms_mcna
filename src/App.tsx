@@ -40,7 +40,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 3,
       retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
-      refetchOnWindowFocus: true
+      refetchOnWindowFocus: false
     }
   }
 });
@@ -136,6 +136,7 @@ function AppShell() {
         const serverStore = await api.getStore();
         AppStore.hydrate(serverStore);
         setStoreData({ ...serverStore });
+        queryClient.setQueryData(["store"], serverStore);
       })
       .catch(() => {
         // The session cookie may be invalid/expired but still present in the browser.
@@ -233,6 +234,7 @@ function AppShell() {
     const serverStore = await api.getStore();
     AppStore.hydrate(serverStore);
     setStoreData({ ...serverStore });
+    queryClient.setQueryData(["store"], serverStore);
     await queryClient.invalidateQueries();
     if (currentUser) {
       const freshUser = serverStore.users.find(u => u.id === currentUser.id);
@@ -477,6 +479,7 @@ function AppShell() {
             const serverStore = await api.getStore();
             AppStore.hydrate(serverStore);
             setStoreData({ ...serverStore });
+            queryClient.setQueryData(["store"], serverStore);
             setCurrentUser(data.user);
           }}
         />
@@ -698,8 +701,8 @@ function AppShell() {
 
               {/* Header right: Clean Status Badge */}
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/80 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   Hệ thống trực tuyến
                 </span>
               </div>

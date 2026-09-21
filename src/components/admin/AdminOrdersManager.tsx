@@ -172,7 +172,7 @@ export default function AdminOrdersManager({
   };
 
   const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat("vi-VN").format(amount) + " đ";
+    return new Intl.NumberFormat("vi-VN").format(amount) + "\u00A0đ";
   };
 
   return (
@@ -180,7 +180,7 @@ export default function AdminOrdersManager({
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-mono font-semibold tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase">
+          <span className="text-[11px] font-mono font-semibold tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80 uppercase inline-block">
             QUẢN LÝ BÁN KHÓA HỌC & ĐƠN HÀNG
           </span>
           <h2 className="text-xl font-bold text-slate-900 mt-2">Đơn hàng & Ghi danh Khóa học</h2>
@@ -204,22 +204,22 @@ export default function AdminOrdersManager({
         </div>
         <div className="mcna-card p-4 bg-emerald-50/40 border-emerald-200/80">
           <p className="text-[11px] text-emerald-800 uppercase tracking-wider font-semibold">Đã kích hoạt / Doanh thu</p>
-          <h3 className="text-lg md:text-xl font-bold font-mono text-emerald-900 mt-1 truncate">
+          <h3 className="text-base sm:text-lg xl:text-xl font-bold font-mono text-emerald-900 mt-1 whitespace-nowrap" title={formatMoney(totalRevenue)}>
             {formatMoney(totalRevenue)}
           </h3>
-          <span className="text-[10px] text-emerald-700 font-medium">{activeCount} học viên đang học</span>
+          <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">{activeCount} học viên đang học</span>
         </div>
       </div>
 
       {/* Filters & Search */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
         <div className="relative flex-1">
-          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Tìm theo tên học viên, SĐT, email, tên khóa..."
-            className="mcna-input pl-9"
+            className="mcna-input mcna-input-search !pl-9"
           />
         </div>
 
@@ -270,9 +270,9 @@ export default function AdminOrdersManager({
               <th className="mcna-th pl-4">Học viên</th>
               <th className="mcna-th">Khóa học</th>
               <th className="mcna-th">Lớp & Lịch học</th>
-              <th className="mcna-th text-right">Số tiền</th>
-              <th className="mcna-th text-center">Trạng thái</th>
-              <th className="mcna-th text-right pr-4">Hành động</th>
+              <th className="mcna-th text-right whitespace-nowrap">Số tiền</th>
+              <th className="mcna-th text-center whitespace-nowrap">Trạng thái</th>
+              <th className="mcna-th text-right pr-4 whitespace-nowrap">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-sans">
@@ -296,11 +296,11 @@ export default function AdminOrdersManager({
                           {order.student?.name || "Học viên"}
                         </span>
                         <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Mail className="h-3 w-3" /> {order.student?.email || "—"}
+                          <Mail className="h-3 w-3 shrink-0" /> {order.student?.email || "—"}
                         </span>
                         {order.student?.phone && (
                           <span className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5 font-mono">
-                            <Phone className="h-3 w-3 text-slate-400" /> {order.student?.phone}
+                            <Phone className="h-3 w-3 text-slate-400 shrink-0" /> {order.student?.phone}
                           </span>
                         )}
                       </div>
@@ -315,10 +315,10 @@ export default function AdminOrdersManager({
                       </span>
                     </td>
 
-                    <td className="mcna-td">
+                    <td className="mcna-td whitespace-nowrap">
                       {activeSection ? (
                         <div>
-                          <span className="mcna-badge-primary">
+                          <span className="mcna-badge-primary font-mono">
                             {activeSection.sectionCode}
                           </span>
                           {activeSection.openingDate && (
@@ -332,42 +332,43 @@ export default function AdminOrdersManager({
                       )}
                     </td>
 
-                    <td className="mcna-td text-right font-mono font-bold text-slate-900">
+                    <td className="mcna-td text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                       {formatMoney(order.price)}
                     </td>
 
-                    <td className="mcna-td text-center">
+                    <td className="mcna-td text-center whitespace-nowrap">
                       {order.status === "pending_payment" && (
                         <span className="mcna-badge-warning inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" /> Chờ thanh toán
+                          <Clock className="h-3 w-3 shrink-0" /> Chờ thanh toán
                         </span>
                       )}
                       {order.status === "pending" && (
                         <span className="mcna-badge-primary inline-flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" /> Chờ xếp lớp
+                          <AlertCircle className="h-3 w-3 shrink-0" /> Chờ xếp lớp
                         </span>
                       )}
                       {order.status === "active" && (
                         <span className="mcna-badge-success inline-flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3" /> Đang học
+                          <CheckCircle className="h-3 w-3 shrink-0" /> Đang học
                         </span>
                       )}
                     </td>
 
-                    <td className="mcna-td text-right pr-4">
+                    <td className="mcna-td text-right pr-4 whitespace-nowrap">
                       {isPending ? (
                         <button
                           onClick={() => handleQuickActivate(order)}
                           disabled={activatingId === order.id}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl transition text-[11px] shadow-xs flex items-center gap-1.5 ml-auto cursor-pointer"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg transition text-[11px] shadow-xs inline-flex items-center gap-1.5 ml-auto cursor-pointer"
                           title="Xác nhận thanh toán và kích hoạt vào lớp"
                         >
-                          <Check className="h-3.5 w-3.5" />
+                          <Check className="h-3.5 w-3.5 shrink-0" />
                           <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt 1-chạm"}</span>
                         </button>
                       ) : (
-                        <span className="text-[11px] text-slate-400 flex items-center justify-end gap-1 font-mono">
-                          <Check className="h-3 w-3 text-emerald-600" /> Đã hoàn tất
+                        <span className="text-[11px] text-slate-400 inline-flex items-center justify-end gap-1.5 font-mono whitespace-nowrap">
+                          <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+                          <span>Đã hoàn tất</span>
                         </span>
                       )}
                     </td>
@@ -451,7 +452,7 @@ export default function AdminOrdersManager({
                                 {s.openingDate ? `Khai giảng ${new Date(s.openingDate).toLocaleDateString("vi-VN")}` : "Chưa chốt ngày khai giảng"}
                               </p>
                             </div>
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isFull ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-md font-mono px-2 py-0.5 text-[10px] font-semibold ${isFull ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
                               <Users className="h-3 w-3" /> {enrolledCount}/{s.maxStudents}
                             </span>
                           </div>

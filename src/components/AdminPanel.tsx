@@ -492,7 +492,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                   const pendingCount = (store.enrollments || []).filter((e: any) => e.status === "pending_payment" || e.status === "pending").length;
                   if (pendingCount === 0) return null;
                   return (
-                    <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-2 py-0.5 rounded-full font-mono">
+                    <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-1.5 py-0.5 rounded-md font-mono border border-amber-200/60">
                       {pendingCount}
                     </span>
                   );
@@ -514,7 +514,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               >
                 <span className="flex items-center gap-2"><GraduationCap className={`h-4 w-4 ${activeSubTab === "approval" ? "text-indigo-600" : "text-slate-400"}`} /> Duyệt khóa học</span>
                 {pendingCourses.length > 0 && (
-                  <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-2 py-0.5 rounded-full font-mono">
+                  <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-1.5 py-0.5 rounded-md font-mono border border-amber-200/60">
                     {pendingCourses.length}
                   </span>
                 )}
