@@ -536,14 +536,19 @@ export default function CourseBuilder(props: ComponentProps) {
     const courseAssignmentsList = courseAssignments || [];
     const courseQuizzesList = courseQuizzes || [];
     
-    // Lấy attendance sessions của môn học và lớp đang chọn (nếu có)
+    // Lấy attendance sessions theo lớp cụ thể nếu đã chọn, hoặc không lọc (chỉ dùng để lookup) nếu ở chế độ "Tất cả"
     const courseSessionsData = (store.attendanceSessions || [])
       .filter((s: any) => s.courseId === activeCourse.id && (!selectedClassSectionId || s.sectionId === selectedClassSectionId))
       .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
+    // FIX: Khi ở chế độ "Tất cả / Giáo trình môn" (không chọn lớp cụ thể),
+    // KHÔNG dùng courseSessionsData.length để tính numSessions vì nó chứa sessions
+    // của TẤT CẢ các lớp cùng courseId → gây nhân đôi/nhân n lần số buổi.
+    // Trong chế độ này, numSessions được xác định chỉ từ giáo trình (lessons + numberOfLessons).
+    const isAllSectionsMode = !selectedClassSectionId;
     const numSessions = Math.max(
       courseLessons.length, 
-      courseSessionsData.length, 
+      isAllSectionsMode ? 0 : courseSessionsData.length,  // chỉ dùng khi lọc theo lớp cụ thể
       activeCourse.numberOfLessons || 10,
       selectedClassSection?.numberOfSessions || 0,
       1
