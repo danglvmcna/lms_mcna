@@ -48,6 +48,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
 import ModalPortal from "./ModalPortal";
+import PaymentQrModal from "./student/PaymentQrModal";
 
 interface StudentPanelProps {
   currentUser: UserType;
@@ -777,7 +778,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                       </div>
 
                       <div className="space-y-1.5 pt-1">
-                        <span className="text-[10px] font-mono text-slate-400 tracking-wider uppercase font-semibold">HỆ THỐNG ĐÀO TẠO E16</span>
+                        <span className="text-[10px] font-mono text-slate-400 tracking-wider uppercase font-semibold">HỌC VIỆN CÔNG NGHỆ MCNA</span>
                         <h5 className="font-display font-bold text-slate-900 text-base leading-snug">{cTitle}</h5>
                         <p className="text-xs text-slate-600 font-sans leading-relaxed">
                           Chứng nhận tốt nghiệp được trao tặng cho học viên <strong className="text-slate-900 font-semibold">{currentUser.name}</strong> vì đã hoàn thành toàn diện lộ trình giáo trình và vượt qua các yêu cầu đánh giá năng lực của khóa học.
@@ -838,6 +839,19 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
         <StudentOrders {...studentPanelProps} />
         <QuizConsole {...studentPanelProps} />
+
+        {paymentGuideTx && (
+          <PaymentQrModal
+            transaction={paymentGuideTx}
+            course={store.courses.find(c => c.id === paymentGuideTx.courseId)}
+            onClose={() => setPaymentGuideTx(null)}
+            onRefreshData={onRefreshData}
+            onPaymentSuccess={() => {
+              onRefreshData();
+              triggerToast("Thanh toán thành công! Khóa học đã được kích hoạt.");
+            }}
+          />
+        )}
 
         </div>
       </div>

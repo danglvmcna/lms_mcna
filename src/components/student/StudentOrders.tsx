@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertCircle, CreditCard, FileText, Search } from "lucide-react";
+import { AlertCircle, CreditCard, FileText, Search, QrCode } from "lucide-react";
 
 interface ComponentProps {
   [key: string]: any;
@@ -89,9 +89,31 @@ export default function StudentOrders(props: ComponentProps) {
               </div>
 
               {enrollment.status === "pending_payment" && (
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-[11px] leading-relaxed flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
-                  <span>Đơn của bạn đang chờ thanh toán. Sau khi bộ phận thu học phí xác nhận, bạn sẽ được xếp vào lớp.</span>
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-[11px] leading-relaxed flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                    <span>Đơn của bạn đang chờ thanh toán. Quét mã VietQR để hoàn tất học phí ngay.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const foundTx = (store.transactions || []).find((t: any) => t.studentId === currentUser.id && t.courseId === enrollment.courseId && t.status === "pending") || {
+                        id: `tx_${Date.now().toString(16).slice(-8)}`,
+                        studentId: currentUser.id,
+                        courseId: enrollment.courseId,
+                        amount: course?.price || 0,
+                        status: "pending",
+                        paymentMethod: "Chuyển khoản Ngân hàng (QR)",
+                        createdAt: new Date().toISOString()
+                      };
+                      if (props.setPaymentGuideTx) {
+                        props.setPaymentGuideTx(foundTx);
+                      }
+                    }}
+                    className="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                  >
+                    <QrCode className="h-3.5 w-3.5" /> Thanh toán VietQR
+                  </button>
                 </div>
               )}
             </div>
@@ -155,7 +177,18 @@ export default function StudentOrders(props: ComponentProps) {
                         <span className="mcna-badge-success">Thành công</span>
                       )}
                       {tx.status === "pending" && (
-                        <span className="mcna-badge-warning">Chờ xác nhận</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (props.setPaymentGuideTx) {
+                              props.setPaymentGuideTx(tx);
+                            }
+                          }}
+                          className="mcna-badge-warning hover:bg-amber-100 transition cursor-pointer inline-flex items-center gap-1"
+                          title="Bấm để mở mã VietQR thanh toán"
+                        >
+                          <QrCode className="h-3 w-3" /> Chờ xác nhận
+                        </button>
                       )}
                       {tx.status === "rejected" && (
                         <span className="mcna-badge-danger">Từ chối</span>
