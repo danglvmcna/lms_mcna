@@ -14,7 +14,7 @@ export function setCsrfToken(token: string | null) {
 
 export function getCsrfToken(): string | null {
   if (typeof document !== "undefined") {
-    const match = document.cookie.match(/(?:^|;\s*)e16_lms_csrf=([^;]+)/);
+    const match = document.cookie.match(/(?:^|;\s*)(?:mcna_lms_csrf|e16_lms_csrf)=([^;]+)/);
     if (match) return decodeURIComponent(match[1]);
   }
   return sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");

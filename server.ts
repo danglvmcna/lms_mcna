@@ -495,17 +495,25 @@ async function verifyToken(token: string): Promise<{ sub: string } | null> {
 function setAuthCookie(res: express.Response, token: string) {
   const secure = (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") ? "; Secure" : "";
   const domain = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : "";
-  res.setHeader("Set-Cookie", `e16_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`);
+  res.setHeader("Set-Cookie", [
+    `mcna_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`,
+    `e16_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`
+  ]);
 }
 
 function setCsrfCookie(res: express.Response, token: string) {
   const secure = (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") ? "; Secure" : "";
   const domain = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : "";
-  res.append("Set-Cookie", `e16_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`);
+  res.append("Set-Cookie", [
+    `mcna_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`,
+    `e16_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`
+  ]);
 }
 
 function clearAuthCookie(res: express.Response) {
   res.setHeader("Set-Cookie", [
+    "mcna_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    "mcna_lms_csrf=; SameSite=Lax; Path=/; Max-Age=0",
     "e16_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
     "e16_lms_csrf=; SameSite=Lax; Path=/; Max-Age=0"
   ]);
@@ -514,7 +522,7 @@ function clearAuthCookie(res: express.Response) {
 function extractBearerToken(req: express.Request): string | null {
   const header = req.header("Authorization");
   if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length);
-  const match = (req.header("Cookie") || "").match(/(?:^|;\s*)e16_lms_session=([^;]+)/);
+  const match = (req.header("Cookie") || "").match(/(?:^|;\s*)(?:mcna_lms_session|e16_lms_session)=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -646,7 +654,7 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
     return next();
   }
 
-  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
     console.warn(`[CSRF] Rejected ${req.method} ${req.originalUrl} — cookie=${cookieToken ? "present" : "MISSING"}, header=${headerToken ? "present" : "MISSING"}, match=${cookieToken === headerToken}`);
@@ -1554,7 +1562,7 @@ app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => {
-  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   let csrfToken = cookieToken;
   if (!csrfToken) {
     csrfToken = crypto.randomBytes(24).toString("base64url");

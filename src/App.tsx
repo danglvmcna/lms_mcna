@@ -28,7 +28,7 @@ import { AppStore } from "./store";
 const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
 const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
 const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
-import { api, setCsrfToken } from "./api";
+import { api, setCsrfToken, getCsrfToken } from "./api";
 import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
 import { ForcedPasswordChange, ForgotPasswordForm, SignUpForm } from "./components/public/AccountForms";
@@ -106,8 +106,9 @@ function AppShell() {
         if (!response.ok) throw new Error("Session expired");
         const data = await response.json();
         setCurrentUser(data.user);
-        const csrfCookie = document.cookie.split("; ").find(item => item.startsWith("e16_lms_csrf="));
+        const csrfCookie = document.cookie.split("; ").find(item => item.startsWith("mcna_lms_csrf=") || item.startsWith("e16_lms_csrf="));
         if (csrfCookie) setCsrfToken(decodeURIComponent(csrfCookie.split("=")[1] || ""));
+        sessionStorage.setItem("mcna_lms_active_session", "true");
         sessionStorage.setItem("e16_lms_active_session", "true");
         // Data APIs stay locked until a temporary password is replaced (ForcedPasswordChange loads the store after).
         if (data.user?.mustChangePassword) return;
@@ -122,6 +123,7 @@ function AppShell() {
         fetch("/api/auth/force-logout", { method: "POST", credentials: "include" }).catch(() => undefined);
         setCurrentUser(null);
         setCsrfToken(null);
+        sessionStorage.removeItem("mcna_lms_active_session");
         sessionStorage.removeItem("e16_lms_active_session");
       });
   }, []);
@@ -139,8 +141,10 @@ function AppShell() {
 
   useEffect(() => {
     if (currentUser) {
+      sessionStorage.setItem("mcna_lms_role", currentUser.role);
       sessionStorage.setItem("e16_lms_role", currentUser.role);
     } else {
+      sessionStorage.removeItem("mcna_lms_role");
       sessionStorage.removeItem("e16_lms_role");
     }
   }, [currentUser]);
@@ -244,6 +248,7 @@ function AppShell() {
 
       setCurrentUser(data.user);
       setCsrfToken(data.csrfToken || null);
+      sessionStorage.setItem("mcna_lms_active_session", "true");
       sessionStorage.setItem("e16_lms_active_session", "true");
       if (!data.user.mustChangePassword) await refreshStoreDataFromServer();
       AppStore.log(data.user.id, "authentication_login", "security", `Successfully authenticated into profile desk role: ${data.user.role}`);
@@ -258,7 +263,7 @@ function AppShell() {
     if (currentUser) {
       AppStore.log(currentUser.id, "authentication_logout", "security", "Successfully closed session.");
     }
-    const csrfToken = sessionStorage.getItem("e16_lms_csrf");
+    const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
     await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
@@ -267,6 +272,7 @@ function AppShell() {
     setCurrentUser(null);
     setCsrfToken(null);
     setAuthView("catalog");
+    sessionStorage.removeItem("mcna_lms_active_session");
     sessionStorage.removeItem("e16_lms_active_session");
   };
 
@@ -393,8 +399,8 @@ function AppShell() {
   <script>
     // Seeding internal localStorage engine with live runtime datasets
     const SEEDED_DUMP = ${rawStoreJson};
-    if (!localStorage.getItem("e16_lms_data")) {
-      localStorage.setItem("e16_lms_data", JSON.stringify(SEEDED_DUMP));
+    if (!localStorage.getItem("mcna_lms_data") && !localStorage.getItem("e16_lms_data")) {
+      localStorage.setItem("mcna_lms_data", JSON.stringify(SEEDED_DUMP));
     }
 
     function launchInteractiveWorkspace() {
@@ -409,7 +415,7 @@ function AppShell() {
     const downloadAnchor = document.createElement("a");
     const blob = new Blob([htmlTemplate], { type: "text/html" });
     downloadAnchor.href = URL.createObjectURL(blob);
-    downloadAnchor.download = "e16_lms_standalone.html";
+    downloadAnchor.download = "mcna_lms_standalone.html";
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -1079,7 +1085,7 @@ function AppShell() {
               }
 
               try {
-                const csrfToken = sessionStorage.getItem("e16_lms_csrf");
+                const csrfToken = getCsrfToken() || sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
                 const response = await fetch("/api/users/change-password", {
                   method: "POST",
                   headers: {

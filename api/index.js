@@ -186,7 +186,7 @@ function verifyPassword(password, passwordHash, salt) {
 }
 
 // src/store.ts
-var STORAGE_KEY = "e16_lms_data";
+var STORAGE_KEY = "mcna_lms_data";
 var credential = (password, salt) => hashPassword(password, salt);
 var ADMIN_CREDENTIAL = credential("admine16", "seed_admin");
 var TEACHER_CREDENTIAL = credential("teachere16", "seed_teacher");
@@ -698,7 +698,7 @@ var AppStore = class {
     localStorage.removeItem(STORAGE_KEY);
     if (skipSync) return Promise.resolve();
     if (typeof sessionStorage !== "undefined") {
-      const role = sessionStorage.getItem("e16_lms_role");
+      const role = sessionStorage.getItem("mcna_lms_role") || sessionStorage.getItem("e16_lms_role");
       if (role && !["manager", "admin"].includes(role)) {
         return Promise.resolve();
       }
@@ -6568,15 +6568,23 @@ async function verifyToken(token) {
 function setAuthCookie(res, token) {
   const secure = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging" ? "; Secure" : "";
   const domain = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : "";
-  res.setHeader("Set-Cookie", `e16_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`);
+  res.setHeader("Set-Cookie", [
+    `mcna_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`,
+    `e16_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`
+  ]);
 }
 function setCsrfCookie(res, token) {
   const secure = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging" ? "; Secure" : "";
   const domain = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : "";
-  res.append("Set-Cookie", `e16_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`);
+  res.append("Set-Cookie", [
+    `mcna_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`,
+    `e16_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}${domain}`
+  ]);
 }
 function clearAuthCookie(res) {
   res.setHeader("Set-Cookie", [
+    "mcna_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    "mcna_lms_csrf=; SameSite=Lax; Path=/; Max-Age=0",
     "e16_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
     "e16_lms_csrf=; SameSite=Lax; Path=/; Max-Age=0"
   ]);
@@ -6584,7 +6592,7 @@ function clearAuthCookie(res) {
 function extractBearerToken(req) {
   const header = req.header("Authorization");
   if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length);
-  const match = (req.header("Cookie") || "").match(/(?:^|;\s*)e16_lms_session=([^;]+)/);
+  const match = (req.header("Cookie") || "").match(/(?:^|;\s*)(?:mcna_lms_session|e16_lms_session)=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 function extractCookie(req, name) {
@@ -6693,7 +6701,7 @@ function requireCsrf(req, res, next) {
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
     return next();
   }
-  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   const headerToken = req.header("X-CSRF-Token");
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
     console.warn(`[CSRF] Rejected ${req.method} ${req.originalUrl} \u2014 cookie=${cookieToken ? "present" : "MISSING"}, header=${headerToken ? "present" : "MISSING"}, match=${cookieToken === headerToken}`);
@@ -7434,7 +7442,7 @@ app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 app.get("/api/auth/me", requireAuth, (req, res) => {
-  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   let csrfToken = cookieToken;
   if (!csrfToken) {
     csrfToken = crypto4.randomBytes(24).toString("base64url");

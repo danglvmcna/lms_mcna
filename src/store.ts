@@ -8,7 +8,7 @@ import {
 import { generateId } from "./utils";
 import { hashPassword } from "./authHash";
 
-const STORAGE_KEY = "e16_lms_data";
+const STORAGE_KEY = "mcna_lms_data";
 
 const credential = (password: string, salt: string) => hashPassword(password, salt);
 
@@ -544,7 +544,7 @@ export class AppStore {
     if (skipSync) return Promise.resolve();
 
     if (typeof sessionStorage !== "undefined") {
-      const role = sessionStorage.getItem("e16_lms_role");
+      const role = sessionStorage.getItem("mcna_lms_role") || sessionStorage.getItem("e16_lms_role");
       if (role && !["manager", "admin"].includes(role)) {
         // Skip calling /api/store/sync as this role does not have permission
         return Promise.resolve();
