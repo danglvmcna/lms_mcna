@@ -102,7 +102,7 @@ Body luôn có cùng một vỏ:
 - `origin`: `lms` nếu hành động xảy ra trong LMS; `crm` nếu do chính CRM gọi API gây ra. CRM có thể bỏ qua sự kiện `origin = "crm"` để tránh vòng lặp.
 - Thứ tự giao không được bảo đảm tuyệt đối khi có thử lại; dùng `occurredAt` để sắp xếp.
 
-Với Vercel (đặc biệt gói Hobby miễn phí giới hạn cron 1 lần/ngày), hai cron đã được khai báo chạy hàng ngày trong `vercel.json` (`0 2 * * *` cho outbox và `0 3 * * *` cho chuyên cần). Đồng thời LMS tự động kích hoạt gửi tức thời (opportunistic delivery) ngay khi sự kiện phát sinh. Nếu cần retry 5 phút/lần trên Vercel Hobby, bạn có thể dùng dịch vụ cron miễn phí ngoài (như cron-job.org) gọi tới `/api/internal/jobs/crm-outbox` kèm header `Authorization: Bearer <CRON_SECRET>`.
+Với Vercel (đặc biệt gói Hobby miễn phí giới hạn cron 1 lần/ngày), repo đã tích hợp sẵn GitHub Actions workflow tự động (`.github/workflows/crm-outbox-cron.yml`) chạy mỗi 10 phút để ping tới `/api/internal/jobs/crm-outbox` với header `Authorization: Bearer <CRON_SECRET>`. Đồng thời LMS cũng tự động kích hoạt gửi tức thời (opportunistic delivery) ngay khi sự kiện phát sinh.
 
 ### 3.2. Phản hồi và thử lại
 

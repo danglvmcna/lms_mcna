@@ -1,0 +1,39 @@
+name: CRM Outbox Sync Cron
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-crm:
+    name: Trigger CRM Outbox Delivery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CRM Outbox Endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::warning ::APP_URL or CRON_SECRET is not configured in GitHub Secrets."
+            echo "To enable automated CRM sync, add APP_URL and CRON_SECRET under Repo Settings -> Secrets and variables -> Actions."
+            exit 0
+          fi
+
+          # Strip trailing slash from APP_URL if present
+          CLEAN_URL="${APP_URL%/}"
+          TARGET_URL="${CLEAN_URL}/api/internal/jobs/crm-outbox"
+          echo "Triggering CRM Outbox sync at: $TARGET_URL"
+
+          RESPONSE=$(curl -f -s -S -X POST "$TARGET_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP_STATUS:%{http_code}")
+
+          HTTP_BODY=$(echo "$RESPONSE" | sed -e '$d')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1 | sed 's/HTTP_STATUS://')
+
+          echo "Response HTTP Status: $HTTP_STATUS"
+          echo "Response Body: $HTTP_BODY"
