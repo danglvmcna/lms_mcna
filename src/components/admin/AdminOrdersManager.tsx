@@ -191,23 +191,23 @@ export default function AdminOrdersManager({
       {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="mcna-card p-4">
-          <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Tổng đơn đăng ký</p>
+          <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Tổng đơn đăng ký</p>
           <h3 className="text-2xl font-bold font-mono text-slate-900 mt-1">{orders.length}</h3>
         </div>
         <div className="mcna-card p-4 bg-amber-50/40 border-amber-200/80">
-          <p className="text-[11px] text-amber-800 uppercase tracking-wider font-semibold">Chờ thanh toán</p>
+          <p className="text-xs text-amber-800 uppercase tracking-wider font-semibold">Chờ thanh toán</p>
           <h3 className="text-2xl font-bold font-mono text-amber-900 mt-1">{pendingPaymentCount}</h3>
         </div>
         <div className="mcna-card p-4 bg-indigo-50/40 border-indigo-200/80">
-          <p className="text-[11px] text-indigo-800 uppercase tracking-wider font-semibold">Chờ xếp lớp</p>
+          <p className="text-xs text-indigo-800 uppercase tracking-wider font-semibold">Chờ xếp lớp</p>
           <h3 className="text-2xl font-bold font-mono text-indigo-900 mt-1">{pendingPlacementCount}</h3>
         </div>
         <div className="mcna-card p-4 bg-emerald-50/40 border-emerald-200/80">
-          <p className="text-[11px] text-emerald-800 uppercase tracking-wider font-semibold">Đã kích hoạt / Doanh thu</p>
+          <p className="text-xs text-emerald-800 uppercase tracking-wider font-semibold">Đã kích hoạt / Doanh thu</p>
           <h3 className="text-base sm:text-lg xl:text-xl font-bold font-mono text-emerald-900 mt-1 whitespace-nowrap" title={formatMoney(totalRevenue)}>
             {formatMoney(totalRevenue)}
           </h3>
-          <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">{activeCount} học viên đang học</span>
+          <span className="text-xs text-emerald-700 font-medium block mt-1">{activeCount} học viên đang học</span>
         </div>
       </div>
 
@@ -249,7 +249,7 @@ export default function AdminOrdersManager({
         </select>
       </div>
 
-      <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
         <span>Hiển thị {filteredOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredOrders.length)} / {filteredOrders.length} đơn</span>
         {(search || statusFilter !== "all" || courseFilter !== "all") && (
           <button
@@ -264,15 +264,15 @@ export default function AdminOrdersManager({
 
       {/* Orders Table */}
       <div className="mcna-table-wrapper">
-        <table className="mcna-table">
+        <table className="mcna-table min-w-[900px]">
           <thead className="mcna-thead">
             <tr>
-              <th className="mcna-th pl-4">Học viên</th>
-              <th className="mcna-th">Khóa học</th>
-              <th className="mcna-th">Lớp & Lịch học</th>
-              <th className="mcna-th text-right whitespace-nowrap">Số tiền</th>
-              <th className="mcna-th text-center whitespace-nowrap">Trạng thái</th>
-              <th className="mcna-th text-right pr-4 whitespace-nowrap">Hành động</th>
+              <th className="mcna-th pl-4 min-w-[190px]">Học viên</th>
+              <th className="mcna-th min-w-[250px]">Khóa học</th>
+              <th className="mcna-th min-w-[150px] whitespace-nowrap">Lớp & Lịch học</th>
+              <th className="mcna-th text-right whitespace-nowrap min-w-[130px]">Số tiền</th>
+              <th className="mcna-th text-center whitespace-nowrap min-w-[140px]">Trạng thái</th>
+              <th className="mcna-th text-right pr-4 whitespace-nowrap min-w-[140px]">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-sans">
@@ -292,25 +292,25 @@ export default function AdminOrdersManager({
                   <tr key={order.id} className="hover:bg-slate-50/60 transition">
                     <td className="mcna-td pl-4">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-slate-900 text-xs">
+                        <span className="font-semibold text-slate-900 text-sm">
                           {order.student?.name || "Học viên"}
                         </span>
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Mail className="h-3 w-3 shrink-0" /> {order.student?.email || "—"}
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                          <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" /> {order.student?.email || "—"}
                         </span>
                         {order.student?.phone && (
-                          <span className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5 font-mono">
-                            <Phone className="h-3 w-3 text-slate-400 shrink-0" /> {order.student?.phone}
+                          <span className="text-xs text-slate-600 flex items-center gap-1.5 mt-0.5 font-mono">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" /> {order.student?.phone}
                           </span>
                         )}
                       </div>
                     </td>
 
                     <td className="mcna-td">
-                      <span className="font-medium text-slate-900 line-clamp-2">
+                      <span className="font-semibold text-slate-900 text-sm block leading-snug">
                         {order.course?.title || "Khóa học"}
                       </span>
-                      <span className="text-[10px] text-indigo-600 font-mono block mt-0.5">
+                      <span className="text-xs text-indigo-600 font-medium block mt-1">
                         {order.course?.category}
                       </span>
                     </td>
@@ -318,38 +318,38 @@ export default function AdminOrdersManager({
                     <td className="mcna-td whitespace-nowrap">
                       {activeSection ? (
                         <div>
-                          <span className="mcna-badge-primary font-mono">
+                          <span className="mcna-badge-primary font-mono text-xs">
                             {activeSection.sectionCode}
                           </span>
                           {activeSection.openingDate && (
-                            <span className="text-[10px] text-slate-500 block mt-1">
+                            <span className="text-xs text-slate-500 block mt-1.5">
                               Khai giảng: {new Date(activeSection.openingDate).toLocaleDateString("vi-VN")}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-slate-400 italic text-[11px]">Chưa chọn lớp</span>
+                        <span className="text-slate-400 italic text-xs">Chưa chọn lớp</span>
                       )}
                     </td>
 
-                    <td className="mcna-td text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                    <td className="mcna-td text-right font-mono font-bold text-slate-900 text-sm md:text-base whitespace-nowrap">
                       {formatMoney(order.price)}
                     </td>
 
                     <td className="mcna-td text-center whitespace-nowrap">
                       {order.status === "pending_payment" && (
-                        <span className="mcna-badge-warning inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3 shrink-0" /> Chờ thanh toán
+                        <span className="mcna-badge-warning inline-flex items-center gap-1.5 text-xs">
+                          <Clock className="h-3.5 w-3.5 shrink-0" /> Chờ thanh toán
                         </span>
                       )}
                       {order.status === "pending" && (
-                        <span className="mcna-badge-primary inline-flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3 shrink-0" /> Chờ xếp lớp
+                        <span className="mcna-badge-primary inline-flex items-center gap-1.5 text-xs">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Chờ xếp lớp
                         </span>
                       )}
                       {order.status === "active" && (
-                        <span className="mcna-badge-success inline-flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3 shrink-0" /> Đang học
+                        <span className="mcna-badge-success inline-flex items-center gap-1.5 text-xs">
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0" /> Đang học
                         </span>
                       )}
                     </td>
@@ -359,15 +359,15 @@ export default function AdminOrdersManager({
                         <button
                           onClick={() => handleQuickActivate(order)}
                           disabled={activatingId === order.id}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg transition text-[11px] shadow-xs inline-flex items-center gap-1.5 ml-auto cursor-pointer"
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg transition text-xs shadow-xs inline-flex items-center gap-1.5 ml-auto cursor-pointer"
                           title="Xác nhận thanh toán và kích hoạt vào lớp"
                         >
-                          <Check className="h-3.5 w-3.5 shrink-0" />
+                          <Check className="h-4 w-4 shrink-0" />
                           <span>{activatingId === order.id ? "Đang xử lý..." : "Kích hoạt 1-chạm"}</span>
                         </button>
                       ) : (
-                        <span className="text-[11px] text-slate-400 inline-flex items-center justify-end gap-1.5 font-mono whitespace-nowrap">
-                          <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+                        <span className="text-xs text-slate-500 inline-flex items-center justify-end gap-1.5 font-medium whitespace-nowrap">
+                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                           <span>Đã hoàn tất</span>
                         </span>
                       )}
@@ -381,14 +381,14 @@ export default function AdminOrdersManager({
       </div>
 
       {pageCount > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-          <p className="text-[11px] text-slate-500">Trang {safePage} / {pageCount}</p>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-600">Trang {safePage} / {pageCount}</p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPage(current => Math.max(1, current - 1))}
               disabled={safePage === 1}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Trước
             </button>
@@ -396,7 +396,7 @@ export default function AdminOrdersManager({
               type="button"
               onClick={() => setPage(current => Math.min(pageCount, current + 1))}
               disabled={safePage === pageCount}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
             >
               Sau <ChevronRight className="h-3.5 w-3.5" />
             </button>
