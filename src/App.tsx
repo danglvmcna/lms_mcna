@@ -68,7 +68,28 @@ function AppShell() {
   const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
 
   // Visitors land on the public course catalog; "login" shows the sign-in card.
-  const [authView, setAuthView] = useState<"catalog" | "login" | "register" | "forgot">(() => (resetToken ? "login" : "catalog"));
+  const [authView, setAuthView] = useState<"catalog" | "login" | "register" | "forgot">(() => {
+    if (resetToken) return "login";
+    const hash = (typeof window !== "undefined" ? window.location.hash.replace("#", "").toLowerCase() : "");
+    if (hash === "login" || hash === "register" || hash === "forgot") {
+      return hash;
+    }
+    return "catalog";
+  });
+
+  const navigateAuth = (view: "catalog" | "login" | "register" | "forgot") => {
+    setAuthView(view);
+    if (typeof window !== "undefined") {
+      const currentHash = window.location.hash.replace("#", "").toLowerCase();
+      if (view === "catalog") {
+        if (currentHash) {
+          window.history.pushState(null, "", window.location.pathname + window.location.search);
+        }
+      } else if (currentHash !== view) {
+        window.location.hash = view;
+      }
+    }
+  };
   const [initialCourseId] = useState(() => new URLSearchParams(window.location.search).get("course") || undefined);
   const [pendingIntent, setPendingIntent] = useState<EnrollIntent | null>(() => readEnrollIntent());
   const [appNotice, setAppNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -128,15 +149,22 @@ function AppShell() {
       });
   }, []);
 
-  // Trap the browser Back button so it can't navigate away from this single-page app
-  // (there is no client-side router with real history entries to step through instead).
+  // Synchronize browser history and hash navigation (back/forward buttons)
   useEffect(() => {
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
+    const handleLocationChange = () => {
+      const hash = window.location.hash.replace("#", "").toLowerCase();
+      if (hash === "login" || hash === "register" || hash === "forgot") {
+        setAuthView(hash);
+      } else if (!hash || hash === "catalog") {
+        setAuthView("catalog");
+      }
     };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleLocationChange);
+    window.addEventListener("popstate", handleLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", handleLocationChange);
+      window.removeEventListener("popstate", handleLocationChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -271,7 +299,7 @@ function AppShell() {
     }).catch(() => undefined);
     setCurrentUser(null);
     setCsrfToken(null);
-    setAuthView("catalog");
+    navigateAuth("catalog");
     sessionStorage.removeItem("mcna_lms_active_session");
     sessionStorage.removeItem("e16_lms_active_session");
   };
@@ -717,13 +745,13 @@ function AppShell() {
         <ErrorBoundary fallbackTitle="Không thể tải danh mục khóa học">
           <PublicCourseCatalog
             initialCourseId={initialCourseId}
-            onLogin={() => setAuthView("login")}
+            onLogin={() => navigateAuth("login")}
             onRegister={intent => {
               if (intent) {
                 saveEnrollIntent(intent);
                 setPendingIntent(intent);
               }
-              setAuthView("register");
+              navigateAuth("register");
             }}
           />
         </ErrorBoundary>
@@ -766,7 +794,7 @@ function AppShell() {
               {!resetToken && (
                 <button
                   type="button"
-                  onClick={() => setAuthView("catalog")}
+                  onClick={() => navigateAuth("catalog")}
                   className="self-start inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 cursor-pointer transition"
                 >
                   <ChevronLeft className="h-4 w-4" /> Xem danh sách khóa học
@@ -899,11 +927,11 @@ function AppShell() {
                   onGoToLogin={email => {
                     if (email) setLoginEmail(email);
                     setAuthError(null);
-                    setAuthView("login");
+                    navigateAuth("login");
                   }}
                 />
               ) : authView === "forgot" ? (
-                <ForgotPasswordForm onGoToLogin={() => setAuthView("login")} />
+                <ForgotPasswordForm onGoToLogin={() => navigateAuth("login")} />
               ) : (
                 <>
                   {/* Login submit form */}
@@ -946,7 +974,7 @@ function AppShell() {
                         type="button"
                         onClick={() => {
                           setAuthError(null);
-                          setAuthView("forgot");
+                          navigateAuth("forgot");
                         }}
                         className="text-slate-500 hover:text-slate-900 font-semibold cursor-pointer transition"
                       >
@@ -956,7 +984,7 @@ function AppShell() {
                         type="button"
                         onClick={() => {
                           setAuthError(null);
-                          setAuthView("register");
+                          navigateAuth("register");
                         }}
                         className="text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer transition"
                       >
