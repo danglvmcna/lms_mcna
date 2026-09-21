@@ -4,6 +4,7 @@ import ModalPortal from "../ModalPortal";
 import { api } from "../../api";
 import { PowerPointLogo, WordLogo, ExcelLogo, PdfLogo } from "../icons/BrandLogos";
 import { parseSubmissionFiles, cleanSubmissionContent, renderSubmissionFileIcon, SubmissionFileInfo } from "../../submissionFiles";
+import FilePreviewModal from "../common/FilePreviewModal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -12,7 +13,17 @@ interface ComponentProps {
 export default function AssignmentGrader(props: ComponentProps) {
   const [submissionSearch, setSubmissionSearch] = React.useState("");
   const [courseDetailId, setCourseDetailId] = React.useState<string | null>(null);
-  const [previewAttachmentUrl, setPreviewAttachmentUrl] = React.useState<string | null>(null);
+  const [previewFiles, setPreviewFiles] = React.useState<SubmissionFileInfo[]>([]);
+  const [previewInitialIndex, setPreviewInitialIndex] = React.useState<number>(0);
+  const [previewStudentName, setPreviewStudentName] = React.useState<string | undefined>(undefined);
+  const [previewAssignmentTitle, setPreviewAssignmentTitle] = React.useState<string | undefined>(undefined);
+
+  const handleOpenPreview = (files: SubmissionFileInfo[], index: number = 0, studentName?: string, assignmentTitle?: string) => {
+    setPreviewFiles(files);
+    setPreviewInitialIndex(index);
+    setPreviewStudentName(studentName);
+    setPreviewAssignmentTitle(assignmentTitle);
+  };
   const [feedbackTemplates, setFeedbackTemplates] = React.useState<any[]>([]);
 
   // Sorting state for student submissions grading table
@@ -338,7 +349,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
                                               type="button"
-                                              onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                                              onClick={() => handleOpenPreview(files, 0, student?.name, challenge?.title)}
                                               className="p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer"
                                               title="Xem file trực tiếp"
                                             >
@@ -381,7 +392,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                                               <div className="flex items-center gap-0.5 shrink-0">
                                                 <button
                                                   type="button"
-                                                  onClick={() => setPreviewAttachmentUrl(f.url)}
+                                                  onClick={() => handleOpenPreview(files, idx, student?.name, challenge?.title)}
                                                   className="p-1 text-indigo-600 hover:text-indigo-800 rounded transition cursor-pointer"
                                                   title="Xem trực tiếp"
                                                 >
@@ -509,7 +520,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <button
                                     type="button"
-                                    onClick={() => setPreviewAttachmentUrl(fileInfo.url)}
+                                    onClick={() => handleOpenPreview(files, fIdx, stud?.name, chal?.title)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition text-[11px] font-semibold cursor-pointer font-sans"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
@@ -596,113 +607,15 @@ export default function AssignmentGrader(props: ComponentProps) {
         </ModalPortal>
       )}
 
-      {previewAttachmentUrl && (() => {
-        const rawFilename = previewAttachmentUrl.split("/").pop() || "assignment_file";
-        const cleanFilename = rawFilename.replace(/^\d+-\d+-/, "");
-        const ext = "." + cleanFilename.split(".").pop()?.toLowerCase();
-        const isWord = [".doc", ".docx"].includes(ext);
-        const isExcel = [".xls", ".xlsx", ".csv"].includes(ext);
-        const isPowerPoint = [".ppt", ".pptx"].includes(ext);
-
-        return (
-          <ModalPortal>
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
-                <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[86vh] shadow-2xl relative overflow-hidden flex flex-col">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 bg-white gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {isWord ? (
-                        <WordLogo className="h-4 w-4 shrink-0" />
-                      ) : isExcel ? (
-                        <ExcelLogo className="h-4 w-4 shrink-0" />
-                      ) : isPowerPoint ? (
-                        <PowerPointLogo className="h-4 w-4 shrink-0" />
-                      ) : ext === ".pdf" ? (
-                        <PdfLogo className="h-4 w-4 shrink-0" />
-                      ) : (
-                        <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
-                      )}
-                      <h3 className="text-sm font-bold text-slate-900 truncate" title={cleanFilename}>
-                        {cleanFilename}
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <a
-                        href={previewAttachmentUrl}
-                        download={cleanFilename}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition flex items-center gap-1.5 shadow-xs decoration-none cursor-pointer"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Tải về máy
-                      </a>
-                      <a
-                        href={previewAttachmentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-lg border border-slate-200 transition"
-                      >
-                        Mở tab mới
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewAttachmentUrl(null)}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex-1 bg-slate-900">
-                    {/\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(previewAttachmentUrl) ? (
-                      <div className="h-full w-full overflow-auto flex items-center justify-center p-4 bg-slate-900">
-                        <img src={previewAttachmentUrl} alt="File bài làm" className="max-h-full max-w-full object-contain" />
-                      </div>
-                    ) : /\.(pdf|txt|html|htm)(\?|#|$)/i.test(previewAttachmentUrl) ? (
-                      <iframe
-                        title="File bài làm"
-                        src={previewAttachmentUrl}
-                        className="h-full w-full border-0 bg-white"
-                      />
-                    ) : (
-                      <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center text-slate-900 bg-white space-y-5">
-                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
-                          {isWord ? (
-                            <WordLogo className="h-16 w-16" />
-                          ) : isExcel ? (
-                            <ExcelLogo className="h-16 w-16" />
-                          ) : isPowerPoint ? (
-                            <PowerPointLogo className="h-16 w-16" />
-                          ) : (
-                            <FileText className="h-16 w-16 text-indigo-600" />
-                          )}
-                        </div>
-                        <div className="space-y-1.5 max-w-md">
-                          <div className="flex justify-center">
-                            {isWord && <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Word (.docx)</span>}
-                            {isExcel && <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft Excel (.xlsx)</span>}
-                            {isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold font-mono uppercase tracking-wide">Microsoft PowerPoint (.pptx)</span>}
-                            {!isWord && !isExcel && !isPowerPoint && <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold font-mono uppercase tracking-wide">{ext.toUpperCase() || "TỆP ĐÍNH KÈM"}</span>}
-                          </div>
-                          <h4 className="text-base font-bold text-slate-900 truncate px-4" title={cleanFilename}>{cleanFilename}</h4>
-                          <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                            Tệp bài làm này đã được lưu trữ an toàn trên hệ thống. Bạn có thể tải tệp về thiết bị để xem chi tiết hoặc mở trong ứng dụng tương ứng.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <a
-                            href={previewAttachmentUrl}
-                            download={cleanFilename}
-                            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer font-sans decoration-none"
-                          >
-                            <Download className="h-4 w-4" /> Tải file bài làm xuống
-                          </a>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </ModalPortal>
-          );
-        })()}
+      {previewFiles.length > 0 && (
+        <FilePreviewModal
+          files={previewFiles}
+          initialIndex={previewInitialIndex}
+          studentName={previewStudentName}
+          assignmentTitle={previewAssignmentTitle}
+          onClose={() => setPreviewFiles([])}
+        />
+      )}
 
       {/* Premium glassmorphic Course Details consultation modal */}
       {courseDetailId && (() => {
