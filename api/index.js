@@ -7227,14 +7227,16 @@ for (const method of ["get", "post"]) {
     res.json(await runCrmOutboxJob());
   }));
 }
-app.use("/api", requireCsrf);
-app.get("/health", asyncHandler(async (_req, res) => {
+var healthHandler = asyncHandler(async (_req, res) => {
   if (isDevMockDb) {
     return res.json({ ok: true, database: "mock_in_memory", uptime: process.uptime() });
   }
   await pool.query("SELECT 1");
   res.json({ ok: true, database: "ok", uptime: process.uptime() });
-}));
+});
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
+app.use("/api", requireCsrf);
 app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (isDevMockDb) {

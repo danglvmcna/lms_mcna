@@ -314,7 +314,7 @@ export interface CourseRegistration {
   grade?: string;
   letterGrade?: string;
   gradePoint?: number;
-  credits: number;
+  credits?: number;
   isRetake?: boolean;                // true if student previously failed this course
   examBan?: boolean;
   gradePostedAt?: string;

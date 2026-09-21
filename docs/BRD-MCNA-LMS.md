@@ -2,7 +2,7 @@
 
 **Học viện Công nghệ MCNA**  
 **Phiên bản:** 3.0 · **Ngày phát hành:** 21/09/2026 · **Trạng thái:** Hiện hành chính thức  
-**Tài liệu tham chiếu:** [`docs/bao-cao-phan-tich-repo.md`](./bao-cao-phan-tich-repo.md), [`docs/crm-integration.md`](./crm-integration.md)
+**Tài liệu tham chiếu:** [`docs/bao-cao-phan-tich-repo.md`](./bao-cao-phan-tich-repo.md), [`docs/crm-integration.md`](./crm-integration.md), [`docs/SIS-TABLES-RETENTION.md`](./SIS-TABLES-RETENTION.md)
 
 ---
 

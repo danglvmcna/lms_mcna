@@ -1403,15 +1403,18 @@ for (const method of ["get", "post"] as const) {
   }));
 }
 
-app.use("/api", requireCsrf);
-
-app.get("/health", asyncHandler(async (_req, res) => {
+const healthHandler = asyncHandler(async (_req: express.Request, res: express.Response) => {
   if (isDevMockDb) {
     return res.json({ ok: true, database: "mock_in_memory", uptime: process.uptime() });
   }
   await pool.query("SELECT 1");
   res.json({ ok: true, database: "ok", uptime: process.uptime() });
-}));
+});
+
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
+
+app.use("/api", requireCsrf);
 
 app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
