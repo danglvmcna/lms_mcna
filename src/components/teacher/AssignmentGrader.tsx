@@ -434,7 +434,7 @@ export default function AssignmentGrader(props: ComponentProps) {
                                       setGradingScore(sub.score ?? challenge?.maxScore ?? 100);
                                       setGradingFeedback(sub.feedback ?? "");
                                     }}
-                                    className="mcna-btn-secondary text-[11px] py-1.5"
+                                    className="mcna-btn-secondary text-[11px] py-1.5 whitespace-nowrap"
                                   >
                                     {sub.score !== undefined ? "Cập nhật Điểm" : "Chấm điểm & Nhận xét"}
                                   </button>
