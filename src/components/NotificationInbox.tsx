@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, Inbox, Search } from "lucide-react";
+import { Bell, CheckCheck, Inbox, Search, Send } from "lucide-react";
 import { api } from "../api";
 import { LMSDataStore, Notification, User } from "../types";
+import SendNotificationModal from "./admin/SendNotificationModal";
 
 interface NotificationInboxProps {
   store: LMSDataStore;
   currentUser: User;
   onRefreshData: () => void;
   title?: string;
+  triggerToast?: (msg: string) => void;
 }
 
 const formatNotificationTime = (value?: string) => {
@@ -55,11 +57,12 @@ const typeClasses = (type: string) => {
   }
 };
 
-export default function NotificationInbox({ store, currentUser, onRefreshData, title = "Hộp thư thông báo" }: NotificationInboxProps) {
+export default function NotificationInbox({ store, currentUser, onRefreshData, title = "Hộp thư thông báo", triggerToast }: NotificationInboxProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSendModal, setShowSendModal] = useState(false);
 
   // Local state to keep track of notifications marked read in the current view session
   const [locallyMarkedReadIds, setLocallyMarkedReadIds] = useState<Set<string>>(new Set());
@@ -153,14 +156,25 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
           </div>
           <p className="text-xs text-slate-500 mt-1">Theo dõi thông báo hệ thống dành riêng cho tài khoản của bạn.</p>
         </div>
-        <button
-          onClick={markAllRead}
-          disabled={totalUnreadCount === 0 || busyId === "all"}
-          className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 shadow-xs transition cursor-pointer"
-        >
-          <CheckCheck className="h-4 w-4" />
-          Đánh dấu tất cả đã đọc
-        </button>
+        <div className="flex items-center gap-2">
+          {currentUser.role === "admin" && (
+            <button
+              onClick={() => setShowSendModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-medium flex items-center gap-2 hover:bg-slate-800 shadow-xs transition cursor-pointer"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Gửi thông báo
+            </button>
+          )}
+          <button
+            onClick={markAllRead}
+            disabled={totalUnreadCount === 0 || busyId === "all"}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 shadow-xs transition cursor-pointer"
+          >
+            <CheckCheck className="h-4 w-4" />
+            Đánh dấu tất cả đã đọc
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -253,6 +267,16 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
           </div>
         )}
       </div>
+
+      {showSendModal && (
+        <SendNotificationModal
+          isOpen={showSendModal}
+          onClose={() => setShowSendModal(false)}
+          store={store}
+          onSent={onRefreshData}
+          triggerToast={triggerToast}
+        />
+      )}
     </div>
   );
 }

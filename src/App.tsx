@@ -28,6 +28,7 @@ import { AppStore } from "./store";
 const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
 const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
 const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
+import NotificationBell from "./components/common/NotificationBell";
 import { api, setCsrfToken, getCsrfToken } from "./api";
 import PublicCourseCatalog from "./components/public/PublicCourseCatalog";
 import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } from "./enrollIntent";
@@ -699,8 +700,9 @@ function AppShell() {
                 </h3>
               </div>
 
-              {/* Header right: Clean Status Badge */}
+              {/* Header right: Notification Bell + System Status Badge */}
               <div className="flex items-center gap-2">
+                <NotificationBell />
                 <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   Hệ thống trực tuyến

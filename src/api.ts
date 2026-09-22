@@ -192,6 +192,9 @@ export const api = {
   sessionMaterialsBundleUrl: (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/materials/download-all`,
   markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
+  getNotifications: () => apiFetch<any[]>("/api/notifications"),
+  sendAdminNotification: (payload: { message: string; type?: string; userIds?: string[]; role?: string }) =>
+    apiFetch<{ sent: number }>("/api/admin/notifications", { method: "POST", body: JSON.stringify(payload) }),
   resetPassword: (userId: string) => apiFetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }),
 
   createForumPost: (courseId: string, payload: { title: string; content: string; sectionId?: string }) => apiFetch(`/api/courses/${courseId}/forum`, { method: "POST", body: JSON.stringify({ courseId, ...payload }) }),

@@ -63,7 +63,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["courses", "assignments"];
+    const allowed = ["courses", "assignments", "notifications"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("courses");
     }
@@ -567,6 +567,10 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   const myAssignmentIds = myAssignments.map(a => a.id);
   const studentSubmissionsRaw = store.submissions.filter(sub => myAssignmentIds.includes(sub.assignmentId));
 
+  const unreadTeacherNotificationsCount = (store.notifications || []).filter(
+    (n: any) => n.userId === currentUser.id && !n.isRead
+  ).length;
+
   const teacherPanelProps = {
     activeSubTab, setActiveSubTab, selectedCourseId, setSelectedCourseId, selectedQuizId, setSelectedQuizId,
     selectedEssayId, setSelectedEssayId, assessmentType, setAssessmentType,
@@ -622,6 +626,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 quizzes: "Đề thi & Đánh giá",
                 gradebook: "Sổ điểm Tổng hợp",
                 analytics: "Báo cáo Hiệu suất",
+                notifications: "Hộp thư Thông báo",
               }[activeSubTab] || activeSubTab}</strong></span>
             </span>
             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${showSidebar ? "rotate-90" : ""}`} />
@@ -658,6 +663,25 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               <Edit className={`h-4 w-4 ${activeSubTab === "assignments" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Bài tập & Chấm điểm</span>
             </button>
+
+            <button
+              onClick={() => handleNavClick("notifications")}
+              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center justify-between ${
+                activeSubTab === "notifications" 
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Bell className={`h-4 w-4 ${activeSubTab === "notifications" ? "text-indigo-600" : "text-slate-400"}`} />
+                <span>Hộp thư Thông báo</span>
+              </span>
+              {unreadTeacherNotificationsCount > 0 && (
+                <span className="bg-rose-50 text-rose-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-rose-200/80 font-medium">
+                  {unreadTeacherNotificationsCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -674,6 +698,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               store={store}
               currentUser={currentUser}
               onRefreshData={onRefreshData}
+              triggerToast={triggerToast}
             />
           )}
         </div>

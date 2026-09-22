@@ -3404,6 +3404,35 @@ app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, r
   res.status(204).send();
 }));
 
+// Admin: send notification to users by role or specific userIds
+app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  const { message, type = "info", userIds, role } = req.body as {
+    message?: string;
+    type?: string;
+    userIds?: string[];
+    role?: string;
+  };
+  if (!message || !message.trim()) return res.status(400).json({ error: "message is required." });
+
+  let targetIds: string[] = [];
+  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+    targetIds = userIds;
+  } else if (role && role !== "all") {
+    const usersRes = await pool.query("SELECT id FROM users WHERE role = $1 AND is_active = true", [role]);
+    targetIds = usersRes.rows.map((r: any) => r.id);
+  } else {
+    // broadcast to all active users
+    const usersRes = await pool.query("SELECT id FROM users WHERE is_active = true");
+    targetIds = usersRes.rows.map((r: any) => r.id);
+  }
+
+  for (const userId of targetIds) {
+    await notificationsRepository.create(pool, { userId, type, message: message.trim() });
+  }
+
+  res.json({ sent: targetIds.length });
+}));
+
 app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });

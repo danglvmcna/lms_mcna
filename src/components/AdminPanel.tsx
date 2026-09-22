@@ -40,6 +40,7 @@ import AdminOrdersManager from "./admin/AdminOrdersManager";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";
+import SendNotificationModal from "./admin/SendNotificationModal";
 
 interface AdminPanelProps {
   currentUser: User;
@@ -94,6 +95,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin">("student");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showSendNotifModal, setShowSendNotifModal] = useState(false);
 
   useUnsavedChangesWarning(
     showAddUserModal && Boolean(newUserEmail.trim() || newUserName.trim() || newUserPassword.trim())
@@ -356,6 +358,9 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const totalUsersCount = store.users.length;
   const totalCoursesCount = store.courses.length;
   const totalEnrollmentsCount = store.enrollments.length;
+  const unreadAdminNotificationsCount = (store.notifications || []).filter(
+    (n: any) => n.userId === currentUser.id && !n.isRead
+  ).length;
 
   // Search filter listings
   const filteredUsers = store.users.filter(u => {
@@ -431,6 +436,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="h-4 w-4 text-slate-500" /> Sao lưu JSON
+          </button>
+          <button 
+            onClick={() => setShowSendNotifModal(true)}
+            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Bell className="h-4 w-4 text-slate-500" /> Gửi thông báo
           </button>
           <button 
             onClick={() => setShowAddUserModal(true)}
@@ -583,6 +594,24 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                   Nhật ký hệ thống
                 </span>
               </button>
+              <button
+                onClick={() => setActiveSubTab("notifications")}
+                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
+                  activeSubTab === "notifications" 
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Bell className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "notifications" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
+                  Thông báo hệ thống
+                </span>
+                {unreadAdminNotificationsCount > 0 && (
+                  <span className="bg-rose-50 text-rose-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-rose-200/80 font-medium">
+                    {unreadAdminNotificationsCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -614,6 +643,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               store={store}
               currentUser={currentUser}
               onRefreshData={onRefreshData}
+              triggerToast={triggerToast}
             />
           )}
 
@@ -1198,6 +1228,16 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           </ModalPortal>
         );
       })()}
+
+      {showSendNotifModal && (
+        <SendNotificationModal
+          isOpen={showSendNotifModal}
+          onClose={() => setShowSendNotifModal(false)}
+          store={store}
+          onSent={onRefreshData}
+          triggerToast={triggerToast}
+        />
+      )}
     </div>
   );
 }
