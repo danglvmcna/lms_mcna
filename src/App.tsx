@@ -709,7 +709,7 @@ function AppShell() {
             </header>
 
             {/* Inner responsive Padding page body */}
-            <div className="pt-4 pb-4 md:pt-6 md:pb-6 lg:pt-8 lg:pb-8 px-4 md:px-4 lg:px-6 max-w-7xl w-full">
+            <div className="pt-4 pb-4 md:pt-6 md:pb-6 lg:pt-8 lg:pb-8 px-4 md:px-4 lg:px-6 w-full">
               <React.Suspense fallback={
                 <div className="flex flex-col items-center justify-center p-16 space-y-4">
                   <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
