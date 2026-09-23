@@ -643,49 +643,40 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         </ModalPortal>
       )}
 
-      {/* Header section spacing */}
-      <div className={`${learningCourseId ? "hidden" : "flex"} flex-col md:flex-row md:items-center justify-between gap-4`}>
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Chào mừng trở lại, {currentUser.name} 🎓</h2>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">Khám phá các khóa học thực chiến, tham gia lớp học trực tuyến, xem lại video bài giảng và quản lý học phí.</p>
-        </div>
-      </div>
-
       {/* Side-by-side dashboard layout: sidebar navigation on the left, workspace canvas on the right */}
-      <div className={`flex flex-col lg:flex-row items-start ${learningCourseId ? "gap-0" : "gap-4 md:gap-8"}`}>
+      <div className={`flex flex-col lg:flex-row items-start ${learningCourseId ? "gap-0" : "gap-4 lg:gap-6"}`}>
         {/* Mobile: sidebar toggle bar */}
         <div className={`${learningCourseId ? "hidden" : "lg:hidden"} w-full`}>
           <button
             onClick={() => setShowSidebar(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs text-slate-700 hover:text-slate-900 transition cursor-pointer shadow-xs"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:text-slate-900 transition cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-              <span className="font-semibold">Menu điều hướng</span>
-              <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
+              <span className="font-semibold">{{
                 catalog: "Khám phá Khóa học",
                 learning: "Lớp học của tôi",
                 orders: "Đơn hàng & Thanh toán",
                 assignments: "Bài tập & Đồ án",
                 certificates: "Chứng nhận của tôi",
                 notifications: "Hộp thư thông báo",
-              }[activeSubTab] || activeSubTab}</strong></span>
+              }[activeSubTab] || activeSubTab}</span>
+              <span className="text-slate-400">Đổi mục</span>
             </span>
             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${showSidebar ? "rotate-90" : ""}`} />
           </button>
         </div>
 
         {/* Left Navigation Sidebar */}
-        <div className={learningCourseId ? "hidden" : `w-full lg:w-64 xl:w-72 flex-col gap-4 shrink-0 ${showSidebar ? "flex" : "hidden"} lg:flex`}>
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 flex flex-col gap-1 w-full text-xs shadow-xs">
-            <span className="text-[11px] text-slate-400 uppercase tracking-wider px-3 py-2 font-semibold">
-              HỌC VIỆN MCNA
+        <div className={learningCourseId ? "hidden" : `w-full lg:w-56 xl:w-60 flex-col gap-4 shrink-0 ${showSidebar ? "flex" : "hidden"} lg:flex`}>
+          <div className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col gap-0.5 w-full text-sm">
+            <span className="text-xs text-slate-500 px-3 py-2 font-semibold">
+              Học viên
             </span>
             <button
               onClick={() => { setActiveSubTab("catalog"); setLearningCourseId(null); setShowSidebar(false); }}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "catalog" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  ? "bg-indigo-50 text-indigo-700 font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
@@ -694,9 +685,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             </button>
             <button
               onClick={() => { setActiveSubTab("learning"); setShowSidebar(false); }}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "learning" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
+                  ? "bg-indigo-50 text-indigo-700 font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
@@ -705,9 +696,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             </button>
             <button
               onClick={() => { setActiveSubTab("orders"); setShowSidebar(false); }}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "orders"
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
@@ -716,9 +707,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             </button>
             <button
               onClick={() => { setActiveSubTab("certificates"); setShowSidebar(false); }}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+              className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "certificates"
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs"
+                  ? "bg-indigo-50 text-indigo-700 font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
@@ -774,7 +765,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                       <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono">
                         <div>
                           <span className="text-slate-400 block uppercase font-medium">Ngày cấp chứng chỉ</span>
-                          <span className="text-slate-700 font-semibold">{new Date(cert.issuedAt).toLocaleDateString()}</span>
+                          <span className="text-slate-700 font-semibold">{new Date(cert.issuedAt).toLocaleDateString("vi-VN")}</span>
                         </div>
                         <div className="text-right">
                           <span className="text-slate-400 block uppercase font-medium">Mã kiểm định độc bản</span>
@@ -805,8 +796,11 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               })}
 
               {store.certificates.filter(c => c.studentId === currentUser.id).length === 0 && (
-                <div className="col-span-full text-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
-                  Bạn chưa sở hữu chứng nhận nào. Hãy hoàn thành tất cả giáo trình bài học và đạt điểm bài trắc nghiệm cuối khóa để kích hoạt chứng nhận.
+                <div className="col-span-full flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
+                  <Award className="h-8 w-8 text-slate-300" />
+                  <p className="text-base font-semibold text-slate-900">Chưa có chứng nhận</p>
+                  <p className="max-w-md text-sm text-slate-500">Chứng nhận sẽ xuất hiện tại đây khi bạn đáp ứng điều kiện hoàn thành khóa học.</p>
+                  <button type="button" onClick={() => setActiveSubTab("learning")} className="mt-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Đến lớp học của tôi</button>
                 </div>
               )}
             </div>

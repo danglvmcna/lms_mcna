@@ -67,22 +67,23 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   // Navigation tab states
   // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
   const [activeSubTab, setActiveSubTab] = useState<
+    | "overview"
     | "orders"
     | "course_section_mgmt"
     | "approval"
     | "users"
     | "audit"
     | "notifications"
-  >("orders");
+  >("overview");
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["orders", "course_section_mgmt", "approval", "users", "audit", "notifications"];
+    const allowed = ["overview", "orders", "course_section_mgmt", "approval", "users", "audit", "notifications"];
     if (!allowed.includes(activeSubTab)) {
-      setActiveSubTab("orders");
+      setActiveSubTab("overview");
     }
   }, [currentUser.role]);
 
@@ -107,8 +108,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
   // Search & Filter flags for users registry
   const [userSearch, setUserSearch] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "admin">("student");
   const [auditSearch, setAuditSearch] = useState("");
   const [auditFilterAction, setAuditFilterAction] = useState("all");
@@ -366,17 +365,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const filteredUsers = store.users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
                           u.email.toLowerCase().includes(userSearch.toLowerCase());
-    const matchesRole = filterRole === "all" || u.role === filterRole;
-    const matchesStatus = filterStatus === "all" || 
-      (filterStatus === "active" && u.isActive) || 
-      (filterStatus === "inactive" && !u.isActive);
-    const matchesDirectory = filterRole !== "all" ? true : (
-      userDirTab === "student" ? u.role === "student" :
-      userDirTab === "teacher" ? u.role === "teacher" :
-      u.role === "admin"
-    );
-
-    return matchesSearch && matchesRole && matchesStatus && matchesDirectory;
+    return matchesSearch && u.role === userDirTab;
   }).sort((a, b) => {
     if (!sortField) return 0;
     let valA: any = a[sortField as keyof User];
@@ -400,6 +389,25 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = filteredUsers.slice((userPage - 1) * itemsPerPage, userPage * itemsPerPage);
   const pendingCourses = store.courses.filter(c => c.status === "pending");
+  const pendingEnrollmentsCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending_payment" || enrollment.status === "pending").length;
+  const filteredAuditLogs = (store.auditLogs || []).filter(log => {
+    const query = auditSearch.toLowerCase();
+    const matchesSearch = !query || [log.action, log.userId, log.target, log.detail].some(value => value.toLowerCase().includes(query));
+    return matchesSearch && (auditFilterAction === "all" || log.action === auditFilterAction);
+  });
+  const adminNavGroups = [
+    { label: "Vận hành", items: [
+      { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
+      { id: "orders", label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount },
+      { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
+      { id: "approval", label: "Duyệt khóa học", icon: GraduationCap, count: pendingCourses.length }
+    ] },
+    { label: "Hệ thống & tài khoản", items: [
+      { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
+      { id: "audit", label: "Nhật ký hệ thống", icon: Database, count: 0 },
+      { id: "notifications", label: "Thông báo hệ thống", icon: Bell, count: unreadAdminNotificationsCount }
+    ] }
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -418,206 +426,115 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       )}
 
       {/* Main Administrative Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-transparent">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Cổng Điều hành & Hồ sơ Học vụ</h2>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">Phân quyền giám sát cấu trúc khóa học, chuyên cần học sinh và trạng thái thanh toán học phí.</p>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Quản trị học viện</h2>
+          <p className="text-sm text-slate-500 mt-1">Theo dõi việc cần xử lý và quản lý vận hành LMS.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button 
+          {activeSubTab === "audit" && <button
             onClick={() => setShowImportModal(true)}
             className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Upload className="h-4 w-4 text-slate-500" /> Nhập CSV
-          </button>
-          <button 
+          </button>}
+          {activeSubTab === "audit" && <button
             onClick={handleExportDataStore}
             className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="h-4 w-4 text-slate-500" /> Sao lưu JSON
-          </button>
-          <button 
+          </button>}
+          {activeSubTab === "notifications" && <button
             onClick={() => setShowSendNotifModal(true)}
             className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Bell className="h-4 w-4 text-slate-500" /> Gửi thông báo
-          </button>
-          <button 
+          </button>}
+          {activeSubTab === "users" && <button
             onClick={() => setShowAddUserModal(true)}
             className="mcna-btn-primary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
             <UserPlus className="h-4 w-4" /> Tạo người dùng
-          </button>
+          </button>}
         </div>
       </div>
-
-      {/* Grid counters stat cards metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
-          <p className="text-xs text-slate-500 font-medium">Tổng tài khoản người dùng</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalUsersCount}</h3>
-        </div>
-        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
-          <p className="text-xs text-slate-500 font-medium">Tổng khóa học môn giảng dạy</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalCoursesCount}</h3>
-        </div>
-        <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-xs">
-          <p className="text-xs text-slate-500 font-medium">Lượt đăng ký lớp học</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono text-slate-900 mt-2">{totalEnrollmentsCount}</h3>
-        </div>
-      </div>
-
-      {operationsSummary && (
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold text-slate-900">Bảng điều hành hôm nay</p>
-              <p className="mt-0.5 text-xs text-slate-500">Các việc cần xử lý được tổng hợp từ LMS và CRM.</p>
-            </div>
-            <button 
-              type="button" 
-              onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} 
-              className="mcna-btn-secondary !h-7 !px-2.5 !text-xs"
-            >
-              Làm mới
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-            {[
-              ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments, "text-amber-700"],
-              ["Bài chưa chấm", operationsSummary.ungradedSubmissions, "text-rose-700"],
-              ["Khóa chờ duyệt", operationsSummary.pendingCourses, "text-indigo-700"],
-              ["CRM giao thất bại", operationsSummary.crmFailures, "text-slate-700"]
-            ].map(([label, value, color]) => (
-              <div key={String(label)} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-                <p className="text-xs text-slate-500 font-medium">{label}</p>
-                <p className={`mt-1.5 text-xl font-bold font-mono ${color}`}>{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Two-Column Layout split sidebar list vs viewports */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
+
+        <div className="lg:hidden w-full">
+          <label htmlFor="admin-section" className="sr-only">Mục quản trị</label>
+          <select id="admin-section" value={activeSubTab} onChange={event => setActiveSubTab(event.target.value as typeof activeSubTab)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900">
+            <option value="overview">Tổng quan</option>
+            <option value="orders">Đơn hàng & Ghi danh</option>
+            <option value="course_section_mgmt">Khóa học & Lớp học</option>
+            <option value="approval">Duyệt khóa học</option>
+            <option value="users">Quản lý người dùng</option>
+            <option value="audit">Nhật ký hệ thống</option>
+            <option value="notifications">Thông báo hệ thống</option>
+          </select>
+        </div>
         
         {/* Left Column navbar structured sections */}
-        <div className="w-full lg:w-60 flex-shrink-0 space-y-4">
-          <div className="bg-white border border-slate-200/80 rounded-xl p-2 text-xs space-y-3 shadow-xs">
-            <div className="space-y-1">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5 py-1">
-                ĐIỀU HÀNH & BÁN HÀNG
-              </span>
-              <button
-                onClick={() => setActiveSubTab("orders")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "orders" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <ShoppingBag className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "orders" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Đơn hàng & Ghi danh
-                </span>
-                {(() => {
-                  const pendingCount = (store.enrollments || []).filter((e: any) => e.status === "pending_payment" || e.status === "pending").length;
-                  if (pendingCount === 0) return null;
-                  return (
-                    <span className="bg-amber-50 text-amber-700 font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-200/80 font-medium">
-                      {pendingCount}
-                    </span>
-                  );
-                })()}
-              </button>
-              <button
-                onClick={() => setActiveSubTab("course_section_mgmt")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "course_section_mgmt" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <BookOpen className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "course_section_mgmt" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Khóa học & Lớp học
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveSubTab("approval")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "approval" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <GraduationCap className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "approval" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Duyệt khóa học
-                </span>
-                {pendingCourses.length > 0 && (
-                  <span className="bg-amber-50 text-amber-700 font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-200/80 font-medium">
-                    {pendingCourses.length}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div className="space-y-1 border-t border-slate-100 pt-2">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block px-2.5 py-1">
-                HỆ THỐNG & TÀI KHOẢN
-              </span>
-              <button
-                onClick={() => setActiveSubTab("users")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "users" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Users className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "users" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Quản lý Người dùng
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveSubTab("audit")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "audit" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Database className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "audit" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Nhật ký hệ thống
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveSubTab("notifications")}
-                className={`group w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer text-xs ${
-                  activeSubTab === "notifications" 
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Bell className={`h-4 w-4 shrink-0 transition-colors ${activeSubTab === "notifications" ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"}`} /> 
-                  Thông báo hệ thống
-                </span>
-                {unreadAdminNotificationsCount > 0 && (
-                  <span className="bg-rose-50 text-rose-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-rose-200/80 font-medium">
-                    {unreadAdminNotificationsCount}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
+        <div className="hidden lg:block w-56 xl:w-60 flex-shrink-0 space-y-4">
+          <nav aria-label="Điều hướng quản trị" className="bg-white border border-slate-200 rounded-xl p-2 text-sm space-y-3">
+            {adminNavGroups.map((group, groupIndex) => (
+              <div key={group.label} className={`space-y-1 ${groupIndex ? "border-t border-slate-100 pt-2" : ""}`}>
+                <span className="block px-2.5 py-1 text-xs font-semibold text-slate-500">{group.label}</span>
+                {group.items.map(item => {
+                  const Icon = item.icon;
+                  const selected = activeSubTab === item.id;
+                  return <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveSubTab(item.id)}
+                    aria-current={selected ? "page" : undefined}
+                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2.5 text-left font-medium transition-colors ${selected ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2"><Icon className="h-4 w-4 shrink-0" />{item.label}</span>
+                    {item.count > 0 && <span className="ml-2 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-semibold text-amber-800">{item.count}</span>}
+                  </button>;
+                })}
+              </div>
+            ))}
+          </nav>
         </div>
 
         {/* Right Main viewport area container */}
         <div className="flex-1 min-w-0 w-full">
+
+          {activeSubTab === "overview" && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Tổng quan vận hành</h3>
+                <p className="mt-1 text-sm text-slate-500">Số liệu hiện tại và các việc cần theo dõi.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ["Người dùng", totalUsersCount],
+                  ["Khóa học", totalCoursesCount],
+                  ["Lượt ghi danh", totalEnrollmentsCount]
+                ].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{value}</p></div>)}
+              </div>
+              {operationsSummary && <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="text-base font-semibold text-slate-900">Việc cần theo dõi</h4><p className="mt-1 text-sm text-slate-500">Tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Làm mới</button></div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {[
+                    ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments],
+                    ["Bài chưa chấm", operationsSummary.ungradedSubmissions],
+                    ["Khóa chờ duyệt", operationsSummary.pendingCourses],
+                    ["CRM giao thất bại", operationsSummary.crmFailures]
+                  ].map(([label, value]) => <div key={String(label)} className="border-l-2 border-indigo-300 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}
+                </div>
+              </section>}
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setActiveSubTab("orders")} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Xử lý ghi danh</button>
+                <button type="button" onClick={() => setActiveSubTab("approval")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Duyệt khóa học</button>
+                <button type="button" onClick={() => setActiveSubTab("users")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Quản lý người dùng</button>
+              </div>
+            </div>
+          )}
           
           {/* ORDERS & ENROLLMENTS GROUP */}
           {activeSubTab === "orders" && (
@@ -729,8 +646,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Thư mục Người dùng & Quản lý Truy cập</h3>
-                  <p className="text-xs text-slate-500">Giám sát tài khoản phân hệ trực quan.</p>
+                  <h3 className="text-xl font-semibold text-slate-900">Người dùng</h3>
+                  <p className="mt-1 text-sm text-slate-500">Tìm kiếm, phân quyền và quản lý trạng thái tài khoản.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -742,16 +659,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                     className="px-3 py-1.5 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
                   />
 
-                  <select
-                    value={filterRole}
-                    onChange={(e) => { setFilterRole(e.target.value); setUserPage(1); }}
-                    className="p-1.5 px-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-sans"
-                  >
-                    <option value="all">Mọi vai trò</option>
-                    <option value="student">Học Viên</option>
-                    <option value="teacher">Giảng Viên</option>
-                    <option value="admin">Quản Trị Viên</option>
-                  </select>
                 </div>
               </div>
 
@@ -771,7 +678,21 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 ))}
               </div>
 
-              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+              <div className="space-y-3 md:hidden">
+                {paginatedUsers.map(usr => <article key={usr.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><h4 className="font-semibold text-slate-900">{usr.name}</h4><p className="truncate text-xs text-slate-500">{usr.email}</p></div>
+                    <span className={`shrink-0 text-xs font-medium ${usr.isActive ? "text-emerald-700" : "text-rose-700"}`}>{usr.isActive ? "Đang hoạt động" : "Đang khóa"}</span>
+                  </div>
+                  {userDirTab === "student" && <p className="text-sm text-slate-600">{usr.phone || "Chưa có số điện thoại"}</p>}
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <label className="text-xs text-slate-500">Vai trò <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800 disabled:opacity-50"><option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option></select></label>
+                    {usr.id !== currentUser.id && <button type="button" onClick={() => handleToggleUserStatus(usr.id)} className="text-sm font-medium text-indigo-700">{usr.isActive ? "Khóa" : "Kích hoạt"}</button>}
+                  </div>
+                </article>)}
+                {paginatedUsers.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Không có tài khoản phù hợp.</p>}
+              </div>
+              <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -882,8 +803,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           {activeSubTab === "audit" && (
             <div className="space-y-6">
               <div className="border-b border-slate-200 pb-3">
-                <h3 className="text-base font-bold text-slate-900">Nhật ký Hệ thống & Access Audits (Infrastructure Logs)</h3>
-                <p className="text-xs text-slate-500">Nhật ký theo dõi các bút toán an ninh, sửa đổi kết cấu điểm số, học bạ chính xác theo thời gian thực.</p>
+                <h3 className="text-xl font-semibold text-slate-900">Nhật ký hệ thống</h3>
+                <p className="mt-1 text-sm text-slate-500">Theo dõi thao tác và thay đổi quan trọng trong LMS.</p>
               </div>
 
               {/* Reactive filter inputs */}
@@ -913,35 +834,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 </div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 font-mono text-[11px] leading-relaxed max-h-96 overflow-y-auto space-y-2 text-slate-200 shadow-inner">
-                {((store?.auditLogs || []).filter(log => {
-                  const matchesSearch = !auditSearch || 
-                    log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.userId.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.target.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.detail.toLowerCase().includes(auditSearch.toLowerCase());
-                  const matchesAction = auditFilterAction === "all" || log.action === auditFilterAction;
-                  return matchesSearch && matchesAction;
-                })).map((log, i) => (
-                  <div key={log.id || i} className="border-b border-slate-800 pb-2">
-                    <span className="text-indigo-400">[{log.createdAt.slice(11, 19)}]</span>{" "}
-                    <span className="text-cyan-400 font-bold">{log.action.toUpperCase()}</span>{" "}
-                    <span className="text-slate-400">bởi:</span> <span className="text-emerald-400 font-bold">{log.userId}</span>{" "}
-                    <span className="text-slate-400">đối tượng:</span> <span className="text-amber-400">{log.target}</span> --{" "}
-                    <span className="text-slate-200">{log.detail}</span>
+              <div className="max-h-[520px] overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                {filteredAuditLogs.map((log, i) => (
+                  <div key={log.id || i} className="px-4 py-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-900">{log.action}</span><time className="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString("vi-VN")}</time></div>
+                    <p className="mt-1 break-words text-slate-700">{log.detail}</p>
+                    <p className="mt-1 break-all text-xs text-slate-500">Người thực hiện: {log.userId} · Đối tượng: {log.target}</p>
                   </div>
                 ))}
-                {((store?.auditLogs || []).filter(log => {
-                  const matchesSearch = !auditSearch || 
-                    log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.userId.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.target.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                    log.detail.toLowerCase().includes(auditSearch.toLowerCase());
-                  const matchesAction = auditFilterAction === "all" || log.action === auditFilterAction;
-                  return matchesSearch && matchesAction;
-                })).length === 0 && (
-                  <div className="text-center text-slate-500 italic py-6">Không tìm thấy bản ghi nhật ký phù hợp.</div>
-                )}
+                {filteredAuditLogs.length === 0 && <div className="py-10 text-center text-sm text-slate-500">Không tìm thấy bản ghi nhật ký phù hợp.</div>}
               </div>
             </div>
           )}

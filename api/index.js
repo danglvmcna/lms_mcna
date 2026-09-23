@@ -1155,6 +1155,15 @@ var schemas = {
   setUserActive: z.object({
     isActive: z.boolean()
   }),
+  adminNotification: z.object({
+    idempotencyKey: z.uuid(),
+    message: z.string().trim().min(1).max(2e3),
+    type: z.enum(["info", "success", "warning", "danger"]).default("info"),
+    role: z.enum(["all", "student", "teacher", "admin"]).optional(),
+    userIds: z.array(z.string().trim().min(1)).min(1).max(100).optional()
+  }).refine((value) => Boolean(value.role) !== Boolean(value.userIds), {
+    message: "Provide exactly one audience: role or userIds."
+  }),
   createCourse: z.object({
     title: z.string().trim().min(1),
     description: z.string().trim().min(1),
@@ -5795,7 +5804,10 @@ async function findMatchingPendingTransaction(db, info) {
   return null;
 }
 async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
-  if (payload.transferType && String(payload.transferType).toLowerCase() !== "in") {
+  if (!payload || !String(payload.id ?? "").trim() || !Number.isSafeInteger(Number(payload.transferAmount)) || Number(payload.transferAmount) <= 0) {
+    return { success: false, matched: false, message: "D\u1EEF li\u1EC7u giao d\u1ECBch SePay kh\xF4ng h\u1EE3p l\u1EC7." };
+  }
+  if (String(payload.transferType || "").toLowerCase() !== "in") {
     return {
       success: true,
       matched: false,
@@ -5804,7 +5816,7 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
   }
   const eventId = `sepay_${payload.id}`;
   const existingEvent = (await pool.query(
-    "SELECT event_id, transaction_id, processing_status FROM payment_webhook_events WHERE event_id = $1",
+    "SELECT event_id, transaction_id, status, error, processing_status FROM payment_webhook_events WHERE event_id = $1",
     [eventId]
   )).rows[0];
   if (existingEvent && existingEvent.processing_status === "processed") {
@@ -5812,8 +5824,9 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
       success: true,
       matched: true,
       duplicate: true,
+      underpaid: existingEvent.error === "amount_mismatch",
       transactionId: existingEvent.transaction_id,
-      message: "Giao d\u1ECBch SePay n\xE0y \u0111\xE3 \u0111\u01B0\u1EE3c h\u1EC7 th\u1ED1ng x\u1EED l\xFD th\xE0nh c\xF4ng tr\u01B0\u1EDBc \u0111\xF3."
+      message: existingEvent.error === "amount_mismatch" ? "Kho\u1EA3n chuy\u1EC3n thi\u1EBFu \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn \u0111\u1EC3 MCNA \u0111\u1ED1i so\xE1t th\u1EE7 c\xF4ng." : "Giao d\u1ECBch SePay n\xE0y \u0111\xE3 \u0111\u01B0\u1EE3c h\u1EC7 th\u1ED1ng x\u1EED l\xFD th\xE0nh c\xF4ng tr\u01B0\u1EDBc \u0111\xF3."
     };
   }
   const info = extractPaymentCodes(payload.content, payload.code);
@@ -5825,38 +5838,93 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
       message: "Kh\xF4ng t\xECm th\u1EA5y \u0111\u01A1n h\xE0ng h\u1ECDc ph\xED pending ph\xF9 h\u1EE3p v\u1EDBi n\u1ED9i dung chuy\u1EC3n kho\u1EA3n."
     };
   }
-  const receivedAmount = Number(payload.transferAmount || 0);
+  const receivedAmount = Number(payload.transferAmount);
   const requiredAmount = Number(matchedTx.amount || 0);
+  const payloadSha256 = sha256Hex(rawBody || JSON.stringify(payload));
   if (receivedAmount < requiredAmount) {
-    const diff = requiredAmount - receivedAmount;
-    await pool.query(
-      `UPDATE transactions
-       SET notes = $2
-       WHERE id = $1`,
-      [
-        matchedTx.id,
-        `SePay: Nh\u1EADn ${receivedAmount.toLocaleString("vi-VN")} \u0111 (thi\u1EBFu ${diff.toLocaleString("vi-VN")} \u0111 so v\u1EDBi h\u1ECDc ph\xED ${requiredAmount.toLocaleString("vi-VN")} \u0111). GD #${payload.id}.`
-      ]
-    );
-    await notificationsRepository.create(pool, {
-      userId: matchedTx.student_id,
-      type: "warning",
-      message: `MCNA \u0111\xE3 nh\u1EADn ${receivedAmount.toLocaleString("vi-VN")} \u0111 h\u1ECDc ph\xED m\xF4n ${matchedTx.course_title}, nh\u01B0ng s\u1ED1 ti\u1EC1n quy \u0111\u1ECBnh l\xE0 ${requiredAmount.toLocaleString("vi-VN")} \u0111 (c\xF2n thi\u1EBFu ${diff.toLocaleString("vi-VN")} \u0111). Vui l\xF2ng chuy\u1EC3n b\u1ED5 sung \u0111\u1EC3 ho\xE0n t\u1EA5t k\xEDch ho\u1EA1t l\u1EDBp h\u1ECDc.`
-    });
+    const client3 = await pool.connect();
+    try {
+      await client3.query("BEGIN");
+      const recorded = await client3.query(
+        `INSERT INTO payment_webhook_events
+           (event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status, processed_at, error)
+         VALUES ($1, $2, 'rejected', CURRENT_TIMESTAMP, $3, 'processed', CURRENT_TIMESTAMP, 'amount_mismatch')
+         ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+        [eventId, matchedTx.id, payloadSha256]
+      );
+      if (!recorded.rowCount) {
+        const previous = (await client3.query(
+          "SELECT transaction_id, error FROM payment_webhook_events WHERE event_id = $1",
+          [eventId]
+        )).rows[0];
+        await client3.query("ROLLBACK");
+        return {
+          success: true,
+          matched: true,
+          duplicate: true,
+          underpaid: previous?.error === "amount_mismatch",
+          transactionId: previous?.transaction_id || matchedTx.id,
+          message: "Giao d\u1ECBch SePay n\xE0y \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\u01B0\u1EDBc \u0111\xF3."
+        };
+      }
+      await client3.query(
+        `UPDATE transactions SET notes = CONCAT_WS(E'
+', NULLIF(notes, ''), $2) WHERE id = $1`,
+        [matchedTx.id, `SePay #${payload.id}: nh\u1EADn ${receivedAmount.toLocaleString("vi-VN")} \u0111 / h\u1ECDc ph\xED ${requiredAmount.toLocaleString("vi-VN")} \u0111; ch\u1EDD \u0111\u1ED1i so\xE1t th\u1EE7 c\xF4ng, kh\xF4ng t\u1EF1 k\xEDch ho\u1EA1t.`]
+      );
+      const adminIds = (await client3.query("SELECT id FROM users WHERE role IN ('admin', 'manager') AND is_active = true")).rows.map((row) => String(row.id));
+      const recipients = [.../* @__PURE__ */ new Set([matchedTx.student_id, ...adminIds])];
+      for (const userId of recipients) {
+        const isStudent = userId === matchedTx.student_id;
+        await client3.query(
+          `INSERT INTO notifications (id, user_id, type, message, is_read, created_at)
+           VALUES ($1, $2, 'warning', $3, false, CURRENT_TIMESTAMP)`,
+          [generateId2("noti"), userId, isStudent ? `MCNA \u0111\xE3 nh\u1EADn kho\u1EA3n chuy\u1EC3n ${receivedAmount.toLocaleString("vi-VN")} \u0111 cho kh\xF3a "${matchedTx.course_title}" nh\u01B0ng ch\u01B0a \u0111\u1EE7 h\u1ECDc ph\xED. \u0110\u01A1n ch\u01B0a \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t. Vui l\xF2ng li\xEAn h\u1EC7 MCNA \u0111\u1EC3 \u0111\u1ED1i so\xE1t ho\u1EB7c ho\xE0n ti\u1EC1n; kh\xF4ng t\u1EF1 chuy\u1EC3n th\xEAm theo \u0111\u01A1n n\xE0y.` : `C\u1EA7n \u0111\u1ED1i so\xE1t th\u1EE7 c\xF4ng: SePay #${payload.id}, \u0111\u01A1n ${matchedTx.id} nh\u1EADn ${receivedAmount.toLocaleString("vi-VN")} \u0111 / ${requiredAmount.toLocaleString("vi-VN")} \u0111. \u0110\u01A1n v\u1EABn \u0111ang ch\u1EDD; li\xEAn h\u1EC7 h\u1ECDc vi\xEAn \u0111\u1EC3 x\u1EED l\xFD.`]
+        );
+      }
+      await client3.query("COMMIT");
+    } catch (error) {
+      await client3.query("ROLLBACK");
+      throw error;
+    } finally {
+      client3.release();
+    }
+    onSuccessfulPayment?.();
     return {
       success: true,
       matched: true,
       underpaid: true,
       transactionId: matchedTx.id,
-      message: `Giao d\u1ECBch chuy\u1EC3n thi\u1EBFu ti\u1EC1n (${receivedAmount.toLocaleString("vi-VN")} \u0111 / ${requiredAmount.toLocaleString("vi-VN")} \u0111). \u0110\xE3 l\u01B0u ghi ch\xFA.`
+      message: `Kho\u1EA3n chuy\u1EC3n thi\u1EBFu (${receivedAmount.toLocaleString("vi-VN")} \u0111 / ${requiredAmount.toLocaleString("vi-VN")} \u0111) \u0111\xE3 chuy\u1EC3n sang \u0111\u1ED1i so\xE1t th\u1EE7 c\xF4ng; \u0111\u01A1n ch\u01B0a k\xEDch ho\u1EA1t.`
     };
   }
   const client2 = await pool.connect();
   let placedSectionId = null;
   let placementError = null;
-  const payloadSha256 = sha256Hex(rawBody || JSON.stringify(payload));
   try {
     await client2.query("BEGIN");
+    const recorded = await client2.query(
+      `INSERT INTO payment_webhook_events
+         (event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status)
+       VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP, $3, 'processing')
+       ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+      [eventId, matchedTx.id, payloadSha256]
+    );
+    if (!recorded.rowCount) {
+      const previous = (await client2.query(
+        "SELECT transaction_id, error, processing_status FROM payment_webhook_events WHERE event_id = $1",
+        [eventId]
+      )).rows[0];
+      await client2.query("ROLLBACK");
+      return {
+        success: true,
+        matched: true,
+        duplicate: true,
+        underpaid: previous?.error === "amount_mismatch",
+        transactionId: previous?.transaction_id || matchedTx.id,
+        message: "Giao d\u1ECBch SePay n\xE0y \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\u01B0\u1EDBc \u0111\xF3."
+      };
+    }
     const payment = await confirmCoursePayment(
       client2,
       matchedTx.enrollment_id,
@@ -5888,14 +5956,8 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
       }
     }
     await client2.query(
-      `INSERT INTO payment_webhook_events (
-         event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status, processed_at
-       ) VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP, $3, 'processed', CURRENT_TIMESTAMP)
-       ON CONFLICT (event_id) DO UPDATE
-         SET processing_status = 'processed',
-             processed_at = CURRENT_TIMESTAMP,
-             transaction_id = $2`,
-      [eventId, matchedTx.id, payloadSha256]
+      "UPDATE payment_webhook_events SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP WHERE event_id = $1",
+      [eventId]
     );
     await client2.query("COMMIT");
   } catch (err) {
@@ -8991,34 +9053,100 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "a
   await audit(req, "toggle_user_status", user.id, `isActive=${user.isActive}`);
   res.json(user);
 }));
-app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => res.json(await notificationsRepository.listForUser(pool, req.user.id, req.query.unreadOnly === "true"))));
+app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const notifications = (devMockStore || getInitialStore()).notifications || [];
+    return res.json(notifications.filter((item) => item.userId === req.user.id && (req.query.unreadOnly !== "true" || !item.isRead)));
+  }
+  res.json(await notificationsRepository.listForUser(pool, req.user.id, req.query.unreadOnly === "true"));
+}));
 app.patch("/api/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    for (const item of (devMockStore || getInitialStore()).notifications || []) {
+      if (item.userId === req.user.id) item.isRead = true;
+    }
+    return res.status(204).send();
+  }
   await notificationsRepository.markAllRead(pool, req.user.id);
   invalidateStoreCache();
   res.status(204).send();
 }));
 app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const item = (devMockStore || getInitialStore()).notifications?.find((item2) => item2.id === req.params.id && item2.userId === req.user.id);
+    if (item) item.isRead = true;
+    return res.status(204).send();
+  }
   await notificationsRepository.markRead(pool, req.params.id, req.user.id);
   invalidateStoreCache();
   res.status(204).send();
 }));
-app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
-  const { message, type = "info", userIds, role } = req.body;
-  if (!message || !message.trim()) return res.status(400).json({ error: "message is required." });
-  let targetIds = [];
-  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
-    targetIds = userIds;
-  } else if (role && role !== "all") {
-    const usersRes = await pool.query("SELECT id FROM users WHERE role = $1 AND is_active = true", [role]);
-    targetIds = usersRes.rows.map((r) => r.id);
-  } else {
-    const usersRes = await pool.query("SELECT id FROM users WHERE is_active = true");
-    targetIds = usersRes.rows.map((r) => r.id);
+var mockNotificationBroadcasts = /* @__PURE__ */ new Map();
+app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), validateBody(schemas.adminNotification), asyncHandler(async (req, res) => {
+  const { idempotencyKey, message, type, role, userIds } = req.body;
+  const requestedIds = userIds ? [...new Set(userIds)].sort() : void 0;
+  const payloadHash = sha256Hex2(JSON.stringify({ message, type, role: role || null, userIds: requestedIds || null }));
+  const campaignKey = `${req.user.id}:${idempotencyKey}`;
+  if (isDevMockDb) {
+    const previous = mockNotificationBroadcasts.get(campaignKey);
+    if (previous) return previous.payloadHash === payloadHash ? res.json({ sent: previous.sent, duplicate: true }) : res.status(409).json({ error: "M\xE3 g\u1EEDi \u0111\xE3 \u0111\u01B0\u1EE3c d\xF9ng cho n\u1ED9i dung kh\xE1c." });
+    const store = devMockStore || getInitialStore();
+    const targets = store.users.filter((user) => user.isActive !== false && (requestedIds ? requestedIds.includes(user.id) : role === "all" || user.role === role));
+    if (requestedIds && targets.length !== requestedIds.length) return res.status(400).json({ error: "C\xF3 ng\u01B0\u1EDDi nh\u1EADn kh\xF4ng t\u1ED3n t\u1EA1i ho\u1EB7c \u0111\xE3 ng\u1EEBng ho\u1EA1t \u0111\u1ED9ng." });
+    if (!targets.length || targets.length > 5e3) return res.status(400).json({ error: "S\u1ED1 ng\u01B0\u1EDDi nh\u1EADn ph\u1EA3i t\u1EEB 1 \u0111\u1EBFn 5000." });
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    store.notifications ||= [];
+    store.notifications.unshift(...targets.map((user) => ({ id: generateId2("noti"), userId: user.id, type, message, isRead: false, createdAt: now })));
+    devMockStore = store;
+    mockNotificationBroadcasts.set(campaignKey, { payloadHash, sent: targets.length });
+    return res.status(201).json({ sent: targets.length, duplicate: false });
   }
-  for (const userId of targetIds) {
-    await notificationsRepository.create(pool, { userId, type, message: message.trim() });
+  const client2 = await pool.connect();
+  try {
+    await client2.query("BEGIN");
+    const broadcastId = generateId2("broadcast");
+    const inserted = await client2.query(
+      `INSERT INTO notification_broadcasts (id, created_by, idempotency_key, payload_hash, message, type)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (created_by, idempotency_key) DO NOTHING RETURNING id`,
+      [broadcastId, req.user.id, idempotencyKey, payloadHash, message, type]
+    );
+    if (!inserted.rowCount) {
+      const previous = (await client2.query(
+        "SELECT payload_hash, target_count FROM notification_broadcasts WHERE created_by = $1 AND idempotency_key = $2",
+        [req.user.id, idempotencyKey]
+      )).rows[0];
+      await client2.query("COMMIT");
+      return previous?.payload_hash === payloadHash ? res.json({ sent: previous.target_count, duplicate: true }) : res.status(409).json({ error: "M\xE3 g\u1EEDi \u0111\xE3 \u0111\u01B0\u1EE3c d\xF9ng cho n\u1ED9i dung kh\xE1c." });
+    }
+    const targets = requestedIds ? (await client2.query("SELECT id FROM users WHERE id = ANY($1::text[]) AND is_active = true ORDER BY id", [requestedIds])).rows : (await client2.query("SELECT id FROM users WHERE is_active = true AND ($1::text = 'all' OR role = $1) ORDER BY id", [role])).rows;
+    if (requestedIds && targets.length !== requestedIds.length) {
+      await client2.query("ROLLBACK");
+      return res.status(400).json({ error: "C\xF3 ng\u01B0\u1EDDi nh\u1EADn kh\xF4ng t\u1ED3n t\u1EA1i ho\u1EB7c \u0111\xE3 ng\u1EEBng ho\u1EA1t \u0111\u1ED9ng." });
+    }
+    if (!targets.length || targets.length > 5e3) {
+      await client2.query("ROLLBACK");
+      return res.status(400).json({ error: "S\u1ED1 ng\u01B0\u1EDDi nh\u1EADn ph\u1EA3i t\u1EEB 1 \u0111\u1EBFn 5000." });
+    }
+    const targetIds = targets.map((row) => String(row.id));
+    const notificationIds = targetIds.map(() => generateId2("noti"));
+    await client2.query(
+      `INSERT INTO notifications (id, user_id, type, message, is_read, created_at, broadcast_id)
+       SELECT ids.id, ids.user_id, $3, $4, false, CURRENT_TIMESTAMP, $5
+       FROM unnest($1::text[], $2::text[]) AS ids(id, user_id)`,
+      [notificationIds, targetIds, type, message, broadcastId]
+    );
+    await client2.query("UPDATE notification_broadcasts SET target_count = $2 WHERE id = $1", [broadcastId, targetIds.length]);
+    await client2.query("COMMIT");
+    invalidateStoreCache();
+    await audit(req, "send_notification_broadcast", broadcastId, `Sent ${targetIds.length} in-app notifications.`);
+    res.status(201).json({ sent: targetIds.length, duplicate: false });
+  } catch (error) {
+    await client2.query("ROLLBACK");
+    throw error;
+  } finally {
+    client2.release();
   }
-  res.json({ sent: targetIds.length });
 }));
 app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
@@ -9202,6 +9330,23 @@ var reviewTransactionHandler = asyncHandler(async (req, res) => {
 });
 app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 app.patch("/api/payments/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
+app.get("/api/student/transactions/:id/status", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (isDevMockDb) {
+    const transaction2 = (devMockStore || getInitialStore()).transactions.find((item) => item.id === req.params.id && item.studentId === req.user.id);
+    if (!transaction2) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y giao d\u1ECBch." });
+    return res.json({ id: transaction2.id, status: transaction2.status, processedAt: transaction2.processedAt || null, requiresManualReview: false });
+  }
+  const transaction = (await pool.query(
+    `SELECT t.id, t.status, t.processed_at,
+            EXISTS (SELECT 1 FROM payment_webhook_events e
+                    WHERE e.transaction_id = t.id AND e.error = 'amount_mismatch' AND e.processing_status = 'processed') AS requires_manual_review
+     FROM transactions t WHERE t.id = $1 AND t.student_id = $2`,
+    [req.params.id, req.user.id]
+  )).rows[0];
+  if (!transaction) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y giao d\u1ECBch." });
+  res.json({ id: transaction.id, status: transaction.status, processedAt: transaction.processed_at, requiresManualReview: transaction.requires_manual_review });
+}));
 var paymentWebhookHandler = asyncHandler(async (req, res) => {
   const signature = req.header("X-Payment-Signature");
   if (!signature) {
@@ -9308,12 +9453,17 @@ app.post("/api/payments/webhook", paymentWebhookHandler);
 app.post("/api/webhooks/payment", paymentWebhookHandler);
 var sepayWebhookHandler = asyncHandler(async (req, res) => {
   const expectedApiKey = process.env.SEPAY_API_KEY?.trim();
-  if (expectedApiKey) {
-    const authHeader = req.header("Authorization") || "";
-    const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, "").trim();
-    if (!token || token !== expectedApiKey) {
-      return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
-    }
+  if (!expectedApiKey) {
+    console.error("[SePay webhook] SEPAY_API_KEY is not configured; rejecting webhook.");
+    return res.status(503).json({ success: false, error: "SePay webhook is not configured." });
+  }
+  const authHeader = req.header("Authorization") || "";
+  const match = /^(Apikey|Bearer)\s+(.+)$/i.exec(authHeader);
+  const token = match?.[2]?.trim() || "";
+  const supplied = Buffer.from(token);
+  const expected = Buffer.from(expectedApiKey);
+  if (!token || supplied.length !== expected.length || !crypto4.timingSafeEqual(supplied, expected)) {
+    return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
   }
   const rawPayload = req.rawBody || JSON.stringify(req.body);
   const result = await processSepayWebhook(req.body, rawPayload, () => {

@@ -4,9 +4,7 @@ import {
   Copy, 
   Check, 
   CreditCard, 
-  Clock, 
   Phone, 
-  RefreshCw, 
   CheckCircle2, 
   Sparkles,
   ShieldCheck,
@@ -14,6 +12,7 @@ import {
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 import { Course, Transaction } from "../../types";
+import { api } from "../../api";
 
 interface PaymentQrModalProps {
   transaction: Transaction;
@@ -23,7 +22,6 @@ interface PaymentQrModalProps {
   onPaymentSuccess?: () => void;
 }
 
-const TOTAL_COUNTDOWN_SECONDS = 900; // 15 minutes
 const BANK_ACCOUNT_NUMBER = "099162438104";
 const BANK_NAME = "MB Bank (Ngân hàng Quân Đội)";
 const ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
@@ -36,9 +34,11 @@ export default function PaymentQrModal({
   onPaymentSuccess
 }: PaymentQrModalProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(TOTAL_COUNTDOWN_SECONDS);
   const [isSuccess, setIsSuccess] = useState<boolean>(transaction.status === "approved");
+  const [isRejected, setIsRejected] = useState<boolean>(transaction.status === "rejected");
+  const [requiresManualReview, setRequiresManualReview] = useState(false);
   const [isChecking, setIsChecking] = useState<boolean>(false);
+  const [statusCheckFailed, setStatusCheckFailed] = useState(false);
   const [qrImgError, setQrImgError] = useState<boolean>(false);
 
   // Extract clean hex identifiers for standardized SePay memo parsing
@@ -52,69 +52,49 @@ export default function PaymentQrModal({
     setTimeout(() => setCopiedField(null), 2500);
   };
 
-  // 15-Minute Countdown Timer
-  useEffect(() => {
-    if (isSuccess) return;
-    const interval = setInterval(() => {
-      setSecondsRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isSuccess]);
-
-  // Format mm:ss
-  const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainderSecs = secs % 60;
-    return `${mins.toString().padStart(2, "0")}:${remainderSecs.toString().padStart(2, "0")}`;
-  };
-
-  // 3-Second Status Poller for Instant SePay Activation
+  // Poll only this learner's order, never the full LMS store.
   const onRefreshDataRef = useRef(onRefreshData);
   onRefreshDataRef.current = onRefreshData;
 
   useEffect(() => {
-    if (isSuccess || secondsRemaining <= 0) return;
+    if (isSuccess || isRejected) return;
 
     let isMounted = true;
+    let inFlight = false;
     const checkPaymentStatus = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         setIsChecking(true);
-        const res = await fetch("/api/store", { credentials: "include" });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tx = data?.transactions?.find((t: any) => t.id === transaction.id);
-        if (tx && tx.status === "approved" && isMounted) {
+        const tx = await api.getMyTransactionStatus(transaction.id);
+        if (isMounted) setStatusCheckFailed(false);
+        if (tx.status === "approved" && isMounted) {
           setIsSuccess(true);
           if (onRefreshDataRef.current) {
-            onRefreshDataRef.current();
+            await onRefreshDataRef.current();
           }
+        } else if (tx.status === "rejected" && isMounted) {
+          setIsRejected(true);
+        } else if (tx.requiresManualReview && isMounted) {
+          setRequiresManualReview(true);
         }
       } catch {
-        // network polling failure is ignored gracefully
+        if (isMounted) setStatusCheckFailed(true);
       } finally {
+        inFlight = false;
         if (isMounted) setIsChecking(false);
       }
     };
 
-    const poller = setInterval(checkPaymentStatus, 3000);
+    void checkPaymentStatus();
+    const poller = setInterval(checkPaymentStatus, 5000);
     return () => {
       isMounted = false;
       clearInterval(poller);
     };
-  }, [isSuccess, secondsRemaining, transaction.id]);
+  }, [isSuccess, isRejected, transaction.id]);
 
   const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${transaction.amount}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
-  const fallbackQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-    `VietQR MB ${BANK_ACCOUNT_NUMBER} amount ${transaction.amount} memo ${memoText}`
-  )}`;
-
-  const timerPercent = (secondsRemaining / TOTAL_COUNTDOWN_SECONDS) * 100;
 
   return (
     <ModalPortal>
@@ -183,6 +163,14 @@ export default function PaymentQrModal({
                 Vào Không Gian Học Tập Ngay
               </button>
             </div>
+          ) : isRejected || requiresManualReview ? (
+            <div className="py-8 space-y-4 text-center">
+              <AlertTriangle className="h-10 w-10 text-amber-600 mx-auto" />
+              <h3 className="text-lg font-bold">{isRejected ? "Đơn thanh toán đã bị từ chối" : "Khoản thanh toán cần đối soát"}</h3>
+              <p className="text-sm text-slate-600">{isRejected ? "Vui lòng liên hệ MCNA để kiểm tra trước khi chuyển khoản." : "MCNA đã ghi nhận khoản chuyển chưa đủ học phí. Đơn chưa được kích hoạt. Vui lòng liên hệ MCNA để đối soát hoặc hoàn tiền; không chuyển thêm theo đơn này."}</p>
+              <a href="https://zalo.me/0939866825" target="_blank" rel="noreferrer" className="inline-flex px-5 py-2 bg-blue-600 text-white rounded-xl">Liên hệ MCNA</a>
+              <button type="button" onClick={onClose} className="px-5 py-2 bg-slate-900 text-white rounded-xl">Đóng</button>
+            </div>
           ) : (
             /* Active QR State */
             <>
@@ -201,61 +189,23 @@ export default function PaymentQrModal({
                 </div>
               </div>
 
-              {/* 15-Minute Countdown Bar */}
-              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3 space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 flex items-center gap-1.5 font-medium">
-                    <Clock className={`h-4 w-4 ${secondsRemaining < 180 ? "text-red-500 animate-pulse" : "text-indigo-600"}`} />
-                    Thời gian giữ mã chuyển khoản:
-                  </span>
-                  <span className={`font-mono font-bold text-sm ${secondsRemaining < 180 ? "text-red-600" : "text-indigo-700"}`}>
-                    {formatTime(secondsRemaining)}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-1000 ${
-                      secondsRemaining < 180 ? "bg-red-500" : "bg-indigo-600"
-                    }`}
-                    style={{ width: `${timerPercent}%` }}
-                  />
-                </div>
-              </div>
-
-              {secondsRemaining === 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                    <span>Mã thanh toán đã quá hạn 15 phút.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSecondsRemaining(TOTAL_COUNTDOWN_SECONDS)}
-                    className="px-2.5 py-1 bg-amber-600 text-white rounded-lg text-[11px] font-bold hover:bg-amber-700 flex items-center gap-1 cursor-pointer transition"
-                  >
-                    <RefreshCw className="h-3 w-3" /> Làm mới
-                  </button>
-                </div>
-              )}
-
               {/* QR Code Graphic with Poller Status */}
               <div className="flex flex-col items-center justify-center p-3.5 bg-gradient-to-b from-white to-slate-50/50 rounded-2xl border border-slate-200 mx-auto w-52 h-52 relative shadow-xs">
-                <img
-                  src={qrImgError ? fallbackQrUrl : vietQrUrl}
-                  alt="VietQR MCNA"
-                  className="w-44 h-44 object-contain rounded-lg"
-                  onError={() => setQrImgError(true)}
-                />
+                {qrImgError ? (
+                  <p className="text-center text-xs text-amber-800 flex flex-col items-center gap-2"><AlertTriangle className="h-6 w-6" />Không tải được VietQR. Vui lòng nhập chính xác thông tin chuyển khoản bên dưới hoặc liên hệ MCNA.</p>
+                ) : (
+                  <img src={vietQrUrl} alt="VietQR MCNA" className="w-44 h-44 object-contain rounded-lg" onError={() => setQrImgError(true)} />
+                )}
               </div>
 
               {/* Auto-activation live poller badge */}
-              <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-slate-600 bg-slate-50 py-2 px-3 rounded-xl border border-slate-200/80">
+              <div className={`flex items-center justify-center gap-2 text-[11px] font-medium py-2 px-3 rounded-xl border ${statusCheckFailed ? "text-amber-800 bg-amber-50 border-amber-200" : "text-slate-600 bg-slate-50 border-slate-200/80"}`}>
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  {!statusCheckFailed && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${statusCheckFailed ? "bg-amber-500" : "bg-emerald-500"}`}></span>
                 </span>
                 <span>
-                  {isChecking ? "Đang kiểm tra giao dịch SePay..." : "Hệ thống tự động kích hoạt ngay khi nhận tiền"}
+                  {statusCheckFailed ? "Chưa kiểm tra được trạng thái đơn; hệ thống sẽ thử lại." : isChecking ? "Đang kiểm tra trạng thái đơn..." : "Đang chờ xác nhận đủ học phí từ SePay"}
                 </span>
               </div>
 

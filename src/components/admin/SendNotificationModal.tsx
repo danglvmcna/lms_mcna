@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { X, Send, Bell, CheckCircle2, AlertTriangle, AlertCircle, Info, Users, UserCheck } from "lucide-react";
 import { LMSDataStore } from "../../types";
 import { api } from "../../api";
@@ -26,11 +26,15 @@ export default function SendNotificationModal({
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Keep the same key across retries; a changed draft gets a new key.
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
+  const resetDraftKey = () => { idempotencyKeyRef.current = crypto.randomUUID(); };
 
   if (!isOpen) return null;
 
   const users = store.users || [];
   const filteredUsers = users.filter(u => {
+    if (u.isActive === false) return false;
     if (!userSearch.trim()) return true;
     const q = userSearch.toLowerCase();
     return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
@@ -58,11 +62,13 @@ export default function SendNotificationModal({
 
     try {
       const payload: {
+        idempotencyKey: string;
         message: string;
         type: string;
         role?: string;
         userIds?: string[];
       } = {
+        idempotencyKey: idempotencyKeyRef.current,
         message: message.trim(),
         type: notifType
       };
@@ -77,9 +83,10 @@ export default function SendNotificationModal({
       const count = res?.sent ?? getRecipientCount();
 
       if (triggerToast) {
-        triggerToast(`Đã gửi thông báo thành công tới ${count} người dùng!`);
+        triggerToast(res?.duplicate ? `Thông báo đã được gửi trước đó tới ${count} người dùng.` : `Đã gửi thông báo tới ${count} người dùng trong LMS!`);
       }
 
+      resetDraftKey();
       setMessage("");
       setSelectedUserId("");
       setUserSearch("");
@@ -112,7 +119,7 @@ export default function SendNotificationModal({
                 Gửi Thông báo Hệ thống
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Phát thông báo tới học viên, giảng viên hoặc toàn bộ người dùng trong hệ thống.
+                Gửi trong LMS tới người dùng đang hoạt động; thao tác này không gửi email.
               </p>
             </div>
           </div>
@@ -149,6 +156,7 @@ export default function SendNotificationModal({
                       key={opt.id}
                       type="button"
                       onClick={() => {
+                        resetDraftKey();
                         setTargetType(opt.id as any);
                         if (opt.id !== "specific") setSelectedUserId("");
                       }}
@@ -181,7 +189,7 @@ export default function SendNotificationModal({
                 />
                 <select
                   value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  onChange={(e) => { resetDraftKey(); setSelectedUserId(e.target.value); }}
                   className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
                   size={Math.min(5, Math.max(2, filteredUsers.length))}
                 >
@@ -215,7 +223,7 @@ export default function SendNotificationModal({
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => setNotifType(t.id as any)}
+                      onClick={() => { resetDraftKey(); setNotifType(t.id as any); }}
                       className={`p-2 rounded-xl border text-center flex items-center justify-center gap-1.5 transition cursor-pointer font-medium ${
                         isSelected
                           ? `${t.color} font-bold ring-2 ring-indigo-500/30 shadow-2xs`
@@ -238,9 +246,10 @@ export default function SendNotificationModal({
               </div>
               <textarea
                 required
+                maxLength={2000}
                 rows={4}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => { resetDraftKey(); setMessage(e.target.value); }}
                 placeholder="Nhập nội dung thông báo muốn gửi tới học viên hoặc giảng viên..."
                 className="w-full px-3.5 py-2.5 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 leading-relaxed placeholder-slate-400"
               />
@@ -258,7 +267,7 @@ export default function SendNotificationModal({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !message.trim()}
+                disabled={isSubmitting || !message.trim() || getRecipientCount() === 0}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />

@@ -41,6 +41,16 @@ function typeDot(type: string) {
   }
 }
 
+function groupNotifications(notifications: Notification[]) {
+  const groups = new Map<string, Notification[]>();
+  notifications.slice(0, 50).forEach(notification => {
+    const day = new Date(notification.createdAt).toLocaleDateString("en-CA");
+    const key = `${notification.type}\u0000${notification.message}\u0000${day}`;
+    groups.set(key, [...(groups.get(key) || []), notification]);
+  });
+  return [...groups.values()];
+}
+
 export default function NotificationBell() {
   const [open, setOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
@@ -80,12 +90,11 @@ export default function NotificationBell() {
   }, [open]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const notificationGroups = groupNotifications(notifications);
 
-  const handleMarkRead = async (id: string) => {
-    try {
-      await api.markNotificationRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch { /* silent */ }
+  const handleMarkRead = async (ids: string[]) => {
+    await Promise.allSettled(ids.map(id => api.markNotificationRead(id)));
+    await fetchNotifications();
   };
 
   const handleMarkAllRead = async () => {
@@ -108,7 +117,7 @@ export default function NotificationBell() {
       {/* Bell button */}
       <button
         onClick={handleOpen}
-        className="relative p-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
+        className="relative p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
         title="Thông báo"
         aria-label="Thông báo"
       >
@@ -122,7 +131,7 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[360px] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[min(360px,calc(100vw-24px))] bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
@@ -163,19 +172,22 @@ export default function NotificationBell() {
                 <p className="text-xs font-medium">Chưa có thông báo nào</p>
               </div>
             ) : (
-              notifications.slice(0, 50).map(notif => (
+              notificationGroups.map(group => {
+                const notif = group[0];
+                const hasUnread = group.some(item => !item.isRead);
+                return (
                 <button
                   key={notif.id}
-                  onClick={() => !notif.isRead && handleMarkRead(notif.id)}
+                  onClick={() => hasUnread && handleMarkRead(group.filter(item => !item.isRead).map(item => item.id))}
                   className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition group cursor-pointer ${
-                    notif.isRead
+                    !hasUnread
                       ? "bg-white hover:bg-slate-50/60"
                       : "bg-indigo-50/40 hover:bg-indigo-50/80"
                   }`}
                 >
                   {/* Unread dot */}
                   <div className="mt-1 shrink-0">
-                    {notif.isRead
+                    {!hasUnread
                       ? <div className="w-2 h-2" />
                       : <div className={`w-2 h-2 rounded-full ${typeDot(notif.type)}`} />
                     }
@@ -186,15 +198,16 @@ export default function NotificationBell() {
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs leading-relaxed ${notif.isRead ? "text-slate-600" : "text-slate-900 font-medium"}`}>
+                    <p className={`text-sm leading-relaxed ${!hasUnread ? "text-slate-600" : "text-slate-900 font-medium"}`}>
                       {notif.message}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                      {relativeTime(notif.createdAt)}
+                    <p className="text-xs text-slate-500 mt-1">
+                      {relativeTime(notif.createdAt)}{group.length > 1 ? ` · ${group.length} thông báo cùng nội dung` : ""}
                     </p>
                   </div>
                 </button>
-              ))
+              );
+              })
             )}
           </div>
 

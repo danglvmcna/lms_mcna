@@ -47,7 +47,7 @@ interface TeacherPanelProps {
 }
 
 export default function TeacherPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS", updateStore }: TeacherPanelProps) {
-  const { store, isLoading, isError } = useApiStore();
+  const { store, isLoading, isError, refetch } = useApiStore();
 
   // Local active sub-module state
   const [activeSubTab, setActiveSubTab] = useState<string>("courses");
@@ -63,7 +63,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["courses", "assignments", "notifications"];
+    const allowed = ["courses", "assignments", "quizzes", "gradebook", "analytics", "notifications"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("courses");
     }
@@ -589,7 +589,9 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
+      {isLoading && <p className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">Đang tải dữ liệu giảng dạy...</p>}
+      {isError && <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><span>Không thể tải dữ liệu lớp học.</span><button type="button" onClick={() => refetch()} className="font-semibold underline">Thử lại</button></div>}
       {/* Toast Alert bottom right */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
@@ -601,88 +603,55 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-            Không gian Giảng dạy & Đào tạo
+            Giảng dạy
           </h2>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Quản lý giáo án, bài giảng, lưu trữ video recording và chấm điểm bài nộp của học viên.
+          <p className="text-sm text-slate-500 mt-1">
+            Khóa học, bài nộp và kết quả của học viên trong một nơi.
           </p>
         </div>
       </div>
 
       {/* Side-by-side dashboard layout: sidebar navigation on the left, workspace canvas on the right */}
-      <div className="flex flex-col lg:flex-row gap-4 md:gap-8 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
         {/* Mobile: sidebar toggle bar */}
         <div className="lg:hidden w-full">
           <button
             onClick={() => setShowSidebar(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs text-slate-700 hover:text-slate-900 transition cursor-pointer shadow-xs"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:text-slate-900 transition cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-              <span className="font-semibold">Menu điều hướng</span>
-              <span className="text-slate-400">— đang xem: <strong className="text-indigo-600">{{
+              <span className="font-semibold">{{
                 courses: "Khóa học & Bài giảng",
                 assignments: "Bài tập & Chấm điểm",
                 quizzes: "Đề thi & Đánh giá",
                 gradebook: "Sổ điểm Tổng hợp",
                 analytics: "Báo cáo Hiệu suất",
                 notifications: "Hộp thư Thông báo",
-              }[activeSubTab] || activeSubTab}</strong></span>
+              }[activeSubTab] || activeSubTab}</span>
+              <span className="text-slate-400">Đổi mục</span>
             </span>
             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${showSidebar ? "rotate-90" : ""}`} />
           </button>
         </div>
 
         {/* Left Navigation Sidebar */}
-        <div className={`w-full lg:w-64 xl:w-72 flex flex-col gap-4 shrink-0 ${showSidebar ? "block" : "hidden"} lg:flex lg:flex-col`}>
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 flex flex-col gap-1 w-full text-xs shadow-xs">
-            <span className="text-[11px] text-slate-400 uppercase tracking-wider px-3 py-2 font-semibold">
-              NGHIỆP VỤ GIẢNG DẠY
-            </span>
-            
-            <button
-              onClick={() => { handleNavClick("courses"); setSelectedCourseId(null); }}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
-                activeSubTab === "courses" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <BookOpen className={`h-4 w-4 ${activeSubTab === "courses" ? "text-indigo-600" : "text-slate-400"}`} />
-              <span>Khóa học & Bài giảng</span>
-            </button>
-
-            <button
-              onClick={() => handleNavClick("assignments")}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
-                activeSubTab === "assignments" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <Edit className={`h-4 w-4 ${activeSubTab === "assignments" ? "text-indigo-600" : "text-slate-400"}`} />
-              <span>Bài tập & Chấm điểm</span>
-            </button>
-
-            <button
-              onClick={() => handleNavClick("notifications")}
-              className={`w-full text-left px-3.5 py-2.5 font-medium rounded-xl transition duration-150 cursor-pointer flex items-center justify-between ${
-                activeSubTab === "notifications" 
-                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs" 
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-2.5">
-                <Bell className={`h-4 w-4 ${activeSubTab === "notifications" ? "text-indigo-600" : "text-slate-400"}`} />
-                <span>Hộp thư Thông báo</span>
-              </span>
-              {unreadTeacherNotificationsCount > 0 && (
-                <span className="bg-rose-50 text-rose-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-rose-200/80 font-medium">
-                  {unreadTeacherNotificationsCount}
-                </span>
-              )}
-            </button>
-          </div>
+        <div className={`w-full lg:w-56 xl:w-60 shrink-0 ${showSidebar ? "block" : "hidden"} lg:block`}>
+          <nav aria-label="Điều hướng giảng viên" className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col gap-0.5 w-full text-sm">
+            <span className="px-3 py-2 text-xs font-semibold text-slate-500">Giảng viên</span>
+            {[
+              { id: "courses", label: "Khóa học & Bài giảng", Icon: BookOpen },
+              { id: "assignments", label: "Bài tập & Chấm điểm", Icon: Edit },
+              { id: "quizzes", label: "Đề thi & Đánh giá", Icon: FileText },
+              { id: "gradebook", label: "Sổ điểm Tổng hợp", Icon: Award },
+              { id: "analytics", label: "Báo cáo Hiệu suất", Icon: BarChart },
+              { id: "notifications", label: "Hộp thư Thông báo", Icon: Bell }
+            ].map(({ id, label, Icon }) => (
+              <button key={id} type="button" onClick={() => { handleNavClick(id); if (id === "courses") setSelectedCourseId(null); }} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left font-medium transition-colors ${activeSubTab === id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+                <span className="flex min-w-0 items-center gap-2.5"><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span></span>
+                {id === "notifications" && unreadTeacherNotificationsCount > 0 && <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-xs font-semibold text-rose-700">{unreadTeacherNotificationsCount}</span>}
+              </button>
+            ))}
+          </nav>
         </div>
 
         {/* Active Panel View Canvas */}

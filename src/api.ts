@@ -173,6 +173,7 @@ export const api = {
   setUserStatus: (userId: string, isActive: boolean) => apiFetch(`/api/admin/users/${userId}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
   setUserRole: (userId: string, role: string) => apiFetch(`/api/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
   reviewTransaction: (transactionId: string, payload: { status: "approved" | "rejected"; notes?: string }) => apiFetch(`/api/payments/transactions/${transactionId}/review`, { method: "PATCH", body: JSON.stringify(payload) }),
+  getMyTransactionStatus: (transactionId: string) => apiFetch<{ id: string; status: "pending" | "approved" | "rejected"; processedAt: string | null; requiresManualReview: boolean }>(`/api/student/transactions/${encodeURIComponent(transactionId)}/status`),
   createCourseSection: (payload: unknown) => apiFetch("/api/course-sections", { method: "POST", body: JSON.stringify(payload) }),
   updateCourseSection: (sectionId: string, payload: unknown) => apiFetch(`/api/course-sections/${sectionId}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteCourseSection: (sectionId: string) => apiFetch(`/api/course-sections/${sectionId}`, { method: "DELETE" }),
@@ -193,8 +194,8 @@ export const api = {
   markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
   getNotifications: () => apiFetch<any[]>("/api/notifications"),
-  sendAdminNotification: (payload: { message: string; type?: string; userIds?: string[]; role?: string }) =>
-    apiFetch<{ sent: number }>("/api/admin/notifications", { method: "POST", body: JSON.stringify(payload) }),
+  sendAdminNotification: (payload: { idempotencyKey: string; message: string; type?: string; userIds?: string[]; role?: string }) =>
+    apiFetch<{ sent: number; duplicate: boolean }>("/api/admin/notifications", { method: "POST", body: JSON.stringify(payload) }),
   resetPassword: (userId: string) => apiFetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" }),
 
   createForumPost: (courseId: string, payload: { title: string; content: string; sectionId?: string }) => apiFetch(`/api/courses/${courseId}/forum`, { method: "POST", body: JSON.stringify({ courseId, ...payload }) }),

@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
 import { PublicCourseDetail, PublicCourseSummary } from "../../types";
 import LinkedText from "../LinkedText";
+import { instructorName } from "../student/studentDisplay";
 
 interface PublicCourseCatalogProps {
   initialCourseId?: string;
@@ -167,7 +168,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                 <h3 className="font-bold text-base leading-snug group-hover:text-indigo-600 text-slate-900 transition-colors">{course.title}</h3>
                 <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{course.description}</p>
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1">
-                  <span className="flex items-center gap-1.5 min-w-0"><UserIcon className="h-3.5 w-3.5 text-indigo-500 shrink-0" /><span className="truncate">{course.teacherName || "MCNA"}</span></span>
+                  <span className="flex items-center gap-1.5 min-w-0"><UserIcon className="h-3.5 w-3.5 text-indigo-500 shrink-0" /><span className="truncate">{instructorName({ name: course.teacherName })}</span></span>
                   <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />{course.numberOfLessons || "—"} buổi</span>
                   <span className="col-span-2 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-amber-500 shrink-0" />{course.openingDate ? `Khai giảng ${formatDate(course.openingDate)}` : "Lịch khai giảng đang cập nhật"}</span>
                 </div>
@@ -271,7 +272,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">Giảng viên</span>
-              <span className="font-semibold text-slate-800 text-right">{course.teacherName || "Đang cập nhật"}</span>
+              <span className="font-semibold text-slate-800 text-right">{instructorName({ name: course.teacherName })}</span>
             </div>
             {course.numberOfLessons ? (
               <div className="flex items-center justify-between gap-2">
@@ -312,7 +313,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                       <h3 className="font-bold text-base text-slate-900">Lớp {section.sectionCode}</h3>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-indigo-500" /> Khai giảng {formatDate(section.openingDate)}</span>
-                        <span className="inline-flex items-center gap-1"><UserIcon className="h-3.5 w-3.5 text-indigo-500" /> {section.teacherName || "Chưa phân công"}</span>
+                        <span className="inline-flex items-center gap-1"><UserIcon className="h-3.5 w-3.5 text-indigo-500" /> {section.teacherName ? instructorName({ name: section.teacherName }) : "Chưa phân công"}</span>
                         <span className="inline-flex items-center gap-1"><BookOpen className="h-3.5 w-3.5 text-indigo-500" /> {sessionCount > 0 ? `${sessionCount} buổi` : "Đang cập nhật"}</span>
                         <span className={`inline-flex items-center gap-1 font-semibold ${isFull ? "text-rose-600" : "text-emerald-600"}`}>
                           <Users className="h-3.5 w-3.5" /> {isFull ? "Đã đủ học viên" : typeof section.seatsLeft === "number" ? `Còn ${seatsLeft}/${maxStudents} chỗ` : `${maxStudents} chỗ`}

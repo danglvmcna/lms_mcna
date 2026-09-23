@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { pool, Queryable } from "../db";
 import { notificationsRepository } from "../repositories/notifications";
+import { generateId } from "../ids";
 import { confirmCoursePayment, placeEnrollment, isServiceError } from "./enrollmentService";
 
 export interface SepayWebhookPayload {
@@ -225,8 +226,11 @@ export async function processSepayWebhook(
   rawBody: string,
   onSuccessfulPayment?: () => void
 ): Promise<SepayProcessResult> {
+  if (!payload || !String(payload.id ?? "").trim() || !Number.isSafeInteger(Number(payload.transferAmount)) || Number(payload.transferAmount) <= 0) {
+    return { success: false, matched: false, message: "Dữ liệu giao dịch SePay không hợp lệ." };
+  }
   // 1. Ignore non-incoming money transfers
-  if (payload.transferType && String(payload.transferType).toLowerCase() !== "in") {
+  if (String(payload.transferType || "").toLowerCase() !== "in") {
     return {
       success: true,
       matched: false,
@@ -237,7 +241,7 @@ export async function processSepayWebhook(
   // 2. Idempotency check with payment_webhook_events
   const eventId = `sepay_${payload.id}`;
   const existingEvent = (await pool.query(
-    "SELECT event_id, transaction_id, processing_status FROM payment_webhook_events WHERE event_id = $1",
+    "SELECT event_id, transaction_id, status, error, processing_status FROM payment_webhook_events WHERE event_id = $1",
     [eventId]
   )).rows[0];
 
@@ -246,8 +250,11 @@ export async function processSepayWebhook(
       success: true,
       matched: true,
       duplicate: true,
+      underpaid: existingEvent.error === "amount_mismatch",
       transactionId: existingEvent.transaction_id,
-      message: "Giao dịch SePay này đã được hệ thống xử lý thành công trước đó."
+      message: existingEvent.error === "amount_mismatch"
+        ? "Khoản chuyển thiếu đã được ghi nhận để MCNA đối soát thủ công."
+        : "Giao dịch SePay này đã được hệ thống xử lý thành công trước đó."
     };
   }
 
@@ -263,34 +270,62 @@ export async function processSepayWebhook(
     };
   }
 
-  const receivedAmount = Number(payload.transferAmount || 0);
+  const receivedAmount = Number(payload.transferAmount);
   const requiredAmount = Number(matchedTx.amount || 0);
+  const payloadSha256 = sha256Hex(rawBody || JSON.stringify(payload));
 
   // 4. Underpayment check
   if (receivedAmount < requiredAmount) {
-    const diff = requiredAmount - receivedAmount;
-    await pool.query(
-      `UPDATE transactions
-       SET notes = $2
-       WHERE id = $1`,
-      [
-        matchedTx.id,
-        `SePay: Nhận ${receivedAmount.toLocaleString("vi-VN")} đ (thiếu ${diff.toLocaleString("vi-VN")} đ so với học phí ${requiredAmount.toLocaleString("vi-VN")} đ). GD #${payload.id}.`
-      ]
-    );
-
-    await notificationsRepository.create(pool, {
-      userId: matchedTx.student_id,
-      type: "warning",
-      message: `MCNA đã nhận ${receivedAmount.toLocaleString("vi-VN")} đ học phí môn ${matchedTx.course_title}, nhưng số tiền quy định là ${requiredAmount.toLocaleString("vi-VN")} đ (còn thiếu ${diff.toLocaleString("vi-VN")} đ). Vui lòng chuyển bổ sung để hoàn tất kích hoạt lớp học.`
-    });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const recorded = await client.query(
+        `INSERT INTO payment_webhook_events
+           (event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status, processed_at, error)
+         VALUES ($1, $2, 'rejected', CURRENT_TIMESTAMP, $3, 'processed', CURRENT_TIMESTAMP, 'amount_mismatch')
+         ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+        [eventId, matchedTx.id, payloadSha256]
+      );
+      if (!recorded.rowCount) {
+        const previous = (await client.query(
+          "SELECT transaction_id, error FROM payment_webhook_events WHERE event_id = $1",
+          [eventId]
+        )).rows[0];
+        await client.query("ROLLBACK");
+        return { success: true, matched: true, duplicate: true, underpaid: previous?.error === "amount_mismatch", transactionId: previous?.transaction_id || matchedTx.id,
+          message: "Giao dịch SePay này đã được ghi nhận trước đó." };
+      }
+      await client.query(
+        `UPDATE transactions SET notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2) WHERE id = $1`,
+        [matchedTx.id, `SePay #${payload.id}: nhận ${receivedAmount.toLocaleString("vi-VN")} đ / học phí ${requiredAmount.toLocaleString("vi-VN")} đ; chờ đối soát thủ công, không tự kích hoạt.`]
+      );
+      const adminIds = (await client.query("SELECT id FROM users WHERE role IN ('admin', 'manager') AND is_active = true")).rows.map(row => String(row.id));
+      const recipients = [...new Set([matchedTx.student_id, ...adminIds])];
+      for (const userId of recipients) {
+        const isStudent = userId === matchedTx.student_id;
+        await client.query(
+          `INSERT INTO notifications (id, user_id, type, message, is_read, created_at)
+           VALUES ($1, $2, 'warning', $3, false, CURRENT_TIMESTAMP)`,
+          [generateId("noti"), userId, isStudent
+            ? `MCNA đã nhận khoản chuyển ${receivedAmount.toLocaleString("vi-VN")} đ cho khóa "${matchedTx.course_title}" nhưng chưa đủ học phí. Đơn chưa được kích hoạt. Vui lòng liên hệ MCNA để đối soát hoặc hoàn tiền; không tự chuyển thêm theo đơn này.`
+            : `Cần đối soát thủ công: SePay #${payload.id}, đơn ${matchedTx.id} nhận ${receivedAmount.toLocaleString("vi-VN")} đ / ${requiredAmount.toLocaleString("vi-VN")} đ. Đơn vẫn đang chờ; liên hệ học viên để xử lý.`]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    onSuccessfulPayment?.();
 
     return {
       success: true,
       matched: true,
       underpaid: true,
       transactionId: matchedTx.id,
-      message: `Giao dịch chuyển thiếu tiền (${receivedAmount.toLocaleString("vi-VN")} đ / ${requiredAmount.toLocaleString("vi-VN")} đ). Đã lưu ghi chú.`
+      message: `Khoản chuyển thiếu (${receivedAmount.toLocaleString("vi-VN")} đ / ${requiredAmount.toLocaleString("vi-VN")} đ) đã chuyển sang đối soát thủ công; đơn chưa kích hoạt.`
     };
   }
 
@@ -298,10 +333,29 @@ export async function processSepayWebhook(
   const client = await pool.connect();
   let placedSectionId: string | null = null;
   let placementError: string | null = null;
-  const payloadSha256 = sha256Hex(rawBody || JSON.stringify(payload));
 
   try {
     await client.query("BEGIN");
+    const recorded = await client.query(
+      `INSERT INTO payment_webhook_events
+         (event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status)
+       VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP, $3, 'processing')
+       ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+      [eventId, matchedTx.id, payloadSha256]
+    );
+    if (!recorded.rowCount) {
+      const previous = (await client.query(
+        "SELECT transaction_id, error, processing_status FROM payment_webhook_events WHERE event_id = $1",
+        [eventId]
+      )).rows[0];
+      await client.query("ROLLBACK");
+      return {
+        success: true, matched: true, duplicate: true,
+        underpaid: previous?.error === "amount_mismatch",
+        transactionId: previous?.transaction_id || matchedTx.id,
+        message: "Giao dịch SePay này đã được ghi nhận trước đó."
+      };
+    }
 
     // Approve payment via shared enrollmentService
     const payment = await confirmCoursePayment(
@@ -338,16 +392,10 @@ export async function processSepayWebhook(
       }
     }
 
-    // Record webhook event for audit & idempotency
+    // Complete the idempotent event in the same transaction as payment approval.
     await client.query(
-      `INSERT INTO payment_webhook_events (
-         event_id, transaction_id, status, event_timestamp, payload_sha256, processing_status, processed_at
-       ) VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP, $3, 'processed', CURRENT_TIMESTAMP)
-       ON CONFLICT (event_id) DO UPDATE
-         SET processing_status = 'processed',
-             processed_at = CURRENT_TIMESTAMP,
-             transaction_id = $2`,
-      [eventId, matchedTx.id, payloadSha256]
+      "UPDATE payment_webhook_events SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP WHERE event_id = $1",
+      [eventId]
     );
 
     await client.query("COMMIT");

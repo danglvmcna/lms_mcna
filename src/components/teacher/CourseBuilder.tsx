@@ -711,11 +711,11 @@ export default function CourseBuilder(props: ComponentProps) {
           <div className="space-y-6 font-sans">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
               <div>
-                <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
+                <h4 className="text-xl font-display font-bold text-slate-900 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-indigo-600" />
                   Khóa học Phụ trách ({myCourses.length})
                 </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-sm text-slate-500 mt-1">
                   Quản lý giáo án, thư mục buổi học, tài liệu, bài tập và chấm điểm học viên theo từng khóa học.
                 </p>
               </div>
@@ -728,7 +728,7 @@ export default function CourseBuilder(props: ComponentProps) {
                     placeholder="Tìm kiếm khóa học..."
                     value={courseSearch}
                     onChange={(e) => setCourseSearch(e.target.value)}
-                    className="w-full sm:w-64 pl-8 pr-3 py-1.5 bg-white text-slate-900 placeholder-slate-400 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    className="w-full sm:w-64 pl-8 pr-3 py-2 bg-white text-slate-900 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm"
                   />
                 </div>
                 {currentUser.role !== "teacher" && (
@@ -742,7 +742,7 @@ export default function CourseBuilder(props: ComponentProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 font-sans">
               {filteredCourses.map((course: any) => {
                 const enrolledCount = store.enrollments.filter((e: any) => e.courseId === course.id).length;
                 const sectionsCount = (store.courseSections || []).filter((s: any) => s.courseId === course.id).length;
@@ -751,68 +751,39 @@ export default function CourseBuilder(props: ComponentProps) {
                 return (
                   <div 
                     key={course.id} 
-                    className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between group shadow-sm"
+                    className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-indigo-300 transition-colors flex flex-col justify-between group"
                   >
                     <div>
-                      <div className="h-40 w-full bg-slate-100 flex items-center justify-center relative border-b border-slate-100 overflow-hidden">
-                        {course.thumbnail ? (
-                          <img
-                            src={course.thumbnail}
-                            alt={course.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLElement).style.display = "none";
-                              const parent = e.currentTarget.parentElement;
-                              const fallback = parent?.querySelector(".thumb-fallback");
-                              if (fallback) (fallback as HTMLElement).style.display = "flex";
-                            }}
-                          />
-                        ) : null}
-                        <div className={`thumb-fallback w-full h-full items-center justify-center ${course.thumbnail ? "hidden" : "flex"} bg-gradient-to-br from-indigo-50 to-slate-100`}>
-                          <BookOpen className="h-10 w-10 text-indigo-400" />
-                        </div>
-                        <div className="absolute top-3 right-3">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase backdrop-blur-md shadow-sm border ${
+                      <div className="p-5 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs font-semibold text-indigo-700">{course.category || "Chuyên đề"}</span>
+                          <span className={`shrink-0 px-2 py-1 rounded-md text-xs font-semibold border ${
                             course.status === "published" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                             course.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
                             course.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
                             "bg-slate-100 text-slate-700 border-slate-300"
                           }`}>
-                            {course.status === "published" ? "ĐANG MỞ" :
-                             course.status === "pending" ? "CHỜ XUẤT BẢN" :
-                             course.status === "rejected" ? "BỊ TRẢ VỀ" : "BẢN NHÁP"}
+                            {course.status === "published" ? "Đang mở" :
+                             course.status === "pending" ? "Chờ duyệt" :
+                             course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                           </span>
                         </div>
-                      </div>
-
-                      <div className="p-5 space-y-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                            {course.category || "CHUYÊN ĐỀ"}
-                          </span>
-                          <span className="text-[11px] font-mono text-slate-500">
-                            {sectionsCount > 0 ? `${sectionsCount} lớp học` : "Chưa lập lớp"}
-                          </span>
-                        </div>
-                        <h5 className="font-display font-bold text-slate-900 text-base group-hover:text-indigo-600 transition leading-snug line-clamp-2">
+                        <h5 className="font-display font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition leading-snug line-clamp-2">
                           {course.title}
                         </h5>
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
                           {course.description}
                         </p>
+                        <p className="text-sm text-slate-600">{sectionsCount > 0 ? `${sectionsCount} lớp học` : "Chưa lập lớp"} · {lessonsCount} bài học · {enrolledCount} học viên</p>
                       </div>
                     </div>
 
-                    <div className="p-5 pt-0 border-t border-slate-100 mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-medium text-[11px]">
-                        👥 {enrolledCount} học viên
-                      </span>
-                      
+                    <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end text-sm">
                       <div className="flex gap-2">
                         {currentUser.role !== "teacher" && (
                           <button
                             onClick={() => handleOpenEditCourse(course)}
-                            className="p-1.5 px-2.5 bg-slate-50 hover:bg-slate-100 text-[11px] rounded-xl border border-slate-200 text-slate-700 font-semibold cursor-pointer flex items-center gap-1 transition"
+                            className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-sm rounded-lg border border-slate-200 text-slate-700 font-semibold cursor-pointer flex items-center gap-1 transition"
                           >
                             <Edit className="h-3 w-3" /> Sửa
                           </button>
@@ -822,9 +793,9 @@ export default function CourseBuilder(props: ComponentProps) {
                             setSelectedCourseId(course.id);
                             setSelectedFolderSessionNumber(null);
                           }}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-white text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1 shadow-sm"
+                          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 font-semibold text-white text-sm rounded-lg transition cursor-pointer flex items-center gap-1"
                         >
-                          Mở thư mục khóa học <ChevronRight className="h-3.5 w-3.5" />
+                          Quản lý khóa học <ChevronRight className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -856,7 +827,7 @@ export default function CourseBuilder(props: ComponentProps) {
         {activeSubTab === "courses" && selectedCourseId && activeCourse && (
           <div className="space-y-6 font-sans">
             {/* Header tổng quan khóa học & Thanh công cụ */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm space-y-4">
+            <div className="border-b border-slate-200 pb-4 space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-0">
                   <button 
@@ -867,33 +838,29 @@ export default function CourseBuilder(props: ComponentProps) {
                         setSelectedCourseId(null);
                       }
                     }}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-xs text-slate-700 rounded-xl cursor-pointer font-bold flex items-center gap-1 transition shrink-0"
+                    className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-sm text-slate-700 rounded-lg cursor-pointer font-semibold flex items-center gap-1 transition shrink-0"
                     title="Quay lại"
                   >
                     <ArrowLeft className="h-4 w-4" /> Quay lại
                   </button>
 
-                  {activeCourse.thumbnail && (
-                    <img src={activeCourse.thumbnail} alt="" className="h-11 w-16 object-cover rounded-xl border border-slate-200 shrink-0 shadow-sm" />
-                  )}
-
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
-                        {activeCourse.category || "KHÓA HỌC"}
+                      <span className="text-xs font-semibold text-indigo-700">
+                        {activeCourse.category || "Khóa học"}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase border ${
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${
                         activeCourse.status === "published" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                         activeCourse.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
                         activeCourse.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
                         "bg-slate-100 text-slate-700 border-slate-200"
                       }`}>
-                        {activeCourse.status === "published" ? "ĐANG MỞ" :
-                         activeCourse.status === "pending" ? "CHỜ XUẤT BẢN" :
-                         activeCourse.status === "rejected" ? "BỊ TRẢ VỀ" : "BẢN NHÁP"}
+                        {activeCourse.status === "published" ? "Đang mở" :
+                         activeCourse.status === "pending" ? "Chờ duyệt" :
+                         activeCourse.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                       </span>
                     </div>
-                    <h4 className="text-base md:text-lg font-display font-bold text-slate-900 truncate mt-0.5">
+                    <h4 className="text-lg md:text-xl font-display font-bold text-slate-900 mt-1 break-words">
                       {activeCourse.title}
                     </h4>
                   </div>
@@ -904,7 +871,7 @@ export default function CourseBuilder(props: ComponentProps) {
                   <button
                     type="button"
                     onClick={handleOpenCreateSession}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5" /> Tạo buổi học
                   </button>
@@ -930,7 +897,7 @@ export default function CourseBuilder(props: ComponentProps) {
               </div>
 
               {/* Section selector & filter bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-600">Lớp học phần:</span>
                   <button
@@ -1018,12 +985,9 @@ export default function CourseBuilder(props: ComponentProps) {
               <div className="space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
                   <div>
-                    <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
-                      <Folder className="h-5 w-5 text-amber-500" />
-                      Các Thư mục Buổi học của Lớp
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {courseSessions.length} buổi học · Chọn một buổi để quản lý file slide bài giảng, tài liệu Word/PDF và video cho lớp.
+                    <h4 className="text-lg font-display font-semibold text-slate-900">Buổi học</h4>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {courseSessions.length} buổi · Chọn một buổi để quản lý tài liệu và video.
                     </p>
                   </div>
                 </div>
@@ -1038,60 +1002,24 @@ export default function CourseBuilder(props: ComponentProps) {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
                   {courseSessions.map((session) => {
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={session.number}
                         onClick={() => setSelectedFolderSessionNumber(session.number)}
-                        className="group bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md p-5 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-sm relative overflow-hidden"
+                        className="group flex w-full flex-col gap-2 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
                       >
-                        <div className="space-y-3.5">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 group-hover:bg-amber-100 flex items-center justify-center text-amber-600 transition shadow-sm">
-                              <Folder className="h-6 w-6" />
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 font-mono flex items-center gap-1">
-                              <FileText className="h-3 w-3 text-slate-400" /> {session.materials.length} file tài liệu
-                            </span>
-                          </div>
-
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-widest block">
-                              BUỔI HỌC {session.number}
-                            </span>
-                            <h5 className="font-display font-bold text-slate-900 text-base leading-snug group-hover:text-indigo-700 transition-colors line-clamp-1">
-                              {session.topic}
-                            </h5>
-                            {session.content && (
-                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                                {session.content}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono pt-1">
-                            <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold flex items-center gap-1">
-                              <FileText className="h-3 w-3 text-indigo-500" /> {session.materials.length} tài liệu / slide
-                            </span>
-                            {(session.videoUrl || session.recordingUrl) && (
-                              <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-semibold flex items-center gap-0.5">
-                                <Video className="h-3 w-3" /> Video
-                              </span>
-                            )}
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">{session.number}</span>
+                          <div className="min-w-0">
+                            <h5 className="truncate text-sm font-semibold text-slate-900 group-hover:text-indigo-700">{session.topic}</h5>
+                            <p className="mt-0.5 text-xs text-slate-500">{session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Theo thời khóa biểu"} · {session.materials.length} tài liệu{(session.videoUrl || session.recordingUrl) ? " · Video" : ""}</p>
                           </div>
                         </div>
-
-                        <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between text-xs">
-                          <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-slate-400" />
-                            {session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Ca học theo TKB"}
-                          </span>
-                          <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                            Mở thư mục file <ArrowRight className="h-3.5 w-3.5" />
-                          </span>
-                        </div>
-                      </div>
+                        <ArrowRight className="hidden h-4 w-4 shrink-0 text-slate-400 sm:block" />
+                      </button>
                     );
                   })}
                 </div>
@@ -1121,44 +1049,30 @@ export default function CourseBuilder(props: ComponentProps) {
                   </span>
                 </div>
 
-                {/* Main Folder Banner Card */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4 shadow-sm relative overflow-hidden">
+                {/* Session details */}
+                <section className="space-y-4 border-b border-slate-200 pb-6">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                    <div className="flex items-start gap-4 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-sm">
-                        <FolderOpen className="h-7 w-7" />
-                      </div>
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                            THƯ MỤC BUỔI {currentFolderSession.number}
-                          </span>
-                          <span className="text-[10px] font-mono font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            {currentFolderSession.materials.length} file tài liệu
-                          </span>
-                          {selectedClassSection && (
-                            <span className="text-[10px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                              Lớp {selectedClassSection.sectionCode}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-lg md:text-xl font-display font-bold text-slate-900 leading-tight">
-                          {currentFolderSession.title}: {currentFolderSession.topic}
-                        </h3>
-                      </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-medium text-slate-500">
+                        Buổi {currentFolderSession.number} · {currentFolderSession.materials.length} tài liệu
+                        {selectedClassSection ? ` · Lớp ${selectedClassSection.sectionCode}` : ""}
+                      </p>
+                      <h3 className="text-xl font-display font-semibold text-slate-900 leading-tight">
+                        {currentFolderSession.title}: {currentFolderSession.topic}
+                      </h3>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOpenEditSession(currentFolderSession)}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        className="px-3 py-2 bg-white hover:bg-slate-50 text-indigo-700 border border-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Edit className="h-3.5 w-3.5" /> Sửa thông tin buổi / Video
+                        <Edit className="h-4 w-4" /> Sửa buổi học
                       </button>
                       {currentFolderSession.date && (
-                        <span className="shrink-0 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                        <span className="shrink-0 text-xs text-slate-600 flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
                           {new Date(currentFolderSession.date).toLocaleString("vi-VN")}
                         </span>
                       )}
@@ -1167,58 +1081,51 @@ export default function CourseBuilder(props: ComponentProps) {
 
                   {/* Folder Description */}
                   {currentFolderSession.content && (
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed font-sans whitespace-pre-line">
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
                       {currentFolderSession.content}
-                    </div>
+                    </p>
                   )}
 
                   {/* Video Recording Link */}
                   {currentFolderSession.recordingUrl && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
-                        <Video className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
-                        <span>Video Recording buổi học đã có sẵn để học viên xem lại.</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <div className="flex items-center gap-2 text-sm text-slate-700">
+                        <Video className="h-4 w-4 text-slate-500 shrink-0" />
+                        <span>Video ghi hình buổi học</span>
                       </div>
                       <a
                         href={currentFolderSession.recordingUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shrink-0"
+                        className="text-sm font-medium text-indigo-700 hover:text-indigo-800"
                       >
-                        Xem Video Recording ↗
+                        Xem video ↗
                       </a>
                     </div>
                   )}
 
-                  {/* Direct Video Player */}
+                  {/* Video lesson link */}
                   {currentFolderSession.videoUrl && (
-                    <div className="space-y-2">
-                      <span className="text-xs font-mono font-bold text-indigo-700 uppercase tracking-widest block">
-                        VIDEO BÀI GIẢNG TRỰC TIẾP
-                      </span>
-                      <div className="bg-black border border-slate-200 rounded-2xl overflow-hidden shadow-lg max-w-2xl">
-                        <div className="aspect-video w-full bg-black flex items-center justify-center">
-                          <video controls src={currentFolderSession.videoUrl} className="w-full h-full object-contain" />
-                        </div>
-                        <div className="flex items-center justify-between px-4 py-2 bg-slate-900 text-white text-xs">
-                          <span className="font-bold truncate">{currentFolderSession.topic}</span>
-                          <a href={currentFolderSession.videoUrl} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">Mở tab mới ↗</a>
-                        </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <div className="flex items-center gap-2 text-sm text-slate-700">
+                        <Video className="h-4 w-4 text-slate-500 shrink-0" />
+                        <span>Video bài giảng</span>
                       </div>
+                      <a href={currentFolderSession.videoUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-indigo-700 hover:text-indigo-800">Mở video ↗</a>
                     </div>
                   )}
-                </div>
+                </section>
 
                 {/* KHU VỰC TRỌNG TÂM: QUẢN LÝ FILE & TÀI LIỆU BUỔI HỌC */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4 shadow-sm relative overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-3">
+                <section className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                        <FileText className="h-4.5 w-4.5 text-indigo-600" />
-                        Quản lý File & Slide bài giảng ({currentFolderSession.materials.length})
+                      <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-indigo-600" />
+                        Tài liệu buổi học ({currentFolderSession.materials.length})
                       </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Tải lên slide PowerPoint (.pptx), tệp Word/PDF và đính kèm video YouTube / Google Drive cho buổi học này.
+                      <p className="text-sm text-slate-500 mt-1">
+                        Tải lên slide, tài liệu hoặc đính kèm video cho học viên.
                       </p>
                     </div>
                   </div>
@@ -1242,7 +1149,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       </button>
                     </div>
                   )}
-                </div>
+                </section>
               </div>
             ) : null}
           </div>

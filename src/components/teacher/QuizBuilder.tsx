@@ -766,7 +766,10 @@ export default function QuizBuilder(props: ComponentProps) {
         {/* Tab 2: Quiz Management & Question Mapping panels */}
         {activeSubTab === "quizzes" && (
           <div className="space-y-6">
-            <h4 className="text-base font-display font-semibold text-white mb-2">Phòng Quản lý Đề thi & Đánh giá Học thuật</h4>
+            <div>
+              <h4 className="text-xl font-display font-semibold text-slate-900">Đề thi & đánh giá</h4>
+              <p className="mt-1 text-sm text-slate-500">Tạo và quản lý bài kiểm tra theo từng khóa học.</p>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left Side: Segmented control & Lists */}

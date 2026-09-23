@@ -301,6 +301,7 @@ function AppShell() {
       headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined
     }).catch(() => undefined);
     setCurrentUser(null);
+    setUserDropdownOpen(false);
     setCsrfToken(null);
     navigateAuth("catalog");
     sessionStorage.removeItem("mcna_lms_active_session");
@@ -488,7 +489,7 @@ function AppShell() {
         <div className="min-h-screen flex flex-col md:flex-row relative">
 
           {/* DESKTOP SIDEBAR NAV BAR */}
-          <aside className={`hidden md:flex flex-col bg-white border-r border-slate-200/80 p-4 flex-shrink-0 sticky top-0 h-screen z-40 transition-all duration-300 ${
+          <aside className={`hidden flex-col bg-white border-r border-slate-200/80 p-4 flex-shrink-0 sticky top-0 h-screen z-40 transition-all duration-300 ${
             isSidebarCollapsed ? "w-20 items-center px-2" : "w-64"
           }`}>
             {/* Top Logo and Toggle */}
@@ -690,28 +691,50 @@ function AppShell() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="p-1.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 md:hidden hover:bg-slate-200 cursor-pointer"
+                  className="hidden p-1.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-200 cursor-pointer"
                 >
                   <Menu className="h-5 w-5" />
                 </button>
 
-                <h3 className="font-display font-bold text-slate-900 text-sm md:text-base leading-none uppercase tracking-wider hidden md:block">
-                  HỌC VIỆN CÔNG NGHỆ MCNA
+                <h3 className="font-display font-bold text-slate-900 text-sm md:text-base leading-none">
+                  MCNA LMS
                 </h3>
               </div>
 
               {/* Header right: Notification Bell + System Status Badge */}
               <div className="flex items-center gap-2">
                 <NotificationBell />
-                <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  Hệ thống trực tuyến
-                </span>
+                {(
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setUserDropdownOpen(open => !open)}
+                      aria-expanded={userDropdownOpen}
+                      aria-label="Mở menu tài khoản"
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900 text-xs font-semibold text-white uppercase">{currentUser.name.slice(0, 2)}</span>
+                      <span className="hidden max-w-36 truncate font-medium sm:block">{currentUser.name}</span>
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    </button>
+                    {userDropdownOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                        <div className="border-b border-slate-100 px-2 py-2 mb-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">{currentUser.name}</p>
+                          <p className="truncate text-xs text-slate-500">{currentUser.email}</p>
+                        </div>
+                        <button type="button" onClick={() => { setShowProfileModal(true); setUserDropdownOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"><Fingerprint className="h-4 w-4" /> Hồ sơ cá nhân</button>
+                        <button type="button" onClick={() => { setShowChangePasswordModal(true); setUserDropdownOpen(false); setChangePasswordError(null); setChangePasswordSuccess(null); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"><Lock className="h-4 w-4" /> Đổi mật khẩu</button>
+                        <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" /> Đăng xuất</button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </header>
 
             {/* Inner responsive Padding page body */}
-            <div className="pt-4 pb-4 md:pt-6 md:pb-6 lg:pt-8 lg:pb-8 px-4 md:px-4 lg:px-6 w-full">
+            <div className={`mx-auto w-full pt-4 pb-6 md:pt-6 lg:pt-8 px-4 md:px-6 ${currentUser.role === "admin" ? "max-w-[1600px]" : "max-w-[1440px]"}`}>
               <React.Suspense fallback={
                 <div className="flex flex-col items-center justify-center p-16 space-y-4">
                   <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />

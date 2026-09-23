@@ -4,6 +4,7 @@ import { AppStore } from "../../store";
 import ModalPortal from "../ModalPortal";
 import LinkedText from "../LinkedText";
 import { api } from "../../api";
+import { instructorName } from "./studentDisplay";
 
 interface ComponentProps {
   [key: string]: any;
@@ -95,8 +96,8 @@ export default function CourseCatalog(props: ComponentProps) {
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
               <div>
-                <h4 className="text-base font-display font-bold text-slate-900">Danh mục Khóa học Công khai</h4>
-                <p className="text-xs text-slate-500">Hiện có {filteredCatalog.length} khóa học đang tuyển sinh học viên.</p>
+                <h4 className="text-xl font-display font-bold text-slate-900">Khám phá khóa học</h4>
+                <p className="text-sm text-slate-500 mt-1">{filteredCatalog.length} khóa học đang tuyển sinh.</p>
               </div>
 
               {/* Filtering / Search panel */}
@@ -136,7 +137,7 @@ export default function CourseCatalog(props: ComponentProps) {
             </div>
 
             {/* Courses Matrix layout cards - paginated */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
               {filteredCatalog
                 .slice(catalogPage * COURSES_PER_PAGE, (catalogPage + 1) * COURSES_PER_PAGE)
                 .map(course => {
@@ -150,67 +151,30 @@ export default function CourseCatalog(props: ComponentProps) {
                 const sessionCount = course.numberOfLessons || openSections.find((section: any) => section.numberOfSessions)?.numberOfSessions || lessonsCount;
 
                 return (
-                  <div key={course.id} className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden hover:border-indigo-200 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 flex flex-col justify-between group shadow-xs">
+                  <div key={course.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-indigo-300 transition-colors flex flex-col justify-between group">
                     <div>
-                      <div className="h-40 bg-gradient-to-br from-indigo-50 to-slate-100 flex items-center justify-center relative border-b border-slate-100 overflow-hidden">
-                        {course.thumbnail ? (
-                          <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                        ) : (
-                          <BookOpen className="h-8 w-8 text-indigo-400" />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent pointer-events-none" />
-                        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-                          <span className="rounded-full bg-indigo-600 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white shadow-xs">
-                            {course.category}
-                          </span>
-                          {course.level && (
-                            <span className="rounded-full border border-slate-200/80 bg-white/90 px-2.5 py-1 text-[9px] font-bold text-slate-700 backdrop-blur-xs shadow-xs">{course.level}</span>
-                          )}
-                        </div>
-                        {isEnrolled && (
-                          <div className="absolute top-3 right-3 bg-emerald-600 text-white font-sans font-bold text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs">
-                            Đã đăng ký
-                          </div>
-                        )}
-                        {!isEnrolled && (
-                          <div className={`absolute bottom-3 left-3 rounded-full px-2.5 py-1 text-[9px] font-bold shadow-xs ${openSections.length > 0 ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-900 border border-amber-200"}`}>
-                            {openSections.length > 0 ? `${openSections.length} lớp đang mở` : "Sắp khai giảng"}
-                          </div>
-                        )}
-                      </div>
-
                       <div className="p-5 space-y-3">
-                        <div className="flex items-center justify-end">
-                          {course.price !== undefined && (
-                            <div className="text-right">
-                              {course.originalPrice && course.originalPrice > course.price ? (
-                                <span className="text-[10px] text-slate-400 line-through mr-1.5 font-mono">
-                                  {new Intl.NumberFormat("vi-VN").format(course.originalPrice)} đ
-                                </span>
-                              ) : null}
-                              <span className="text-xs font-bold text-emerald-600 font-mono">
-                                {course.price > 0 ? `${new Intl.NumberFormat("vi-VN").format(course.price)} đ` : "Miễn phí"}
-                              </span>
-                            </div>
-                          )}
+                        <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                          <span className="font-semibold text-indigo-700">{course.category || "Khóa học MCNA"}</span>
+                          <span>{course.level}</span>
                         </div>
-                        <h5 className="font-display font-bold text-slate-900 text-base leading-snug line-clamp-2 group-hover:text-indigo-600 transition-colors">{course.title}</h5>
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{course.description}</p>
-                        <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-slate-600">
-                          <span className="flex items-center gap-1.5 min-w-0"><User className="h-3.5 w-3.5 text-slate-400 shrink-0" /><span className="truncate">{teacher?.name || "MCNA"}</span></span>
-                          <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />{sessionCount} buổi</span>
-                          <span className="col-span-2 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />{upcomingOpening?.openingDate ? `Khai giảng ${new Date(upcomingOpening.openingDate).toLocaleDateString("vi-VN")}` : "Lịch khai giảng đang cập nhật"}</span>
+                        <h5 className="font-display font-bold text-slate-900 text-lg leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">{course.title}</h5>
+                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">{course.description}</p>
+                        <div className="space-y-1.5 pt-1 text-sm text-slate-600">
+                          <p className="flex items-center gap-2 min-w-0"><User className="h-4 w-4 text-slate-400 shrink-0" /><span className="truncate">{instructorName(teacher)}</span></p>
+                          <p className="flex items-center gap-2"><Clock className="h-4 w-4 text-slate-400 shrink-0" />{sessionCount} buổi · {lessonsCount} bài học</p>
+                          <p className="flex items-center gap-2"><Calendar className="h-4 w-4 text-slate-400 shrink-0" />{upcomingOpening?.openingDate ? `Khai giảng ${new Date(upcomingOpening.openingDate).toLocaleDateString("vi-VN")}` : "Lịch khai giảng đang cập nhật"}</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-5 pt-3 border-t border-slate-100 mt-1 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-mono text-[11px]">{lessonsCount} bài học</span>
+                    <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between gap-3 text-sm">
+                      <div><p className="font-bold text-slate-900">{course.price > 0 ? `${new Intl.NumberFormat("vi-VN").format(course.price)} đ` : "Miễn phí"}</p><p className="text-xs text-slate-500">{isEnrolled ? "Đã đăng ký" : openSections.length > 0 ? `${openSections.length} lớp đang mở` : "Sắp khai giảng"}</p></div>
                       <button
                         onClick={() => setViewingCourseId(course.id)}
-                        className="px-3.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-100/80 transition cursor-pointer"
+                        className="px-3.5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition cursor-pointer"
                       >
-                        Chi tiết lộ trình
+                        Xem khóa học
                       </button>
                     </div>
                   </div>
@@ -450,10 +414,10 @@ export default function CourseCatalog(props: ComponentProps) {
                       
                       <div className="flex items-center gap-2.5 text-xs">
                         <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold font-mono text-indigo-700">
-                          {teacher?.name?.slice(0, 2).toUpperCase() || "GV"}
+                          {instructorName(teacher).slice(0, 2).toUpperCase()}
                         </div>
                         <div className="truncate">
-                          <h6 className="font-bold text-slate-900">{teacher?.name || "Giảng viên môn học"}</h6>
+                          <h6 className="font-bold text-slate-900">{instructorName(teacher)}</h6>
                           <span className="text-[10px] text-slate-400 block font-mono">Thông tin Người hướng dẫn môn</span>
                         </div>
                       </div>

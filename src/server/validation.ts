@@ -40,6 +40,15 @@ export const schemas = {
   setUserActive: z.object({
     isActive: z.boolean()
   }),
+  adminNotification: z.object({
+    idempotencyKey: z.uuid(),
+    message: z.string().trim().min(1).max(2000),
+    type: z.enum(["info", "success", "warning", "danger"]).default("info"),
+    role: z.enum(["all", "student", "teacher", "admin"]).optional(),
+    userIds: z.array(z.string().trim().min(1)).min(1).max(100).optional()
+  }).refine(value => Boolean(value.role) !== Boolean(value.userIds), {
+    message: "Provide exactly one audience: role or userIds."
+  }),
   createCourse: z.object({
     title: z.string().trim().min(1),
     description: z.string().trim().min(1),

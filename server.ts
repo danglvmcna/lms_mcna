@@ -3391,46 +3391,113 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "a
 
 
 
-app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => res.json(await notificationsRepository.listForUser(pool, req.user!.id, req.query.unreadOnly === "true"))));
+app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const notifications = (devMockStore || getInitialStore()).notifications || [];
+    return res.json(notifications.filter(item => item.userId === req.user!.id && (req.query.unreadOnly !== "true" || !item.isRead)));
+  }
+  res.json(await notificationsRepository.listForUser(pool, req.user!.id, req.query.unreadOnly === "true"));
+}));
 // IMPORTANT: /read-all must be registered BEFORE /:id/read to avoid Express matching "read-all" as an id param
 app.patch("/api/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    for (const item of (devMockStore || getInitialStore()).notifications || []) {
+      if (item.userId === req.user!.id) item.isRead = true;
+    }
+    return res.status(204).send();
+  }
   await notificationsRepository.markAllRead(pool, req.user!.id);
   invalidateStoreCache();
   res.status(204).send();
 }));
 app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    const item = (devMockStore || getInitialStore()).notifications?.find(item => item.id === req.params.id && item.userId === req.user!.id);
+    if (item) item.isRead = true;
+    return res.status(204).send();
+  }
   await notificationsRepository.markRead(pool, req.params.id, req.user!.id);
   invalidateStoreCache();
   res.status(204).send();
 }));
 
-// Admin: send notification to users by role or specific userIds
-app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
-  const { message, type = "info", userIds, role } = req.body as {
-    message?: string;
-    type?: string;
-    userIds?: string[];
-    role?: string;
-  };
-  if (!message || !message.trim()) return res.status(400).json({ error: "message is required." });
+// Admin broadcasts are one atomic, retry-safe in-app operation. Email delivery is intentionally separate.
+const mockNotificationBroadcasts = new Map<string, { payloadHash: string; sent: number }>();
+app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), validateBody(schemas.adminNotification), asyncHandler(async (req, res) => {
+  const { idempotencyKey, message, type, role, userIds } = req.body;
+  const requestedIds = userIds ? [...new Set(userIds)].sort() : undefined;
+  const payloadHash = sha256Hex(JSON.stringify({ message, type, role: role || null, userIds: requestedIds || null }));
+  const campaignKey = `${req.user!.id}:${idempotencyKey}`;
 
-  let targetIds: string[] = [];
-  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
-    targetIds = userIds;
-  } else if (role && role !== "all") {
-    const usersRes = await pool.query("SELECT id FROM users WHERE role = $1 AND is_active = true", [role]);
-    targetIds = usersRes.rows.map((r: any) => r.id);
-  } else {
-    // broadcast to all active users
-    const usersRes = await pool.query("SELECT id FROM users WHERE is_active = true");
-    targetIds = usersRes.rows.map((r: any) => r.id);
+  if (isDevMockDb) {
+    const previous = mockNotificationBroadcasts.get(campaignKey);
+    if (previous) return previous.payloadHash === payloadHash
+      ? res.json({ sent: previous.sent, duplicate: true })
+      : res.status(409).json({ error: "Mã gửi đã được dùng cho nội dung khác." });
+    const store = devMockStore || getInitialStore();
+    const targets = store.users.filter(user => user.isActive !== false && (requestedIds ? requestedIds.includes(user.id) : role === "all" || user.role === role));
+    if (requestedIds && targets.length !== requestedIds.length) return res.status(400).json({ error: "Có người nhận không tồn tại hoặc đã ngừng hoạt động." });
+    if (!targets.length || targets.length > 5000) return res.status(400).json({ error: "Số người nhận phải từ 1 đến 5000." });
+    const now = new Date().toISOString();
+    store.notifications ||= [];
+    store.notifications.unshift(...targets.map(user => ({ id: generateId("noti"), userId: user.id, type, message, isRead: false, createdAt: now })));
+    devMockStore = store;
+    mockNotificationBroadcasts.set(campaignKey, { payloadHash, sent: targets.length });
+    return res.status(201).json({ sent: targets.length, duplicate: false });
   }
 
-  for (const userId of targetIds) {
-    await notificationsRepository.create(pool, { userId, type, message: message.trim() });
-  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const broadcastId = generateId("broadcast");
+    const inserted = await client.query(
+      `INSERT INTO notification_broadcasts (id, created_by, idempotency_key, payload_hash, message, type)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (created_by, idempotency_key) DO NOTHING RETURNING id`,
+      [broadcastId, req.user!.id, idempotencyKey, payloadHash, message, type]
+    );
+    if (!inserted.rowCount) {
+      const previous = (await client.query(
+        "SELECT payload_hash, target_count FROM notification_broadcasts WHERE created_by = $1 AND idempotency_key = $2",
+        [req.user!.id, idempotencyKey]
+      )).rows[0];
+      await client.query("COMMIT");
+      return previous?.payload_hash === payloadHash
+        ? res.json({ sent: previous.target_count, duplicate: true })
+        : res.status(409).json({ error: "Mã gửi đã được dùng cho nội dung khác." });
+    }
 
-  res.json({ sent: targetIds.length });
+    const targets = requestedIds
+      ? (await client.query("SELECT id FROM users WHERE id = ANY($1::text[]) AND is_active = true ORDER BY id", [requestedIds])).rows
+      : (await client.query("SELECT id FROM users WHERE is_active = true AND ($1::text = 'all' OR role = $1) ORDER BY id", [role])).rows;
+    if (requestedIds && targets.length !== requestedIds.length) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Có người nhận không tồn tại hoặc đã ngừng hoạt động." });
+    }
+    if (!targets.length || targets.length > 5000) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Số người nhận phải từ 1 đến 5000." });
+    }
+
+    const targetIds = targets.map(row => String(row.id));
+    const notificationIds = targetIds.map(() => generateId("noti"));
+    await client.query(
+      `INSERT INTO notifications (id, user_id, type, message, is_read, created_at, broadcast_id)
+       SELECT ids.id, ids.user_id, $3, $4, false, CURRENT_TIMESTAMP, $5
+       FROM unnest($1::text[], $2::text[]) AS ids(id, user_id)`,
+      [notificationIds, targetIds, type, message, broadcastId]
+    );
+    await client.query("UPDATE notification_broadcasts SET target_count = $2 WHERE id = $1", [broadcastId, targetIds.length]);
+    await client.query("COMMIT");
+    invalidateStoreCache();
+    await audit(req, "send_notification_broadcast", broadcastId, `Sent ${targetIds.length} in-app notifications.`);
+    res.status(201).json({ sent: targetIds.length, duplicate: false });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
 app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
@@ -3626,6 +3693,24 @@ const reviewTransactionHandler = asyncHandler(async (req, res) => {
 app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 app.patch("/api/payments/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
 
+app.get("/api/student/transactions/:id/status", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (isDevMockDb) {
+    const transaction = (devMockStore || getInitialStore()).transactions.find(item => item.id === req.params.id && item.studentId === req.user!.id);
+    if (!transaction) return res.status(404).json({ error: "Không tìm thấy giao dịch." });
+    return res.json({ id: transaction.id, status: transaction.status, processedAt: transaction.processedAt || null, requiresManualReview: false });
+  }
+  const transaction = (await pool.query(
+    `SELECT t.id, t.status, t.processed_at,
+            EXISTS (SELECT 1 FROM payment_webhook_events e
+                    WHERE e.transaction_id = t.id AND e.error = 'amount_mismatch' AND e.processing_status = 'processed') AS requires_manual_review
+     FROM transactions t WHERE t.id = $1 AND t.student_id = $2`,
+    [req.params.id, req.user!.id]
+  )).rows[0];
+  if (!transaction) return res.status(404).json({ error: "Không tìm thấy giao dịch." });
+  res.json({ id: transaction.id, status: transaction.status, processedAt: transaction.processed_at, requiresManualReview: transaction.requires_manual_review });
+}));
+
 
 
 const paymentWebhookHandler = asyncHandler(async (req, res) => {
@@ -3747,12 +3832,17 @@ app.post("/api/webhooks/payment", paymentWebhookHandler);
 
 const sepayWebhookHandler = asyncHandler(async (req, res) => {
   const expectedApiKey = process.env.SEPAY_API_KEY?.trim();
-  if (expectedApiKey) {
-    const authHeader = req.header("Authorization") || "";
-    const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, "").trim();
-    if (!token || token !== expectedApiKey) {
-      return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
-    }
+  if (!expectedApiKey) {
+    console.error("[SePay webhook] SEPAY_API_KEY is not configured; rejecting webhook.");
+    return res.status(503).json({ success: false, error: "SePay webhook is not configured." });
+  }
+  const authHeader = req.header("Authorization") || "";
+  const match = /^(Apikey|Bearer)\s+(.+)$/i.exec(authHeader);
+  const token = match?.[2]?.trim() || "";
+  const supplied = Buffer.from(token);
+  const expected = Buffer.from(expectedApiKey);
+  if (!token || supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
   }
 
   const rawPayload = (req as any).rawBody || JSON.stringify(req.body);

@@ -103,9 +103,9 @@ export default function TeacherAnalytics(props: ComponentProps) {
         {/* Tab 5: Analytics metrics */}
         {activeSubTab === "analytics" && (
           <div className="space-y-6">
-            <h4 className="text-base font-semibold text-slate-900">Bảng Thống kê Hiệu suất Giáo dục & Đào tạo</h4>
+            <div><h4 className="text-xl font-semibold text-slate-900">Báo cáo hiệu suất</h4><p className="mt-1 text-sm text-slate-500">Tình hình ghi danh và đánh giá theo khóa học.</p></div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
               {myCourses.map(course => {
                 const enrolledEnroll = store.enrollments.filter(e => e.courseId === course.id);
                 const averageScoreRaw = store.quizAttempts.filter(qa => {
@@ -115,22 +115,19 @@ export default function TeacherAnalytics(props: ComponentProps) {
                 const totalAvgQuiz = averageScoreRaw.reduce((sum, qa) => sum + qa.score, 0) / (averageScoreRaw.length || 1);
 
                 return (
-                  <div key={course.id} className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs hover:shadow-md transition">
-                    <span className="text-[10px] font-mono text-slate-400 block pb-1 border-b border-slate-100 truncate uppercase tracking-wider font-semibold">
-                      Chi tiết Đánh giá Khóa học
-                    </span>
-                    <h5 className="font-bold text-slate-900 text-sm my-2 truncate">{course.title}</h5>
+                  <div key={course.id} className="bg-white border border-slate-200 p-5 rounded-xl">
+                    <h5 className="font-semibold text-slate-900 text-base leading-snug min-h-12">{course.title}</h5>
 
                     <div className="space-y-3 pt-2">
-                      <div className="flex justify-between items-center text-xs">
+                      <div className="flex justify-between items-center gap-3 text-sm">
                         <span className="text-slate-500">Lượt đăng ký học</span>
                         <span className="font-mono text-slate-800 font-semibold">{enrolledEnroll.length} học viên</span>
                       </div>
-                      <div className="flex justify-between items-center text-xs">
+                      <div className="flex justify-between items-center gap-3 text-sm">
                         <span className="text-slate-500">Điểm kiểm tra trung bình</span>
-                        <span className="font-mono text-indigo-600 font-bold">{Math.round(totalAvgQuiz)}%</span>
+                        <span className="font-medium text-slate-800">{averageScoreRaw.length ? `${Math.round(totalAvgQuiz)}%` : "Chưa có"}</span>
                       </div>
-                      <div className="flex justify-between items-center text-xs">
+                      <div className="flex justify-between items-center gap-3 text-sm">
                         <span className="text-slate-500">Trạng thái khóa học</span>
                         <span className={`uppercase font-mono text-[10px] py-0.5 px-2.5 rounded-full font-bold ${
                           course.status === "published"
