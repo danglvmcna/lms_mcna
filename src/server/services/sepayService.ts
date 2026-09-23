@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { pool, Queryable } from "../db";
 import { notificationsRepository } from "../repositories/notifications";
+import { notifyRole } from "../notify";
 import { generateId } from "../ids";
 import { confirmCoursePayment, placeEnrollment, isServiceError } from "./enrollmentService";
 
@@ -423,6 +424,12 @@ export async function processSepayWebhook(
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`
     });
   }
+
+  void notifyRole(pool, "admin", `SePay: Đã nhận thanh toán ${receivedAmount.toLocaleString("vi-VN")}đ cho khóa học "${matchedTx.course_title}".`, {
+    type: "success",
+    relatedEntityType: "transaction",
+    relatedEntityId: matchedTx.id
+  }).catch(err => console.error("[notify] failed to notify admin on sepay payment:", err));
 
   return {
     success: true,

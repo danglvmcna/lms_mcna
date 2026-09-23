@@ -6024,6 +6024,11 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
       message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n vui l\xF2ng ch\u1EDD qu\u1EA3n tr\u1ECB vi\xEAn x\u1EBFp l\u1EDBp h\u1ECDc ph\u1EA7n.`
     });
   }
+  void notifyRole(pool, "admin", `SePay: \u0110\xE3 nh\u1EADn thanh to\xE1n ${receivedAmount.toLocaleString("vi-VN")}\u0111 cho kh\xF3a h\u1ECDc "${matchedTx.course_title}".`, {
+    type: "success",
+    relatedEntityType: "transaction",
+    relatedEntityId: matchedTx.id
+  }).catch((err) => console.error("[notify] failed to notify admin on sepay payment:", err));
   return {
     success: true,
     matched: true,
@@ -7442,6 +7447,12 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
   await auditRepository.log(pool, result.user.id, "self_register", "security", `Self sign-up with personal email ${result.user.email}.`);
+  const studentDisplayName = result.user.name || result.user.email;
+  void notifyRole(pool, "admin", `H\u1ECDc vi\xEAn m\u1EDBi ${studentDisplayName} (${result.user.email}) v\u1EEBa \u0111\u0103ng k\xFD t\xE0i kho\u1EA3n tr\xEAn h\u1EC7 th\u1ED1ng.`, {
+    type: "info",
+    relatedEntityType: "user",
+    relatedEntityId: result.user.id
+  }).catch((err) => console.error("[notify] failed to notify admin on register:", err));
   const hasSmtp = hasSmtpConfig();
   res.status(202).json({
     ok: true,
@@ -7870,6 +7881,14 @@ app.post("/api/integrations/crm/enrollments", rateLimitCrmIntegration, requireCr
       )).rows[0];
       return { status: 409, body: { error: result.error, enrollmentId: current?.id || null } };
     }
+    const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
+    const sName = studentUser?.name || studentUser?.email || "H\u1ECDc vi\xEAn";
+    const courseTitle = result.course?.title || "Kh\xF3a h\u1ECDc";
+    void notifyRole(pool, "admin", `CRM MCNA v\u1EEBa ghi danh h\u1ECDc vi\xEAn ${sName} v\xE0o kh\xF3a h\u1ECDc "${courseTitle}".`, {
+      type: "info",
+      relatedEntityType: "enrollment",
+      relatedEntityId: result.enrollment.id
+    }).catch((err) => console.error("[notify] failed to notify admin on crm enrollment:", err));
     return {
       status: 201,
       body: {
@@ -8126,6 +8145,12 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
   await audit(req, "enroll_course", result.course.id, result.course.title);
+  const studentName = req.user.name || req.user.email || "H\u1ECDc vi\xEAn";
+  void notifyRole(pool, "admin", `H\u1ECDc vi\xEAn ${studentName} v\u1EEBa \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc "${result.course.title}". Vui l\xF2ng ki\u1EC3m tra v\xE0 x\u1EBFp l\u1EDBp.`, {
+    type: "info",
+    relatedEntityType: "enrollment",
+    relatedEntityId: result.enrollment.id
+  }).catch((err) => console.error("[notify] failed to notify admin on course register:", err));
   res.status(201).json(result.enrollment);
 }));
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
@@ -8168,6 +8193,23 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     type: "success",
     message: targetSectionId ? "\u0110\u01A1n \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t v\xE0 x\u1EBFp v\xE0o l\u1EDBp. Ch\xFAc b\u1EA1n h\u1ECDc t\u1EADp hi\u1EC7u qu\u1EA3!" : "\u0110\u01A1n \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t."
   });
+  const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
+  const sName = studentUser?.name || studentUser?.email || "H\u1ECDc vi\xEAn";
+  await notificationsRepository.create(pool, {
+    userId: req.user.id,
+    type: "success",
+    message: `\u0110\xE3 k\xEDch ho\u1EA1t th\xE0nh c\xF4ng \u0111\u01A1n ghi danh cho h\u1ECDc vi\xEAn ${sName}.`
+  });
+  if (targetSectionId) {
+    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
+    if (sec?.teacher_id) {
+      await notificationsRepository.create(pool, {
+        userId: sec.teacher_id,
+        type: "info",
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || targetSectionId}" c\u1EE7a b\u1EA1n.`
+      });
+    }
+  }
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
   res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
 }));
@@ -8197,6 +8239,23 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     type: "success",
     message: sectionId ? "Y\xEAu c\u1EA7u \u0111\u0103ng k\xFD m\xF4n h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c duy\u1EC7t v\xE0 x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc ph\u1EA7n." : "Y\xEAu c\u1EA7u \u0111\u0103ng k\xFD m\xF4n h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c duy\u1EC7t."
   });
+  const approveStudentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollment.student_id])).rows[0];
+  const approveSName = approveStudentUser?.name || approveStudentUser?.email || "H\u1ECDc vi\xEAn";
+  await notificationsRepository.create(pool, {
+    userId: req.user.id,
+    type: "success",
+    message: `\u0110\xE3 duy\u1EC7t ghi danh cho h\u1ECDc vi\xEAn ${approveSName}.`
+  });
+  if (sectionId) {
+    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    if (sec?.teacher_id) {
+      await notificationsRepository.create(pool, {
+        userId: sec.teacher_id,
+        type: "info",
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || sectionId}" c\u1EE7a b\u1EA1n.`
+      });
+    }
+  }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
   res.json({ enrollment, registration });
 }));

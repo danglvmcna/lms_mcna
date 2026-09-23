@@ -1535,6 +1535,12 @@ app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegis
 
   invalidateStoreCache();
   await auditRepository.log(pool, result.user.id, "self_register", "security", `Self sign-up with personal email ${result.user.email}.`);
+  const studentDisplayName = result.user.name || result.user.email;
+  void notifyRole(pool, "admin", `Học viên mới ${studentDisplayName} (${result.user.email}) vừa đăng ký tài khoản trên hệ thống.`, {
+    type: "info",
+    relatedEntityType: "user",
+    relatedEntityId: result.user.id
+  }).catch(err => console.error("[notify] failed to notify admin on register:", err));
   const hasSmtp = hasSmtpConfig();
   res.status(202).json({
     ok: true,
@@ -1998,6 +2004,14 @@ app.post("/api/integrations/crm/enrollments", rateLimitCrmIntegration, requireCr
       )).rows[0];
       return { status: 409, body: { error: result.error, enrollmentId: current?.id || null } };
     }
+    const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
+    const sName = studentUser?.name || studentUser?.email || "Học viên";
+    const courseTitle = result.course?.title || "Khóa học";
+    void notifyRole(pool, "admin", `CRM MCNA vừa ghi danh học viên ${sName} vào khóa học "${courseTitle}".`, {
+      type: "info",
+      relatedEntityType: "enrollment",
+      relatedEntityId: result.enrollment.id
+    }).catch(err => console.error("[notify] failed to notify admin on crm enrollment:", err));
     return {
       status: 201,
       body: {
@@ -2306,6 +2320,12 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
 
   invalidateStoreCache();
   await audit(req, "enroll_course", result.course.id, result.course.title);
+  const studentName = req.user!.name || req.user!.email || "Học viên";
+  void notifyRole(pool, "admin", `Học viên ${studentName} vừa đăng ký khóa học "${result.course.title}". Vui lòng kiểm tra và xếp lớp.`, {
+    type: "info",
+    relatedEntityType: "enrollment",
+    relatedEntityId: result.enrollment.id
+  }).catch(err => console.error("[notify] failed to notify admin on course register:", err));
   res.status(201).json(result.enrollment);
 }));
 // One-click activation from the admin orders screen: record the payment, then place the learner.
@@ -2354,6 +2374,23 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
       ? "Đơn đăng ký khóa học của bạn đã được kích hoạt và xếp vào lớp. Chúc bạn học tập hiệu quả!"
       : "Đơn đăng ký khóa học của bạn đã được kích hoạt."
   });
+  const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
+  const sName = studentUser?.name || studentUser?.email || "Học viên";
+  await notificationsRepository.create(pool, {
+    userId: req.user!.id,
+    type: "success",
+    message: `Đã kích hoạt thành công đơn ghi danh cho học viên ${sName}.`
+  });
+  if (targetSectionId) {
+    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
+    if (sec?.teacher_id) {
+      await notificationsRepository.create(pool, {
+        userId: sec.teacher_id,
+        type: "info",
+        message: `Học viên mới (${sName}) vừa được xếp vào lớp "${sec.title || targetSectionId}" của bạn.`
+      });
+    }
+  }
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
   res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
 }));
@@ -2386,6 +2423,23 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
       ? "Yêu cầu đăng ký môn học của bạn đã được duyệt và xếp vào lớp học phần."
       : "Yêu cầu đăng ký môn học của bạn đã được duyệt."
   });
+  const approveStudentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollment.student_id])).rows[0];
+  const approveSName = approveStudentUser?.name || approveStudentUser?.email || "Học viên";
+  await notificationsRepository.create(pool, {
+    userId: req.user!.id,
+    type: "success",
+    message: `Đã duyệt ghi danh cho học viên ${approveSName}.`
+  });
+  if (sectionId) {
+    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    if (sec?.teacher_id) {
+      await notificationsRepository.create(pool, {
+        userId: sec.teacher_id,
+        type: "info",
+        message: `Học viên mới (${approveSName}) vừa được xếp vào lớp "${sec.title || sectionId}" của bạn.`
+      });
+    }
+  }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
   res.json({ enrollment, registration });
 }));
