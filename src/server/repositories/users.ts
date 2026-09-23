@@ -2,6 +2,15 @@ import { Queryable } from "../db";
 import { DbUserRow, denormalizeRole, toPublicUser } from "../mappers";
 import { User } from "../../types";
 
+export function normalizePhone(raw?: string | null): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("84") && digits.length >= 11) {
+    return "0" + digits.slice(2);
+  }
+  return digits;
+}
+
 export const usersRepository = {
   async normalizeLegacyRoles(db: Queryable) {
     await db.query(`
@@ -45,6 +54,43 @@ export const usersRepository = {
       if (mappedMatch) return mappedMatch;
     }
 
+    return null;
+  },
+
+  async findStudentByPhone(db: Queryable, phone: string) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) return null;
+    const norm = normalizePhone(cleanPhone);
+    const row = (await db.query<DbUserRow>(
+      `SELECT * FROM users 
+       WHERE role = 'student' 
+         AND (
+           phone = $1 
+           OR regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $2
+           OR regexp_replace(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), '^84', '0') = $2
+         )
+       LIMIT 1`,
+      [cleanPhone, norm || cleanPhone]
+    )).rows[0];
+    return row || null;
+  },
+
+  async findStudentByEmailOrPhone(db: Queryable, params: { email?: string; phone?: string; crmContactId?: string }) {
+    if (params.crmContactId) {
+      const row = (await db.query<DbUserRow>(
+        "SELECT * FROM users WHERE crm_contact_id = $1 AND role = 'student' LIMIT 1",
+        [params.crmContactId]
+      )).rows[0];
+      if (row) return row;
+    }
+    if (params.email) {
+      const row = await this.findAuthByEmail(db, params.email);
+      if (row && row.role === "student") return row;
+    }
+    if (params.phone) {
+      const row = await this.findStudentByPhone(db, params.phone);
+      if (row) return row;
+    }
     return null;
   },
 

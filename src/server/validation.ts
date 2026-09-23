@@ -263,7 +263,7 @@ export const schemas = {
     email: z.email().trim().toLowerCase()
   }),
   crmUpsertStudent: z.object({
-    crmContactId: z.string().trim().min(1).max(200),
+    crmContactId: z.string().trim().min(1).max(200).optional(),
     name: z.string().trim().min(2).max(120),
     email: z.email().trim().toLowerCase(),
     phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/).optional()
@@ -271,10 +271,11 @@ export const schemas = {
   crmCreateEnrollment: z.object({
     crmContactId: z.string().trim().min(1).max(200).optional(),
     email: z.email().trim().toLowerCase().optional(),
+    phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/).optional(),
     courseId: z.string().trim().min(1),
     sectionId: z.string().trim().min(1).optional(),
     crmDealId: z.string().trim().min(1).max(200).optional()
-  }).refine(value => Boolean(value.crmContactId || value.email), { message: "crmContactId or email is required." }),
+  }).refine(value => Boolean(value.crmContactId || value.email || value.phone), { message: "crmContactId, email, or phone is required." }),
   crmConfirmPayment: z.object({
     enrollmentId: z.string().trim().min(1).optional(),
     crmDealId: z.string().trim().min(1).max(200).optional(),

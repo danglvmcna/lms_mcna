@@ -230,23 +230,26 @@ Danh sách khóa học đang mở và các lớp đang nhận đăng ký.
 
 ### 4.2. `POST /api/integrations/crm/students`
 
-Tạo hoặc liên kết tài khoản học viên theo liên hệ CRM.
+Tạo hoặc liên kết tài khoản học viên theo **Số điện thoại (phone)** và **Email** làm khóa định danh (Key).
 
 Request:
 
 ```json
-{ "crmContactId": "C-1001", "name": "Nguyễn Văn A", "email": "a@gmail.com", "phone": "0912345678" }
+{ "name": "Nguyễn Văn A", "email": "a@gmail.com", "phone": "0912345678", "crmContactId": "C-1001" }
 ```
 
+*Lưu ý: `crmContactId` là tùy chọn (optional). Khóa chính để liên kết và đối soát giữa LMS và CRM là `phone` và `email`.*
+
 Cách xử lý:
-1. Đã có tài khoản gắn `crmContactId` này: trả tài khoản đó.
-2. Email đã có tài khoản học viên chưa gắn CRM: gắn `crmContactId` vào tài khoản đó.
-3. Chưa có: tạo tài khoản mới, gửi mật khẩu tạm tới email và bắt đổi ở lần đăng nhập đầu. Phát sự kiện `contact.registered` với `origin = "crm"`.
+1. Đã có tài khoản gắn `crmContactId` này (nếu có truyền): trả tài khoản đó.
+2. Tìm kiếm theo `email`: nếu đã có tài khoản học viên, liên kết `crmContactId` và cập nhật `phone` (nếu chưa có), trả về tài khoản đó.
+3. Tìm kiếm theo `phone` (đã chuẩn hóa các đầu số `+84` / `0`): nếu đã có tài khoản học viên, liên kết `crmContactId`, trả về tài khoản đó.
+4. Chưa có: tạo tài khoản mới với mật khẩu ngẫu nhiên tạm thời gửi về email, kích hoạt bắt buộc đổi mật khẩu lần đầu. Phát sự kiện `contact.registered` với `origin = "crm"`.
 
 Phản hồi `201` (tạo mới) hoặc `200` (đã có):
 
 ```json
-{ "lmsUserId": "user_8d2f0c1a9b3e", "email": "a@gmail.com", "created": true }
+{ "lmsUserId": "user_8d2f0c1a9b3e", "email": "a@gmail.com", "phone": "0912345678", "created": true }
 ```
 
 Lỗi riêng:
@@ -257,10 +260,10 @@ Lỗi riêng:
 
 Ghi danh học viên vào khóa học, tùy chọn kèm lớp.
 
-Request (cần một trong `crmContactId` hoặc `email`):
+Request (cần ít nhất một trong: `email`, `phone`, hoặc `crmContactId`):
 
 ```json
-{ "crmContactId": "C-1001", "courseId": "course_web01", "sectionId": "section_ab12cd34ef56", "crmDealId": "D-5520" }
+{ "phone": "0912345678", "email": "a@gmail.com", "courseId": "course_web01", "sectionId": "section_ab12cd34ef56", "crmDealId": "D-5520" }
 ```
 
 Kết quả giống khi học viên tự bấm đăng ký trên LMS:

@@ -1376,7 +1376,7 @@ var schemas = {
     email: z.email().trim().toLowerCase()
   }),
   crmUpsertStudent: z.object({
-    crmContactId: z.string().trim().min(1).max(200),
+    crmContactId: z.string().trim().min(1).max(200).optional(),
     name: z.string().trim().min(2).max(120),
     email: z.email().trim().toLowerCase(),
     phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/).optional()
@@ -1384,10 +1384,11 @@ var schemas = {
   crmCreateEnrollment: z.object({
     crmContactId: z.string().trim().min(1).max(200).optional(),
     email: z.email().trim().toLowerCase().optional(),
+    phone: z.string().trim().regex(/^[0-9+\s.()-]{8,20}$/).optional(),
     courseId: z.string().trim().min(1),
     sectionId: z.string().trim().min(1).optional(),
     crmDealId: z.string().trim().min(1).max(200).optional()
-  }).refine((value) => Boolean(value.crmContactId || value.email), { message: "crmContactId or email is required." }),
+  }).refine((value) => Boolean(value.crmContactId || value.email || value.phone), { message: "crmContactId, email, or phone is required." }),
   crmConfirmPayment: z.object({
     enrollmentId: z.string().trim().min(1).optional(),
     crmDealId: z.string().trim().min(1).max(200).optional(),
@@ -1720,6 +1721,14 @@ function backfillMegaDemoData(storeInput) {
 }
 
 // src/server/repositories/users.ts
+function normalizePhone(raw) {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("84") && digits.length >= 11) {
+    return "0" + digits.slice(2);
+  }
+  return digits;
+}
 var usersRepository = {
   async normalizeLegacyRoles(db) {
     await db.query(`
@@ -1755,6 +1764,41 @@ var usersRepository = {
       const mappedEmail = cleanEmail.replace("@mcna.local", "@e16.local");
       const mappedMatch = (await db.query("SELECT * FROM users WHERE lower(email) = $1", [mappedEmail])).rows[0];
       if (mappedMatch) return mappedMatch;
+    }
+    return null;
+  },
+  async findStudentByPhone(db, phone) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) return null;
+    const norm = normalizePhone(cleanPhone);
+    const row = (await db.query(
+      `SELECT * FROM users 
+       WHERE role = 'student' 
+         AND (
+           phone = $1 
+           OR regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $2
+           OR regexp_replace(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), '^84', '0') = $2
+         )
+       LIMIT 1`,
+      [cleanPhone, norm || cleanPhone]
+    )).rows[0];
+    return row || null;
+  },
+  async findStudentByEmailOrPhone(db, params) {
+    if (params.crmContactId) {
+      const row = (await db.query(
+        "SELECT * FROM users WHERE crm_contact_id = $1 AND role = 'student' LIMIT 1",
+        [params.crmContactId]
+      )).rows[0];
+      if (row) return row;
+    }
+    if (params.email) {
+      const row = await this.findAuthByEmail(db, params.email);
+      if (row && row.role === "student") return row;
+    }
+    if (params.phone) {
+      const row = await this.findStudentByPhone(db, params.phone);
+      if (row) return row;
     }
     return null;
   },
@@ -7755,15 +7799,8 @@ async function runIdempotentCrmCall(req, res, type, handler2) {
   return res.status(result.status).json(result.body);
 }
 async function findCrmStudentId(input) {
-  if (input.crmContactId) {
-    const row = (await pool.query("SELECT id FROM users WHERE crm_contact_id = $1 AND role = 'student'", [input.crmContactId])).rows[0];
-    if (row) return row.id;
-  }
-  if (input.email) {
-    const row = await usersRepository.findAuthByEmail(pool, input.email);
-    if (row?.role === "student") return row.id;
-  }
-  return null;
+  const student = await usersRepository.findStudentByEmailOrPhone(pool, input);
+  return student?.id || null;
 }
 app.get("/api/integrations/crm/courses", rateLimitCrmIntegration, requireCrmIntegration, asyncHandler(async (_req, res) => {
   const courseRows = (await pool.query(`${PUBLIC_COURSE_SELECT} WHERE c.status = 'published' ORDER BY c.created_at DESC`)).rows;
@@ -7781,25 +7818,43 @@ app.get("/api/integrations/crm/courses", rateLimitCrmIntegration, requireCrmInte
 app.post("/api/integrations/crm/students", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmUpsertStudent), asyncHandler(async (req, res) => {
   await runIdempotentCrmCall(req, res, "students.upsert", async () => {
     const { crmContactId, name, email, phone } = req.body;
-    const linked = (await pool.query("SELECT id, email FROM users WHERE crm_contact_id = $1", [crmContactId])).rows[0];
-    if (linked) return { status: 200, body: { lmsUserId: linked.id, email: linked.email, created: false } };
-    const existing = await usersRepository.findAuthByEmail(pool, email);
-    if (existing) {
-      if (existing.role !== "student") return { status: 409, body: { error: "Email belongs to a non-student account." } };
-      if (existing.crm_contact_id) return { status: 409, body: { error: "Email is already linked to another CRM contact." } };
-      await pool.query("UPDATE users SET crm_contact_id = $1 WHERE id = $2", [crmContactId, existing.id]);
-      return { status: 200, body: { lmsUserId: existing.id, email: existing.email, created: false } };
+    if (crmContactId) {
+      const linked = (await pool.query("SELECT id, email, phone FROM users WHERE crm_contact_id = $1", [crmContactId])).rows[0];
+      if (linked) return { status: 200, body: { lmsUserId: linked.id, email: linked.email, phone: linked.phone || null, created: false } };
+    }
+    const existingByEmail = await usersRepository.findAuthByEmail(pool, email);
+    if (existingByEmail) {
+      if (existingByEmail.role !== "student") return { status: 409, body: { error: "Email belongs to a non-student account." } };
+      if (crmContactId && existingByEmail.crm_contact_id && existingByEmail.crm_contact_id !== crmContactId) {
+        return { status: 409, body: { error: "Email is already linked to another CRM contact." } };
+      }
+      if (crmContactId && !existingByEmail.crm_contact_id) {
+        await pool.query("UPDATE users SET crm_contact_id = $1 WHERE id = $2", [crmContactId, existingByEmail.id]);
+      }
+      if (phone && !existingByEmail.phone) {
+        await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [phone.trim(), existingByEmail.id]);
+      }
+      return { status: 200, body: { lmsUserId: existingByEmail.id, email: existingByEmail.email, phone: existingByEmail.phone || phone || null, created: false } };
+    }
+    if (phone) {
+      const existingByPhone = await usersRepository.findStudentByPhone(pool, phone);
+      if (existingByPhone) {
+        if (crmContactId && !existingByPhone.crm_contact_id) {
+          await pool.query("UPDATE users SET crm_contact_id = $1 WHERE id = $2", [crmContactId, existingByPhone.id]);
+        }
+        return { status: 200, body: { lmsUserId: existingByPhone.id, email: existingByPhone.email, phone: existingByPhone.phone || phone || null, created: false } };
+      }
     }
     const result = await createStudentWithTemporaryPassword({ name, email, phone, crmContactId }, "crm", lmsBaseUrl(req));
     if (isServiceError(result)) return { status: result.status, body: { error: result.error } };
-    await auditRepository.log(pool, result.user.id, "crm_create_student", "security", `Created from CRM contact ${crmContactId}.`);
-    return { status: 201, body: { lmsUserId: result.user.id, email: result.user.email, created: true } };
+    await auditRepository.log(pool, result.user.id, "crm_create_student", "security", `Created from CRM (email: ${email}, phone: ${phone || "none"}).`);
+    return { status: 201, body: { lmsUserId: result.user.id, email: result.user.email, phone: result.user.phone || null, created: true } };
   });
 }));
 app.post("/api/integrations/crm/enrollments", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmCreateEnrollment), asyncHandler(async (req, res) => {
   await runIdempotentCrmCall(req, res, "enrollments.create", async () => {
     const studentId = await findCrmStudentId(req.body);
-    if (!studentId) return { status: 404, body: { error: "No student account found for this CRM contact or email." } };
+    if (!studentId) return { status: 404, body: { error: "No student account found for this CRM contact, email, or phone." } };
     const result = await requestEnrollment({
       studentId,
       courseId: req.body.courseId,
