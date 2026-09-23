@@ -40,8 +40,6 @@ import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgr
 import { AppStore } from "../store";
 import CourseCatalog from "./student/CourseCatalog";
 import MyLearningWorkspace from "./student/MyLearningWorkspace";
-import QuizConsole from "./student/QuizConsole";
-import AssignmentSubmit from "./student/AssignmentSubmit";
 import StudentOrders from "./student/StudentOrders";
 import { generateId, escapeHTML } from "../utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,9 +65,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     | "catalog"
     | "learning"
     | "orders"
-    | "quizzes"
-    | "assignments"
-    | "certificates"
     | "notifications"
   >("catalog");
 
@@ -656,8 +651,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                 catalog: "Khám phá Khóa học",
                 learning: "Lớp học của tôi",
                 orders: "Đơn hàng & Thanh toán",
-                assignments: "Bài tập & Đồ án",
-                certificates: "Chứng nhận của tôi",
                 notifications: "Hộp thư thông báo",
               }[activeSubTab] || activeSubTab}</span>
               <span className="text-slate-400">Đổi mục</span>
@@ -705,17 +698,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <CreditCard className={`h-4 w-4 ${activeSubTab === "orders" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Đơn hàng & Thanh toán</span>
             </button>
-            <button
-              onClick={() => { setActiveSubTab("certificates"); setShowSidebar(false); }}
-              className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
-                activeSubTab === "certificates"
-                  ? "bg-indigo-50 text-indigo-700 font-semibold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <Award className={`h-4 w-4 ${activeSubTab === "certificates" ? "text-indigo-600" : "text-slate-400"}`} />
-              <span>Chứng nhận của tôi</span>
-            </button>
           </div>
         </div>
 
@@ -724,88 +706,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />
-        <AssignmentSubmit {...studentPanelProps} />
-        {/* Tab 4: Graduation Certificates display board */}
-        {activeSubTab === "certificates" && (
-          <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500 shadow-xs">Đang tải dữ liệu...</div>}
-      {isError && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          <span>Không thể tải dữ liệu từ server.</span>
-          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1 font-semibold text-red-700 hover:bg-red-50 transition cursor-pointer shadow-xs">Thử lại</button>
-        </div>
-      )}
-            <h4 className="text-base font-display font-bold text-slate-900">Chứng nhận của tôi ({store.certificates.filter(c => c.studentId === currentUser.id).length})</h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {store.certificates.filter(c => c.studentId === currentUser.id).map(cert => {
-                const cTitle = store.courses.find(cr => cr.id === cert.courseId)?.title || "Curriculum Master Class";
-                const enrolledVal = store.enrollments.find(e => e.id === cert.enrollmentId);
-
-                return (
-                  <div key={cert.id} className="relative overflow-hidden bg-white border border-amber-200/80 rounded-2xl p-6 shadow-xs">
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between">
-                        <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-                          <Award className="h-6 w-6" />
-                        </div>
-                        <span className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full uppercase font-bold tracking-wider">
-                          Xác thực chính chủ
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 pt-1">
-                        <span className="text-[10px] font-mono text-slate-400 tracking-wider uppercase font-semibold">HỌC VIỆN CÔNG NGHỆ MCNA</span>
-                        <h5 className="font-display font-bold text-slate-900 text-base leading-snug">{cTitle}</h5>
-                        <p className="text-xs text-slate-600 font-sans leading-relaxed">
-                          Chứng nhận tốt nghiệp được trao tặng cho học viên <strong className="text-slate-900 font-semibold">{currentUser.name}</strong> vì đã hoàn thành toàn diện lộ trình giáo trình và vượt qua các yêu cầu đánh giá năng lực của khóa học.
-                        </p>
-                      </div>
-
-                      <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono">
-                        <div>
-                          <span className="text-slate-400 block uppercase font-medium">Ngày cấp chứng chỉ</span>
-                          <span className="text-slate-700 font-semibold">{new Date(cert.issuedAt).toLocaleDateString("vi-VN")}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-slate-400 block uppercase font-medium">Mã kiểm định độc bản</span>
-                          <span className="text-amber-700 font-bold font-mono tracking-wider uppercase">{cert.certificateCode}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                        <a
-                          href={`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(cTitle)}&organizationName=${encodeURIComponent("MCNA Technology School")}&issueYear=${new Date(cert.issuedAt).getFullYear()}&issueMonth=${new Date(cert.issuedAt).getMonth() + 1}&certificationId=${encodeURIComponent(cert.certificateCode)}&certificationUrl=${encodeURIComponent(`${window.location.origin}${api.publicCertificateUrl(cert.certificateCode)}`)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" /> Thêm vào LinkedIn
-                        </a>
-                        <a
-                          href={api.publicCertificateUrl(cert.certificateCode)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
-                        >
-                          <Shield className="h-3.5 w-3.5" /> Trang xác thực
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {store.certificates.filter(c => c.studentId === currentUser.id).length === 0 && (
-                <div className="col-span-full flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
-                  <Award className="h-8 w-8 text-slate-300" />
-                  <p className="text-base font-semibold text-slate-900">Chưa có chứng nhận</p>
-                  <p className="max-w-md text-sm text-slate-500">Chứng nhận sẽ xuất hiện tại đây khi bạn đáp ứng điều kiện hoàn thành khóa học.</p>
-                  <button type="button" onClick={() => setActiveSubTab("learning")} className="mt-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Đến lớp học của tôi</button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Tab 5: alerts and Notifications list panel */}
         {activeSubTab === "notifications" && (
@@ -818,7 +718,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         )}
 
         <StudentOrders {...studentPanelProps} />
-        <QuizConsole {...studentPanelProps} />
 
         {paymentGuideTx && (
           <PaymentQrModal

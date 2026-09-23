@@ -764,7 +764,7 @@ export default function CourseBuilder(props: ComponentProps) {
                             "bg-slate-100 text-slate-700 border-slate-300"
                           }`}>
                             {course.status === "published" ? "Đang mở" :
-                             course.status === "pending" ? "Chờ duyệt" :
+                             course.status === "pending" ? "Chưa xuất bản" :
                              course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                           </span>
                         </div>
@@ -856,7 +856,7 @@ export default function CourseBuilder(props: ComponentProps) {
                         "bg-slate-100 text-slate-700 border-slate-200"
                       }`}>
                         {activeCourse.status === "published" ? "Đang mở" :
-                         activeCourse.status === "pending" ? "Chờ duyệt" :
+                         activeCourse.status === "pending" ? "Chưa xuất bản" :
                          activeCourse.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                       </span>
                     </div>
@@ -884,13 +884,13 @@ export default function CourseBuilder(props: ComponentProps) {
                       <Plus className="h-3.5 w-3.5" /> Lập lớp học phần
                     </button>
                   )}
-                  {activeCourse.status === "draft" && (
+                  {(activeCourse.status === "draft" || activeCourse.status === "pending" || activeCourse.status === "rejected") && (
                     <button
                       type="button"
                       onClick={() => handleSubmitCourseForApproval(activeCourse.id)}
                       className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
                     >
-                      Gửi duyệt khóa học
+                      Xuất bản khóa học
                     </button>
                   )}
                 </div>

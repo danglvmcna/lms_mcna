@@ -76,8 +76,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
-  // Local state for active assignment detail and accordion sessions
-  const [activeAssignmentId, setActiveAssignmentId] = React.useState<string | null>(null);
+  // Local state for the selected course session
   const [activePresentationSessionNumber, setActivePresentationSessionNumber] = React.useState<number | null>(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<"study" | "discussion">("study");
   const [myClassSearch, setMyClassSearch] = React.useState("");
@@ -90,7 +89,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
 
   // Reset local states when user exits or enters a different course
   React.useEffect(() => {
-    setActiveAssignmentId(null);
     setActivePresentationSessionNumber(null);
     setActiveWorkspaceTab("study");
     setOpenVideoUrl(null);
@@ -134,11 +132,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     return (store.courseSections || []).some((section: any) => section.id === registration.sectionId && section.courseId === learningCourseId);
   }) || {}).sectionId || null;
 
-  // Construct structured study sessions by grouping lessons and assignments dynamically
+  // Group lessons and materials into course sessions.
   const getCourseSessions = () => {
     const courseLessons = currentLearningLessons || [];
-    const courseAssignments = store.assignments.filter((a: any) => a.courseId === learningCourseId) || [];
-    const courseQuizzes = store.quizzes.filter((q: any) => q.courseId === learningCourseId) || [];
     const activeSection = (store.courseSections || []).find((section: any) => section.id === activeLearningSectionId);
     const courseSessionsData = store.attendanceSessions
       .filter((s: any) => s.courseId === learningCourseId && (!activeLearningSectionId || s.sectionId === activeLearningSectionId))
@@ -150,26 +146,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
       // Lesson index matches the session index
       const lessonsInSession = courseLessons.filter((_, lIdx) => lIdx === idx);
       const attendanceSession = courseSessionsData[idx];
-      
-      // Distribute assignments cleanly based on sessionId or fallback to lessonId
-      const assignmentsInSession = courseAssignments.filter((assign) => {
-        if (assign.sessionId) {
-          return attendanceSession && attendanceSession.id === assign.sessionId;
-        }
-        if (assign.lessonId) {
-          return lessonsInSession.some(l => l.id === assign.lessonId);
-        }
-        return false;
-      });
-      const quizzesInSession = courseQuizzes.filter((quiz: any) => {
-        if (quiz.sessionId) {
-          return attendanceSession && attendanceSession.id === quiz.sessionId;
-        }
-        if (quiz.lessonId) {
-          return lessonsInSession.some(l => l.id === quiz.lessonId);
-        }
-        return false;
-      });
       
       return {
         number: sessionNum,
@@ -183,9 +159,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         content: attendanceSession?.content,
         videoUrl: attendanceSession?.videoUrl || lessonsInSession.find((lesson: any) => lesson.videoUrl)?.videoUrl,
         recordingUrl: attendanceSession?.recordingUrl,
-        lessons: lessonsInSession,
-        assignments: assignmentsInSession,
-        quizzes: quizzesInSession
+        lessons: lessonsInSession
       };
     });
   };
@@ -194,7 +168,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
   const activePresentationSession = courseSessions.find((session) => {
     if (activePresentationSessionNumber && session.number === activePresentationSessionNumber) return true;
     if (activeLessonId && session.lessons.some((lesson: any) => lesson.id === activeLessonId)) return true;
-    if (activeAssignmentId && session.assignments.some((assignment: any) => assignment.id === activeAssignmentId)) return true;
     return false;
   }) || null;
   // Recording links (Zoom cloud, Drive, YouTube) are web pages, not media files, so they get their own button instead of the <video> stage.
@@ -242,7 +215,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     const currentSection = (store.courseSections || []).find((s: any) => s.id === (session.sectionId || activeLearningSectionId))
       || (store.courseSections || []).find((s: any) => s.courseId === learningCourseId);
     const zoomUrl = currentSection?.meetingUrl;
-    const itemCount = (session.materials?.length || 0) + (session.lessons?.length || 0) + (session.assignments?.length || 0);
+    const itemCount = (session.materials?.length || 0) + (session.lessons?.length || 0);
 
     return (
       <div className="space-y-4">
@@ -253,7 +226,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             onClick={() => {
               setActivePresentationSessionNumber(null);
               setActiveLessonId(null);
-              setActiveAssignmentId(null);
             }}
             className="hover:text-indigo-700 flex items-center gap-1.5 font-semibold transition cursor-pointer text-slate-600"
           >
@@ -406,7 +378,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       >
                         {isCompleted && <Check className="h-3.5 w-3.5 stroke-[3]" />}
                       </button>
-                      <button type="button" onClick={() => { setActivePresentationSessionNumber(session.number); setActiveLessonId(les.id); setActiveAssignmentId(null); }} className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left">
+                      <button type="button" onClick={() => { setActivePresentationSessionNumber(session.number); setActiveLessonId(les.id); }} className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left">
                         <span className="space-y-1 min-w-0">
                         <span className="text-[9px] font-mono text-indigo-700 font-bold uppercase block">Bài {idx + 1}</span>
                         <span className="font-bold text-slate-900 text-sm group-hover:text-indigo-700 transition-colors leading-snug line-clamp-2 block">
@@ -423,72 +395,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           </div>
         )}
 
-        {/* SECTION 3: ASSIGNMENTS */}
-        {session.assignments.length > 0 && (
-          <div className="border-t border-slate-200 pt-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-3">
-              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <FileText className="h-4.5 w-4.5 text-indigo-600" />
-                Bài tập tự luận ({session.assignments.length})
-              </h4>
-              <span className="text-[11px] text-slate-500">Chọn bài tập để xem đề và nộp bài</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {session.assignments.map((assign: any) => {
-                const sub = store.submissions.find((s: any) => s.assignmentId === assign.id && s.studentId === currentUser.id);
-                let statusBg = "bg-slate-100 text-slate-600 border-slate-200";
-                let statusText = "Chưa nộp";
-                if (sub) {
-                  if (typeof sub.score === "number") {
-                    statusBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                    statusText = `Đã chấm (${sub.score}/${assign.maxScore} đ)`;
-                  } else {
-                    statusBg = "bg-amber-50 text-amber-700 border-amber-200";
-                    statusText = "Chờ chấm";
-                  }
-                }
-
-                return (
-                  <button
-                    type="button"
-                    key={assign.id}
-                    onClick={() => {
-                      setActivePresentationSessionNumber(session.number);
-                      setActiveAssignmentId(assign.id);
-                      setActiveLessonId(null);
-                    }}
-                    className="p-4 rounded-lg bg-white hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 flex items-start justify-between gap-3 transition-colors cursor-pointer group text-left"
-                  >
-                    <div className="space-y-2 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {assign.type && assign.type !== "lesson" && (
-                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-                            assign.type === "final" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            assign.type === "midterm" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                            "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}>
-                            {assign.type === "final" ? "Cuối kỳ" : assign.type === "midterm" ? "Giữa kỳ" : "Cuối chương"}
-                          </span>
-                        )}
-                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full border font-bold ${statusBg}`}>
-                          {statusText}
-                        </span>
-                      </div>
-                      <h5 className="font-bold text-slate-900 text-sm group-hover:text-indigo-700 transition-colors leading-snug line-clamp-2">
-                        {assign.title}
-                      </h5>
-                      <span className="text-[10px] text-slate-500 font-mono block">
-                        Hạn nộp: {new Date(assign.deadline).toLocaleDateString("vi-VN")}
-                      </span>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition shrink-0 mt-1" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -502,14 +408,14 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             Tổng quan chương trình
           </h4>
           <p className="text-sm text-slate-500 mt-1">
-            {courseSessions.length} buổi học · Chọn một buổi để xem nội dung, tài liệu, video xem lại và bài tập.
+            {courseSessions.length} buổi học · Chọn một buổi để xem nội dung, tài liệu và video xem lại.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         {courseSessions.map((session) => {
-          const itemCount = session.materials.length + session.lessons.length + session.assignments.length;
+          const itemCount = session.materials.length + session.lessons.length;
 
           return (
             <button
@@ -518,7 +424,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               onClick={() => {
                 setActivePresentationSessionNumber(session.number);
                 setActiveLessonId(null);
-                setActiveAssignmentId(null);
               }}
               className="group bg-white border border-slate-200 hover:border-indigo-300 p-5 rounded-lg transition-colors cursor-pointer flex flex-col justify-between text-left"
             >
@@ -554,11 +459,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                       <BookOpen className="h-3 w-3" /> {session.lessons.length} bài học
                     </span>
                   )}
-                  {session.assignments.length > 0 && (
-                    <span className="inline-flex items-center gap-1">
-                      <Award className="h-3 w-3" /> {session.assignments.length} bài tập
-                    </span>
-                  )}
                   {session.videoUrl && (
                     <span className="inline-flex items-center gap-1">
                       <Video className="h-3 w-3" /> Video
@@ -590,49 +490,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         })}
       </div>
 
-      {/* Qualification Final Exam Banner if completed */}
-      {activeLearningEnrollment && (() => {
-        const checkQuiz = store.quizzes.find(q => q.courseId === learningCourseId);
-        const isAllSessionsRead = currentLearningLessons.length > 0 && store.lessonProgress.filter(
-          p => p.enrollmentId === activeLearningEnrollment.id && p.completed
-        ).length === currentLearningLessons.length;
-
-        if (checkQuiz && isAllSessionsRead) {
-          const isQuizDeadlineExpired = checkQuiz.deadline ? new Date(checkQuiz.deadline).getTime() < Date.now() : false;
-
-          return (
-            <div className="p-6 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6 shadow-sm">
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-700 bg-emerald-100/60 px-2.5 py-1 rounded-md border border-emerald-300/40 inline-block">
-                  ĐÁNH GIÁ CUỐI KHÓA HỌC
-                </span>
-                <h5 className="text-base sm:text-lg font-bold text-slate-950">Chúc mừng! Bạn đã hoàn thành toàn bộ bài học lý thuyết.</h5>
-                <p className="text-xs text-slate-600">
-                  {checkQuiz.deadline
-                    ? `Hạn chót làm bài kiểm tra: ${new Date(checkQuiz.deadline).toLocaleDateString("vi-VN")}`
-                    : "Bạn có thể bắt đầu bài kiểm tra đánh giá để nhận chứng chỉ."}
-                </p>
-              </div>
-              {isQuizDeadlineExpired ? (
-                <button
-                  disabled
-                  className="px-5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-not-allowed shrink-0"
-                >
-                  <BadgeAlert className="h-4 w-4" /> Đã quá hạn làm bài thi ({new Date(checkQuiz.deadline).toLocaleDateString("vi-VN")})
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleStartQuiz(checkQuiz)}
-                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 shrink-0"
-                >
-                  <Award className="h-4.5 w-4.5" /> Bắt đầu bài Đánh giá Cuối khóa
-                </button>
-              )}
-            </div>
-          );
-        }
-        return null;
-      })()}
     </div>
   );
 
@@ -927,7 +784,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   onClick={() => setActiveWorkspaceTab("study")}
                   className={`px-4 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${activeWorkspaceTab === "study" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
                 >
-                  Bài học & Bài tập
+                  Tài liệu học tập
                 </button>
                 <button
                   onClick={() => setActiveWorkspaceTab("discussion")}
@@ -941,150 +798,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             {activeWorkspaceTab === "study" ? (
               <div className="space-y-5 min-w-0 w-full">
                 
-                {/* Condition 1: View Assignment detail & submission console */}
-                {activeAssignmentId ? (() => {
-                  const assignObj = store.assignments.find(a => a.id === activeAssignmentId);
-                  if (!assignObj) return null;
-                  
-                  const sub = store.submissions.find(s => s.assignmentId === assignObj.id && s.studentId === currentUser.id);
-                  const isDeadlineExpired = new Date(assignObj.deadline).getTime() < Date.now();
-
-                  return (
-                    <div className="space-y-4">
-                      {/* Breadcrumb back to session folder */}
-                      <div className="flex items-center gap-2 px-1 text-xs text-slate-500">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActivePresentationSessionNumber(null);
-                            setActiveLessonId(null);
-                            setActiveAssignmentId(null);
-                          }}
-                          className="hover:text-indigo-700 flex items-center gap-1.5 font-semibold transition cursor-pointer text-slate-600"
-                        >
-                          <Folder className="h-4 w-4 text-amber-500" /> Tổng quan khóa học
-                        </button>
-                        <span className="text-slate-400">/</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveAssignmentId(null);
-                          }}
-                          className="hover:text-indigo-700 text-slate-700 font-semibold flex items-center gap-1.5 cursor-pointer transition"
-                        >
-                          <FolderOpen className="h-4 w-4 text-amber-500" /> {activePresentationSession?.title || "Buổi học"}
-                        </button>
-                        <span className="text-slate-400">/</span>
-                        <span className="text-slate-900 font-bold truncate">{assignObj.title}</span>
-                      </div>
-
-                      <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 space-y-6 shadow-sm relative overflow-hidden">
-                        {renderPresentationSessionInfo(activePresentationSession)}
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-5 gap-3">
-                          <div className="space-y-1">
-                            <span className="text-xs font-mono font-bold text-indigo-700 uppercase tracking-widest">BÀI TẬP TỰ LUẬN</span>
-                            <h5 className="text-lg md:text-xl font-display font-bold text-slate-900 leading-tight flex items-center gap-2">
-                              <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
-                              {assignObj.title}
-                            </h5>
-                          </div>
-                          <span className="text-xs font-mono text-indigo-700 bg-indigo-50 px-3.5 py-1.5 rounded-full border border-indigo-200 shrink-0 self-start sm:self-auto font-semibold">
-                            Hạn nộp: {new Date(assignObj.deadline).toLocaleDateString("vi-VN")}
-                          </span>
-                        </div>
-
-                        {isDeadlineExpired && (
-                          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800 flex items-start gap-2 shadow-sm">
-                            <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
-                            <div className="space-y-1">
-                              <span className="font-bold block text-sm uppercase tracking-wide">Thời hạn nộp bài đã kết thúc</span>
-                              <p className="text-slate-600">
-                                Hạn chót nộp bài là <span className="text-slate-900 font-semibold">{new Date(assignObj.deadline).toLocaleDateString("vi-VN")}</span> lúc <span className="text-slate-900 font-semibold">{new Date(assignObj.deadline).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}</span>. Bạn không thể nộp hoặc chỉnh sửa bài làm sau khi hết hạn.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <span className="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest block">Yêu cầu & Hướng dẫn</span>
-                          <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 text-sm text-slate-700 leading-relaxed font-sans whitespace-pre-line">
-                            {assignObj.description}
-                          </div>
-                        </div>
-
-                        {/* Display current submission content if already submitted */}
-                        {sub && (
-                          <div className="space-y-4 pt-4 border-t border-slate-200">
-                            <span className="text-xs font-mono font-bold text-emerald-700 uppercase tracking-widest block">Bài làm đã nộp của bạn</span>
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-60 overflow-y-auto font-mono text-xs text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
-                              {sub.content}
-                            </div>
-                            
-                            {sub.score !== undefined ? (
-                              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs md:text-sm text-slate-900 flex flex-col gap-2 shadow-sm">
-                                <span className="font-bold flex items-center gap-2 text-emerald-700 text-sm">
-                                  <CheckCircle className="h-5 w-5 shrink-0" />
-                                  Trạng thái: Đã chấm | Điểm: {sub.score}/{assignObj.maxScore} đ
-                                </span>
-                                {sub.feedback && (
-                                  <p className="text-slate-600 font-sans italic border-t border-emerald-200/60 pt-2 mt-1">
-                                    Nhận xét của giảng viên: "{sub.feedback}"
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-medium text-amber-800 flex items-center gap-2 shadow-sm">
-                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                                <span>⏳ Trạng thái: Chờ chấm (Bài làm của bạn đang được giảng viên xem xét & chấm điểm)</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="pt-4 border-t border-slate-200 flex justify-end">
-                          {!sub ? (
-                            <button
-                              onClick={() => {
-                                if (isDeadlineExpired) {
-                                  triggerToast("Đã quá hạn nộp bài tập này!");
-                                  return;
-                                }
-                                setSubmittingAssignmentId(assignObj.id);
-                                setSubmissionCodeText("");
-                              }}
-                              disabled={isDeadlineExpired}
-                              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition cursor-pointer"
-                            >
-                              Nộp bài tập làm
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (isDeadlineExpired) {
-                                  triggerToast("Đã quá hạn nộp bài tập này!");
-                                  return;
-                                }
-                                setSubmittingAssignmentId(assignObj.id);
-                                // Strip file attachment brackets if editing existing
-                                const match = sub.content.match(/\[Tệp đính kèm:\s*([^\]]+)\]/);
-                                if (match) {
-                                  setSubmissionCodeText(sub.content.replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "").trim());
-                                } else {
-                                  setSubmissionCodeText(sub.content);
-                                }
-                              }}
-                              disabled={isDeadlineExpired}
-                              className="px-6 py-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
-                            >
-                              Cập nhật bài nộp mới
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })() : currentLessonContentObj ? (
+                {currentLessonContentObj ? (
                   // Condition 2: View Lesson content (default display)
                   <div className="space-y-4">
                     {/* Breadcrumb back to session folder */}
@@ -1094,7 +808,6 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         onClick={() => {
                           setActivePresentationSessionNumber(null);
                           setActiveLessonId(null);
-                          setActiveAssignmentId(null);
                         }}
                         className="hover:text-indigo-700 flex items-center gap-1.5 font-semibold transition cursor-pointer text-slate-600"
                       >

@@ -138,7 +138,7 @@ export default function TeacherAnalytics(props: ComponentProps) {
                             ? "bg-rose-50 text-rose-700 border border-rose-200"
                             : "bg-slate-100 text-slate-600 border border-slate-200"
                         }`}>
-                          {course.status === "published" ? "Đang mở" : course.status === "pending" ? "Chờ xuất bản" : course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
+                          {course.status === "published" ? "Đang mở" : course.status === "pending" ? "Chưa xuất bản" : course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
                         </span>
                       </div>
                     </div>

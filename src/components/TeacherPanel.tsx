@@ -28,10 +28,6 @@ import {
 import { LMSDataStore, User, Course, Lesson, Quiz, Question, Assignment, Submission, QuizAttempt } from "../types";
 import { AppStore } from "../store";
 import CourseBuilder from "./teacher/CourseBuilder";
-import QuizBuilder from "./teacher/QuizBuilder";
-import AssignmentGrader from "./teacher/AssignmentGrader";
-import GradebookTable from "./teacher/GradebookTable";
-import TeacherAnalytics from "./teacher/TeacherAnalytics";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import { generateId } from "../utils";
@@ -63,7 +59,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["courses", "assignments", "quizzes", "gradebook", "analytics", "notifications"];
+    const allowed = ["courses", "notifications"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("courses");
     }
@@ -271,26 +267,10 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     try {
       await api.submitCourse(courseId);
       await Promise.resolve(onRefreshData());
-      triggerToast("Khóa học đã được gửi duyệt thành công.");
+      triggerToast("Khóa học đã được xuất bản.");
     } catch (err: any) {
-      triggerToast(err.message || "Không thể gửi duyệt khóa học.");
+      triggerToast(err.message || "Không thể xuất bản khóa học.");
     }
-    return;
-
-    const storeData = AppStore.get();
-    storeData.courses = storeData.courses.map(c => {
-      if (c.id === courseId) {
-        AppStore.log(currentUser.id, "submit_course_for_review", c.title, "Submitted course for manager approval.");
-        return { ...c, status: "pending" };
-      }
-      return c;
-    });
-
-    api.submitCourse(courseId).catch(err => console.warn("Failed to submit course for approval on server:", err));
-
-    AppStore.save(storeData);
-    onRefreshData();
-    triggerToast("Khóa học đã được gửi duyệt thành công.");
   };
 
   // Add Lesson to current Course
@@ -521,40 +501,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     }
   };
 
-  // Export Gradebook CSV
-  const handleExportCSVGradebook = () => {
-    const storeData = AppStore.get();
-    let csvContent = "data:text/csv;charset=utf-8,Student Name,Email,Course,Assignment,Score Obtained,Max Possible Score\n";
-
-    const mySubmissions = storeData.submissions.filter(sub => {
-      const assignment = storeData.assignments.find(a => a.id === sub.assignmentId);
-      return assignment && myCourseIds.includes(assignment.courseId);
-    });
-
-    mySubmissions.forEach(sub => {
-      const student = storeData.users.find(u => u.id === sub.studentId);
-      const assignment = storeData.assignments.find(a => a.id === sub.assignmentId);
-      const course = storeData.courses.find(c => c.id === assignment?.courseId);
-
-      const parts = [
-        `"${student?.name || "Không xác định"}"`,
-        `"${student?.email || "Không xác định"}"`,
-        `"${course?.title || "Không xác định"}"`,
-        `"${assignment?.title || "Không xác định"}"`,
-        `"${sub.score ?? "Chưa chấm"}"`,
-        `"${assignment?.maxScore || 100}"`
-      ];
-      csvContent += parts.join(",") + "\n";
-    });
-
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", encodeURI(csvContent));
-    downloadAnchor.setAttribute("download", `mcna_lms_gradebook_export.csv`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    triggerToast("Gradebook CSV compilation exported for local download.");
-  };
 
   // Retrieve matching subsets for Course details explorer
   const activeCourse = store.courses.find(c => c.id === selectedCourseId);
@@ -584,7 +530,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     activeSubmissionId, setActiveSubmissionId, gradingScore, setGradingScore, gradingFeedback, setGradingFeedback,
     store, currentUser, myCourses, myCourseIds, handleOpenCreateCourse, handleOpenEditCourse, handleSaveCourse,
     handleSubmitCourseForApproval, handleAddLessonSubmit, handleAddQuizSubmit, handleAddQuestionSubmit, handleAddAssignmentSubmit,
-    handleGradeSubmission, handleExportCSVGradebook, activeCourse, lessons, courseQuizzes, courseAssignments, myAssignments, studentSubmissionsRaw, updateStore,
+    handleGradeSubmission, activeCourse, lessons, courseQuizzes, courseAssignments, myAssignments, studentSubmissionsRaw, updateStore,
     triggerToast, onRefreshData
   };
 
@@ -606,7 +552,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
             Giảng dạy
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Khóa học, bài nộp và kết quả của học viên trong một nơi.
+            Quản lý khóa học và tài liệu học tập cho học viên.
           </p>
         </div>
       </div>
@@ -621,11 +567,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
           >
             <span className="flex items-center gap-2">
               <span className="font-semibold">{{
-                courses: "Khóa học & Bài giảng",
-                assignments: "Bài tập & Chấm điểm",
-                quizzes: "Đề thi & Đánh giá",
-                gradebook: "Sổ điểm Tổng hợp",
-                analytics: "Báo cáo Hiệu suất",
+                courses: "Khóa học & Tài liệu",
                 notifications: "Hộp thư Thông báo",
               }[activeSubTab] || activeSubTab}</span>
               <span className="text-slate-400">Đổi mục</span>
@@ -639,11 +581,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
           <nav aria-label="Điều hướng giảng viên" className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col gap-0.5 w-full text-sm">
             <span className="px-3 py-2 text-xs font-semibold text-slate-500">Giảng viên</span>
             {[
-              { id: "courses", label: "Khóa học & Bài giảng", Icon: BookOpen },
-              { id: "assignments", label: "Bài tập & Chấm điểm", Icon: Edit },
-              { id: "quizzes", label: "Đề thi & Đánh giá", Icon: FileText },
-              { id: "gradebook", label: "Sổ điểm Tổng hợp", Icon: Award },
-              { id: "analytics", label: "Báo cáo Hiệu suất", Icon: BarChart },
+              { id: "courses", label: "Khóa học & Tài liệu", Icon: BookOpen },
               { id: "notifications", label: "Hộp thư Thông báo", Icon: Bell }
             ].map(({ id, label, Icon }) => (
               <button key={id} type="button" onClick={() => { handleNavClick(id); if (id === "courses") setSelectedCourseId(null); }} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left font-medium transition-colors ${activeSubTab === id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
@@ -657,10 +595,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
         {/* Active Panel View Canvas */}
         <div className="flex-1 min-w-0 w-full">
           <CourseBuilder {...teacherPanelProps} />
-          <QuizBuilder {...teacherPanelProps} />
-          <AssignmentGrader {...teacherPanelProps} />
-          <GradebookTable {...teacherPanelProps} />
-          <TeacherAnalytics {...teacherPanelProps} />
 
           {activeSubTab === "notifications" && (
             <NotificationInbox

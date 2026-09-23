@@ -7945,16 +7945,10 @@ app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin"]), vali
 }));
 app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.params.id)) return res.status(403).json({ error: "Permission denied." });
-  const nextStatus = req.user.role === "teacher" ? "pending" : "published";
-  const course = await coursesRepository.setStatus(pool, req.params.id, nextStatus);
+  const course = await coursesRepository.setStatus(pool, req.params.id, "published");
   if (!course) return res.status(404).json({ error: "Course not found." });
   invalidateStoreCache();
-  await audit(req, req.user.role === "teacher" ? "submit_course_for_review" : "publish_course_direct", course.id, course.title);
-  if (nextStatus === "pending") {
-    const teacherName = req.user.name || "Gi\xE1o vi\xEAn";
-    const message = `Gi\u1EA3ng vi\xEAn ${teacherName} \u0111\xE3 g\u1EEDi y\xEAu c\u1EA7u ph\xEA duy\u1EC7t kh\xF3a h\u1ECDc m\u1EDBi: "${course.title}".`;
-    await notifyRole(pool, "admin", message, { relatedEntityType: "course", relatedEntityId: course.id });
-  }
+  await audit(req, "publish_course_direct", course.id, course.title);
   res.json(course);
 }));
 app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {

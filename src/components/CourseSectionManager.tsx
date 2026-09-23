@@ -568,7 +568,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               c.status === "pending" ? "bg-amber-500 text-white" :
                               "bg-slate-700 text-white"
                             }`}>
-                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
+                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chưa xuất bản" : "Bản nháp"}
                             </span>
                           </div>
                         </div>
@@ -584,7 +584,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               c.status === "pending" ? "bg-amber-50 text-amber-700 border border-amber-200" :
                               "bg-slate-100 text-slate-600 border border-slate-200"
                             }`}>
-                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chờ duyệt" : "Bản nháp"}
+                              {c.status === "published" ? "Đã mở" : c.status === "pending" ? "Chưa xuất bản" : "Bản nháp"}
                             </span>
                           )}
                         </div>

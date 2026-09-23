@@ -3,7 +3,6 @@ import {
   Users, 
   BookOpen, 
   ShoppingBag,
-  GraduationCap, 
   DollarSign, 
   TrendingUp, 
   UserPlus, 
@@ -26,10 +25,8 @@ import {
   Activity,
   LogOut,
   ChevronRight,
-  FileText,
   HelpCircle,
-  Bell,
-  Eye
+  Bell
 } from "lucide-react";
 import { User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
@@ -70,7 +67,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     | "overview"
     | "orders"
     | "course_section_mgmt"
-    | "approval"
     | "users"
     | "audit"
     | "notifications"
@@ -81,7 +77,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["overview", "orders", "course_section_mgmt", "approval", "users", "audit", "notifications"];
+    const allowed = ["overview", "orders", "course_section_mgmt", "users", "audit", "notifications"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("overview");
     }
@@ -102,10 +98,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     showAddUserModal && Boolean(newUserEmail.trim() || newUserName.trim() || newUserPassword.trim())
   );
 
-  // Course rejection states
-  const [rejectingCourseId, setRejectingCourseId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-
   // Search & Filter flags for users registry
   const [userSearch, setUserSearch] = useState("");
   const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "admin">("student");
@@ -124,8 +116,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     }
   };
   const itemsPerPage = 8;
-  const [approvalSearch, setApprovalSearch] = useState("");
-  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [operationsSummary, setOperationsSummary] = useState<any | null>(null);
@@ -310,37 +300,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       });
   };
 
-  // Approve Course selection
-  const handleApproveCourse = (courseId: string) => {
-    api.publishCourse(courseId)
-      .then(() => {
-        onRefreshData();
-        triggerToast("Đã phê duyệt và phát hành khóa học.");
-      })
-      .catch((err: Error) => triggerToast(err.message || "Không thể phê duyệt khóa học."));
-  };
-
-  const handleStartRejectCourse = (courseId: string) => {
-    setRejectingCourseId(courseId);
-    setRejectReason("");
-  };
-
-  const handleConfirmRejectCourse = () => {
-    if (!rejectingCourseId) return;
-    if (!rejectReason.trim()) {
-      triggerToast("Vui lòng ghi rõ lý do trả về học phần.");
-      return;
-    }
-
-    api.rejectCourse(rejectingCourseId, rejectReason)
-      .then(() => {
-        setRejectingCourseId(null);
-        onRefreshData();
-        triggerToast("Học phần lớp học được trả về để điều hành giảng viên bổ sung.");
-      })
-      .catch((err: Error) => triggerToast(err.message || "Không thể từ chối khóa học."));
-  };
-
   // Local JSON snapshot export dump backup
   const handleExportDataStore = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(store, null, 2));
@@ -388,7 +347,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = filteredUsers.slice((userPage - 1) * itemsPerPage, userPage * itemsPerPage);
-  const pendingCourses = store.courses.filter(c => c.status === "pending");
   const pendingEnrollmentsCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending_payment" || enrollment.status === "pending").length;
   const filteredAuditLogs = (store.auditLogs || []).filter(log => {
     const query = auditSearch.toLowerCase();
@@ -400,7 +358,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
       { id: "orders", label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount },
       { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
-      { id: "approval", label: "Duyệt khóa học", icon: GraduationCap, count: pendingCourses.length }
     ] },
     { label: "Hệ thống & tài khoản", items: [
       { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
@@ -469,7 +426,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
             <option value="overview">Tổng quan</option>
             <option value="orders">Đơn hàng & Ghi danh</option>
             <option value="course_section_mgmt">Khóa học & Lớp học</option>
-            <option value="approval">Duyệt khóa học</option>
             <option value="users">Quản lý người dùng</option>
             <option value="audit">Nhật ký hệ thống</option>
             <option value="notifications">Thông báo hệ thống</option>
@@ -519,18 +475,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               </div>
               {operationsSummary && <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="text-base font-semibold text-slate-900">Việc cần theo dõi</h4><p className="mt-1 text-sm text-slate-500">Tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Làm mới</button></div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3">
                   {[
                     ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments],
-                    ["Bài chưa chấm", operationsSummary.ungradedSubmissions],
-                    ["Khóa chờ duyệt", operationsSummary.pendingCourses],
                     ["CRM giao thất bại", operationsSummary.crmFailures]
                   ].map(([label, value]) => <div key={String(label)} className="border-l-2 border-indigo-300 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}
                 </div>
               </section>}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setActiveSubTab("orders")} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Xử lý ghi danh</button>
-                <button type="button" onClick={() => setActiveSubTab("approval")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Duyệt khóa học</button>
                 <button type="button" onClick={() => setActiveSubTab("users")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Quản lý người dùng</button>
               </div>
             </div>
@@ -562,83 +515,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
               onRefreshData={onRefreshData}
               triggerToast={triggerToast}
             />
-          )}
-
-          {activeSubTab === "approval" && (
-            <div className="space-y-6">
-              <div className="border-b border-slate-200 pb-3">
-                <h3 className="text-base font-bold text-slate-900">Xử lý Phê duyệt Mở Môn học & Đề cương</h3>
-                <p className="text-xs text-slate-500">Phê duyệt để đưa bài khóa học của Giáo viên chuyên môn lên Hệ thống tuyển sinh đào tạo.</p>
-              </div>
-
-              {/* Reactive filter inputs */}
-              <div className="flex gap-3 bg-white border border-slate-200/80 p-2.5 rounded-xl text-xs max-w-md shadow-xs">
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm khóa học chờ phê duyệt..."
-                  value={approvalSearch}
-                  onChange={(e) => setApprovalSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none font-sans"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
-                {pendingCourses.filter(c => {
-                  return !approvalSearch ||
-                    c.title.toLowerCase().includes(approvalSearch.toLowerCase()) ||
-                    c.category.toLowerCase().includes(approvalSearch.toLowerCase()) ||
-                    c.description.toLowerCase().includes(approvalSearch.toLowerCase());
-                }).map(course => {
-                  const teacherUser = store.users.find(u => u.id === course.teacherId) || { name: "Giảng viên" };
-                  return (
-                    <div key={course.id} className="p-5 bg-white border border-slate-200/80 rounded-2xl flex flex-col justify-between shadow-xs hover:border-slate-300 transition duration-150">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="font-mono text-indigo-600 font-bold uppercase">{course.category}</span>
-                          <span className="text-slate-400">{teacherUser.name}</span>
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-900 leading-snug">{course.title}</h4>
-                        <p className="text-xs text-slate-500 line-clamp-2">{course.description}</p>
-                      </div>
-
-                      <div className="flex gap-2 justify-between items-center text-xs pt-4 border-t border-slate-100 mt-4">
-                        <button
-                          onClick={() => setCourseDetailId(course.id)}
-                          className="mcna-badge-primary inline-flex items-center gap-1.5 cursor-pointer hover:bg-indigo-100 transition px-3 py-1.5 text-xs font-semibold"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          Xem chi tiết
-                        </button>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleStartRejectCourse(course.id)}
-                            className="px-3.5 py-1.5 text-red-600 hover:bg-red-50 rounded-xl transition text-[11px] font-semibold cursor-pointer"
-                          >
-                            Trả về yêu cầu
-                          </button>
-                          <button
-                            onClick={() => handleApproveCourse(course.id)}
-                            className="px-4 py-1.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-[11px] cursor-pointer shadow-xs"
-                          >
-                            Phê duyệt lập tức
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {pendingCourses.filter(c => {
-                  return !approvalSearch ||
-                    c.title.toLowerCase().includes(approvalSearch.toLowerCase()) ||
-                    c.category.toLowerCase().includes(approvalSearch.toLowerCase()) ||
-                    c.description.toLowerCase().includes(approvalSearch.toLowerCase());
-                }).length === 0 && (
-                  <div className="col-span-2 py-16 text-center text-slate-400 text-xs">
-                    {pendingCourses.length === 0 ? "Không có khóa học nào đang chờ phê duyệt." : "Không tìm thấy khóa học nào phù hợp với bộ lọc."}
-                  </div>
-                )}
-              </div>
-            </div>
           )}
 
           {/* EXISTING USER ACCESS CONTROLS REGISTRY */}
@@ -938,55 +814,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         </ModalPortal>
       )}
 
-      {/* REJECT MODAL CHAT BOX */}
-      {rejectingCourseId && (
-        <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150 text-slate-900">
-            <button 
-              onClick={() => setRejectingCourseId(null)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <h3 className="text-base font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
-              Trả lại hồ sơ đăng ký giảng dạy
-            </h3>
-
-            <form onSubmit={(e) => { e.preventDefault(); handleConfirmRejectCourse(); }} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Góp ý lý do trả về đính kèm:</label>
-                <textarea
-                  required
-                  placeholder="Ví dụ: Đề cương chương 3 chưa đính kèm bài giảng lý thuyết..."
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-500/20 h-24 text-xs"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 text-xs pt-2">
-                <button
-                  type="button"
-                  onClick={() => setRejectingCourseId(null)}
-                  className="px-4 py-2 bg-transparent text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4.5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-sm"
-                >
-                  Xác nhận trả về
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
-
       {/* IMPORT MULTIPLE USERS REGISTRY CSV */}
       {showImportModal && (
         <ModalPortal>
@@ -1048,88 +875,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         </div>
         </ModalPortal>
       )}
-      {/* Premium Course Details consultation modal */}
-      {courseDetailId && (() => {
-        const course = store.courses.find(c => c.id === courseDetailId);
-        if (!course) return null;
-        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
-        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
-        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
-        const assignments = store.assignments.filter(a => a.courseId === course.id);
-        const formatVND = (num: number) => {
-          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
-        };
-        return (
-          <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-slate-900 font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
-              <div className="space-y-5">
-                <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-                  <div>
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
-                      {course.category}
-                    </span>
-                    <h3 className="text-lg font-bold text-slate-900 mt-2">{course.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1">Giảng viên: <strong className="text-slate-800 font-semibold">{teacher.name}</strong></p>
-                  </div>
-                  <button 
-                    onClick={() => setCourseDetailId(null)}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200/80 font-sans">
-                  <div>
-                    <span className="text-slate-500 block font-medium">Học phí:</span>
-                    <strong className="text-sm font-mono text-emerald-700 font-bold">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block font-medium">Cấp trình độ:</span>
-                    <strong className="text-slate-900 font-semibold capitalize">{course.level || "Cơ bản"}</strong>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="text-[11px] text-slate-500 font-bold uppercase block">Mô tả khóa đào tạo:</span>
-                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200/80 font-sans">{course.description}</p>
-                </div>
-
-                <div className="space-y-2.5">
-                  <span className="text-[11px] text-slate-500 font-bold uppercase flex items-center gap-1.5 font-sans">
-                    <FileText className="h-3.5 w-3.5 text-indigo-600" /> Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
-                  </span>
-                  
-                  {lessons.length > 0 ? (
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
-                      {lessons.map((lesson, idx) => (
-                        <div key={lesson.id} className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg flex justify-between items-center text-xs">
-                          <span className="font-medium text-slate-800">Bài {idx + 1}: {lesson.title}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">{lesson.duration || "15 phút"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 mt-5 flex justify-end">
-                <button
-                  onClick={() => setCourseDetailId(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition text-xs cursor-pointer"
-                >
-                  Đóng thông tin
-                </button>
-              </div>
-            </div>
-          </div>
-          </ModalPortal>
-        );
-      })()}
-
       {showSendNotifModal && (
         <SendNotificationModal
           isOpen={showSendNotifModal}
