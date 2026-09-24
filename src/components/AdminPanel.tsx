@@ -83,6 +83,44 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     }
   }, [currentUser.role]);
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      const notif = e.detail;
+      if (!notif) return;
+      const { relatedEntityType, message } = notif;
+      const text = (message || "").toLowerCase();
+
+      if (
+        relatedEntityType === "enrollment" ||
+        relatedEntityType === "transaction" ||
+        text.includes("ghi danh") ||
+        text.includes("đăng ký khóa học") ||
+        text.includes("thanh toán")
+      ) {
+        setActiveSubTab("orders");
+      } else if (
+        relatedEntityType === "user" ||
+        text.includes("tài khoản") ||
+        text.includes("học viên mới")
+      ) {
+        setActiveSubTab("users");
+      } else if (
+        relatedEntityType === "course" ||
+        relatedEntityType === "section" ||
+        text.includes("lớp học phần") ||
+        text.includes("mở thêm lớp")
+      ) {
+        setActiveSubTab("course_section_mgmt");
+      } else if (relatedEntityType === "audit") {
+        setActiveSubTab("audit");
+      } else {
+        setActiveSubTab("notifications");
+      }
+    };
+    window.addEventListener("mcna:notification_click", handler as EventListener);
+    return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
+  }, []);
+
   // Existing User modals states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);

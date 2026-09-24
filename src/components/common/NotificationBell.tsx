@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, X, CheckCheck, Info, CheckCircle, AlertTriangle, AlertCircle } from "lucide-react";
+import { Bell, X, CheckCheck, Info, CheckCircle, AlertTriangle, AlertCircle, ChevronRight } from "lucide-react";
 import { api } from "../../api";
 
 interface Notification {
@@ -9,6 +9,8 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
 }
 
 function relativeTime(iso: string): string {
@@ -112,6 +114,14 @@ export default function NotificationBell() {
     if (!open) fetchNotifications();
   };
 
+  const handleClickNotification = async (notif: Notification, unreadIds: string[]) => {
+    if (unreadIds.length > 0) {
+      await handleMarkRead(unreadIds);
+    }
+    setOpen(false);
+    window.dispatchEvent(new CustomEvent("mcna:notification_click", { detail: notif }));
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell button */}
@@ -175,13 +185,14 @@ export default function NotificationBell() {
               notificationGroups.map(group => {
                 const notif = group[0];
                 const hasUnread = group.some(item => !item.isRead);
+                const unreadIds = group.filter(item => !item.isRead).map(item => item.id);
                 return (
                 <button
                   key={notif.id}
-                  onClick={() => hasUnread && handleMarkRead(group.filter(item => !item.isRead).map(item => item.id))}
+                  onClick={() => handleClickNotification(notif, unreadIds)}
                   className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition group cursor-pointer ${
                     !hasUnread
-                      ? "bg-white hover:bg-slate-50/60"
+                      ? "bg-white hover:bg-slate-50/80"
                       : "bg-indigo-50/40 hover:bg-indigo-50/80"
                   }`}
                 >
@@ -198,12 +209,17 @@ export default function NotificationBell() {
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm leading-relaxed ${!hasUnread ? "text-slate-600" : "text-slate-900 font-medium"}`}>
+                    <p className={`text-sm leading-relaxed transition-colors ${!hasUnread ? "text-slate-600 group-hover:text-indigo-600" : "text-slate-900 font-medium group-hover:text-indigo-700"}`}>
                       {notif.message}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {relativeTime(notif.createdAt)}{group.length > 1 ? ` · ${group.length} thông báo cùng nội dung` : ""}
-                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-slate-400">
+                        {relativeTime(notif.createdAt)}{group.length > 1 ? ` · ${group.length} thông báo cùng nội dung` : ""}
+                      </p>
+                      <span className="text-[11px] font-medium text-indigo-600 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+                        Mở <ChevronRight className="h-3 w-3" />
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -215,7 +231,7 @@ export default function NotificationBell() {
           {notifications.length > 0 && (
             <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/50">
               <p className="text-[11px] text-slate-400 text-center font-mono">
-                {notifications.length} thông báo · Click để đánh dấu đã đọc
+                {notifications.length} thông báo · Click để mở chi tiết
               </p>
             </div>
           )}

@@ -65,6 +65,40 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     }
   }, []);
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      const notif = e.detail;
+      if (!notif) return;
+      const { relatedEntityType, relatedEntityId, message } = notif;
+      const text = (message || "").toLowerCase();
+
+      if (
+        relatedEntityType === "course" ||
+        relatedEntityType === "section" ||
+        relatedEntityType === "session" ||
+        relatedEntityType === "enrollment" ||
+        text.includes("lớp") ||
+        text.includes("buổi học") ||
+        text.includes("học viên")
+      ) {
+        setActiveSubTab("courses");
+        if (relatedEntityId) {
+          const crs = (store?.courses || []).find(c => c.id === relatedEntityId);
+          if (crs) {
+            setSelectedCourseId(crs.id);
+          } else {
+            const sec = (store?.courseSections || []).find(s => s.id === relatedEntityId);
+            if (sec) setSelectedCourseId(sec.courseId);
+          }
+        }
+      } else {
+        setActiveSubTab("notifications");
+      }
+    };
+    window.addEventListener("mcna:notification_click", handler as EventListener);
+    return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
+  }, [store?.courses, store?.courseSections]);
+
   // Selection states
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);

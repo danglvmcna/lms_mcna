@@ -75,7 +75,51 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     }
   }, [activeSubTab]);
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      const notif = e.detail;
+      if (!notif) return;
+      const { relatedEntityType, relatedEntityId, message } = notif;
+      const text = (message || "").toLowerCase();
 
+      if (
+        relatedEntityType === "transaction" ||
+        text.includes("thanh toán") ||
+        text.includes("học phí") ||
+        text.includes("đơn hàng")
+      ) {
+        setActiveSubTab("orders");
+        setLearningCourseId(null);
+      } else if (
+        relatedEntityType === "enrollment" ||
+        relatedEntityType === "section" ||
+        relatedEntityType === "session" ||
+        text.includes("kích hoạt") ||
+        text.includes("vào lớp") ||
+        text.includes("bắt đầu học") ||
+        text.includes("buổi học")
+      ) {
+        setActiveSubTab("learning");
+        if (relatedEntityId) {
+          const crs = (store?.courses || []).find(c => c.id === relatedEntityId);
+          if (crs) {
+            setLearningCourseId(crs.id);
+          } else {
+            const enr = (store?.enrollments || []).find(en => en.id === relatedEntityId);
+            if (enr) setLearningCourseId(enr.courseId);
+          }
+        }
+      } else if (relatedEntityType === "course") {
+        setActiveSubTab("catalog");
+        setLearningCourseId(null);
+      } else {
+        setActiveSubTab("notifications");
+        setLearningCourseId(null);
+      }
+    };
+    window.addEventListener("mcna:notification_click", handler as EventListener);
+    return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
+  }, [store?.courses, store?.enrollments]);
 
   // Periodic polling every 30s while on the notifications tab to refresh notifications
   useEffect(() => {

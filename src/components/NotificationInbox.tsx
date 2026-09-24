@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, Inbox, Search, Send } from "lucide-react";
+import { Bell, CheckCheck, Inbox, Search, Send, ChevronRight } from "lucide-react";
 import { api } from "../api";
 import { LMSDataStore, Notification, User } from "../types";
 import SendNotificationModal from "./admin/SendNotificationModal";
@@ -234,8 +234,11 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
           return (
             <button
               key={note.id}
-              onClick={() => markRead(note)}
-              className={`w-full text-left rounded-2xl border p-4 transition cursor-pointer ${
+              onClick={() => {
+                markRead(note);
+                window.dispatchEvent(new CustomEvent("mcna:notification_click", { detail: note }));
+              }}
+              className={`w-full text-left rounded-2xl border p-4 transition cursor-pointer group ${
                 isNoteRead
                   ? "bg-white border-slate-200/80 hover:bg-slate-50/80 shadow-2xs"
                   : "bg-indigo-50/40 border-indigo-200/80 shadow-xs hover:bg-indigo-50/60"
@@ -247,14 +250,19 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                   <Bell className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase ${typeClasses(note.type)}`}>
-                      {translateType(note.type)}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase ${typeClasses(note.type)}`}>
+                        {translateType(note.type)}
+                      </span>
+                      <span className="text-[11px] text-slate-400">{formatNotificationTime(note.createdAt)}</span>
+                      {!isNoteRead && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">Chưa đọc</span>}
+                    </div>
+                    <span className="text-[11px] font-medium text-indigo-600 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+                      Mở chi tiết <ChevronRight className="h-3 w-3" />
                     </span>
-                    <span className="text-[11px] text-slate-400">{formatNotificationTime(note.createdAt)}</span>
-                    {!isNoteRead && <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">Chưa đọc</span>}
                   </div>
-                  <p className="mt-1.5 text-xs text-slate-700 leading-relaxed font-sans">{note.message}</p>
+                  <p className="mt-1.5 text-xs text-slate-700 leading-relaxed font-sans group-hover:text-slate-900">{note.message}</p>
                 </div>
               </div>
             </button>
