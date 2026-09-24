@@ -1,4 +1,4 @@
-import { LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial } from "./types";
+import { CrmOutboxStatus, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial } from "./types";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -202,5 +202,11 @@ export const api = {
   createForumReply: (postId: string, payload: { content: string }) => apiFetch(`/api/forum/posts/${postId}/replies`, { method: "POST", body: JSON.stringify(payload) }),
   updateAssignment: (id: string, payload: unknown) => apiFetch(`/api/assignments/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAssignment: (id: string) => apiFetch(`/api/assignments/${id}`, { method: "DELETE" }),
-  updateAttendanceSession: (id: string, payload: unknown) => apiFetch(`/api/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
+  updateAttendanceSession: (id: string, payload: unknown) => apiFetch(`/api/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  getCrmOutboxStatus: () => apiFetch<CrmOutboxStatus>("/api/admin/crm/outbox"),
+  syncCrmOutbox: (payload?: { retryFailed?: boolean }) =>
+    apiFetch<{ success: boolean; configured: boolean; sent: number; failed: number }>("/api/admin/crm/outbox/sync", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    })
 };

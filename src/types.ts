@@ -366,3 +366,25 @@ export interface LMSDataStore {
   systemEvents?: SystemEvent[];
   teacherAttendance?: TeacherAttendance[];
 }
+
+export interface CrmOutboxEvent {
+  id: string;
+  eventType: string;
+  status: "pending" | "sent" | "failed";
+  attempts: number;
+  lastError?: string | null;
+  createdAt: string;
+  sentAt?: string | null;
+}
+
+export interface CrmOutboxStatus {
+  configured: boolean;
+  webhookUrl: string | null;
+  counts: {
+    total: number;
+    pending: number;
+    sent: number;
+    failed: number;
+  };
+  recentEvents: CrmOutboxEvent[];
+}

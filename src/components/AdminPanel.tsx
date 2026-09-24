@@ -26,9 +26,13 @@ import {
   LogOut,
   ChevronRight,
   HelpCircle,
-  Bell
+  Bell,
+  Radio,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle
 } from "lucide-react";
-import { User } from "../types";
+import { CrmOutboxStatus, User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { api } from "../api";
@@ -157,8 +161,46 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [operationsSummary, setOperationsSummary] = useState<any | null>(null);
+  const [crmOutbox, setCrmOutbox] = useState<CrmOutboxStatus | null>(null);
+  const [loadingCrmOutbox, setLoadingCrmOutbox] = useState(false);
+  const [syncingCrm, setSyncingCrm] = useState(false);
+  const [crmSyncMessage, setCrmSyncMessage] = useState<string | null>(null);
 
+  const loadCrmOutbox = async () => {
+    setLoadingCrmOutbox(true);
+    try {
+      const data = await api.getCrmOutboxStatus();
+      setCrmOutbox(data);
+    } catch (err: any) {
+      console.warn("Failed to load CRM outbox:", err);
+    } finally {
+      setLoadingCrmOutbox(false);
+    }
+  };
 
+  const handleSyncCrm = async (retryFailed = false) => {
+    setSyncingCrm(true);
+    setCrmSyncMessage(null);
+    try {
+      const res = await api.syncCrmOutbox({ retryFailed });
+      if (!res.configured) {
+        setCrmSyncMessage("Máy chủ chưa cấu hình CRM_WEBHOOK_URL hoặc CRM_WEBHOOK_SECRET.");
+      } else {
+        setCrmSyncMessage(`Đồng bộ hoàn tất: Đã gửi ${res.sent} sự kiện, lỗi ${res.failed}.`);
+      }
+      await loadCrmOutbox();
+    } catch (err: any) {
+      setCrmSyncMessage(`Lỗi đồng bộ: ${err.message || "Không thể gửi sự kiện"}`);
+    } finally {
+      setSyncingCrm(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === "audit") {
+      loadCrmOutbox();
+    }
+  }, [activeSubTab]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -717,8 +759,122 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           {activeSubTab === "audit" && (
             <div className="space-y-6">
               <div className="border-b border-slate-200 pb-3">
-                <h3 className="text-xl font-semibold text-slate-900">Nhật ký hệ thống</h3>
-                <p className="mt-1 text-sm text-slate-500">Theo dõi thao tác và thay đổi quan trọng trong LMS.</p>
+                <h3 className="text-xl font-semibold text-slate-900">Nhật ký hệ thống &amp; Tích hợp CRM</h3>
+                <p className="mt-1 text-sm text-slate-500">Theo dõi thao tác quản trị, nhật ký bảo mật và đồng bộ dữ liệu đa kênh CRM.</p>
+              </div>
+
+              {/* CRM INTEGRATION & OUTBOX SYNC MONITOR */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Radio className="h-5 w-5 text-indigo-600" />
+                      <h4 className="text-base font-bold text-slate-900">Kết nối &amp; Đồng bộ CRM (Outbox)</h4>
+                      {crmOutbox?.configured ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="h-3 w-3" /> Webhook hoạt động
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          <AlertTriangle className="h-3 w-3" /> Chưa cấu hình Webhook URL
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Hàng đợi gửi sự kiện tự động sang CRM (đăng ký mới, kích hoạt khóa học, đóng học phí, cấp chứng chỉ).
+                      {crmOutbox?.webhookUrl && <span className="font-mono text-[11px] ml-1 text-slate-600">({crmOutbox.webhookUrl})</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {crmOutbox && crmOutbox.counts.failed > 0 && (
+                      <button
+                        type="button"
+                        disabled={syncingCrm}
+                        onClick={() => handleSyncCrm(true)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer transition disabled:opacity-50"
+                      >
+                        Thử lại {crmOutbox.counts.failed} sự kiện lỗi
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={syncingCrm || loadingCrmOutbox}
+                      onClick={() => handleSyncCrm(false)}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${syncingCrm ? "animate-spin" : ""}`} />
+                      {syncingCrm ? "Đang đồng bộ..." : "Đồng bộ CRM ngay"}
+                    </button>
+                  </div>
+                </div>
+
+                {crmSyncMessage && (
+                  <div className="p-3 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-700 flex items-center justify-between">
+                    <span>{crmSyncMessage}</span>
+                    <button type="button" onClick={() => setCrmSyncMessage(null)} className="text-slate-400 hover:text-slate-600 font-bold ml-2">×</button>
+                  </div>
+                )}
+
+                {/* Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-slate-500 font-medium block">Tổng sự kiện</span>
+                    <span className="text-xl font-bold font-mono text-slate-900">{crmOutbox?.counts.total ?? "—"}</span>
+                  </div>
+                  <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-emerald-700 font-medium block">Đã gửi thành công</span>
+                    <span className="text-xl font-bold font-mono text-emerald-600">{crmOutbox?.counts.sent ?? "—"}</span>
+                  </div>
+                  <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-amber-700 font-medium block">Đang chờ gửi</span>
+                    <span className="text-xl font-bold font-mono text-amber-600">{crmOutbox?.counts.pending ?? "—"}</span>
+                  </div>
+                  <div className="bg-rose-50/50 border border-rose-200/60 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-rose-700 font-medium block">Thất bại</span>
+                    <span className="text-xl font-bold font-mono text-rose-600">{crmOutbox?.counts.failed ?? "—"}</span>
+                  </div>
+                </div>
+
+                {/* Recent events list */}
+                {crmOutbox?.recentEvents && crmOutbox.recentEvents.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Sự kiện gần đây</span>
+                      <button
+                        type="button"
+                        onClick={loadCrmOutbox}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 cursor-pointer font-medium"
+                      >
+                        Làm mới danh sách
+                      </button>
+                    </div>
+                    <div className="divide-y divide-slate-100 border border-slate-200/70 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                      {crmOutbox.recentEvents.map(evt => (
+                        <div key={evt.id} className="p-2.5 text-xs flex flex-wrap items-center justify-between gap-2 bg-white hover:bg-slate-50">
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-semibold text-slate-800">{evt.eventType}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">#{evt.id.slice(0, 14)}</span>
+                            </div>
+                            {evt.lastError && (
+                              <p className="text-[11px] text-rose-600 line-clamp-1 break-all">Lỗi: {evt.lastError}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-[11px] text-slate-400">{new Date(evt.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              evt.status === "sent" ? "bg-emerald-100 text-emerald-800" :
+                              evt.status === "pending" ? "bg-amber-100 text-amber-800" :
+                              "bg-rose-100 text-rose-800"
+                            }`}>
+                              {evt.status === "sent" ? "Đã gửi" : evt.status === "pending" ? `Chờ (${evt.attempts})` : `Lỗi (${evt.attempts})`}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Reactive filter inputs */}

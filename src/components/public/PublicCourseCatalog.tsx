@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Calendar, ChevronDown, Clock, MapPin, Search, User as UserIcon, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Calendar, Check, ChevronDown, Clock, MapPin, Search, Share2, User as UserIcon, Users } from "lucide-react";
 import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
 import { PublicCourseDetail, PublicCourseSummary } from "../../types";
@@ -38,6 +38,16 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId || null);
   const [detail, setDetail] = useState<PublicCourseDetail | null>(null);
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
+  const [copiedCourseId, setCopiedCourseId] = useState<string | null>(null);
+
+  const handleCopyCourseLink = (e: React.MouseEvent, courseId: string) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/?course=${encodeURIComponent(courseId)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedCourseId(courseId);
+      setTimeout(() => setCopiedCourseId(null), 2500);
+    });
+  };
 
   const courseDetailCache = useRef<Map<string, PublicCourseDetail>>(new Map());
 
@@ -160,6 +170,18 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                   <span className="px-2.5 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase tracking-wider shadow-2xs">{course.category}</span>
                   {course.level && <span className="px-2.5 py-1 rounded-full border border-slate-200 bg-white/90 text-[9px] font-bold text-slate-700 backdrop-blur-xs">{course.level}</span>}
                 </div>
+                <button
+                  type="button"
+                  title="Sao chép liên kết chia sẻ"
+                  onClick={(e) => handleCopyCourseLink(e, course.id)}
+                  className="absolute right-3 top-3 p-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-700 hover:text-indigo-600 shadow-2xs backdrop-blur-xs transition z-10 cursor-pointer"
+                >
+                  {copiedCourseId === course.id ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Share2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <span className={`absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[9px] font-bold shadow-2xs ${course.openSectionCount > 0 ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>
                   {course.openSectionCount > 0 ? "Đang mở ghi danh" : "Sắp khai giảng"}
                 </span>
@@ -203,13 +225,32 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
 
     return (
       <>
-        <button
-          type="button"
-          onClick={() => setSelectedCourseId(null)}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer transition"
-        >
-          <ArrowLeft className="h-4 w-4" /> Tất cả khóa học
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setSelectedCourseId(null)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer transition"
+          >
+            <ArrowLeft className="h-4 w-4" /> Tất cả khóa học
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleCopyCourseLink(e, course.id)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 text-xs font-semibold transition cursor-pointer shadow-2xs"
+          >
+            {copiedCourseId === course.id ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-emerald-700 font-bold">Đã sao chép link</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3.5 w-3.5 text-slate-500" />
+                <span>Chia sẻ khóa học</span>
+              </>
+            )}
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <section className="lg:col-span-2 space-y-4">
@@ -287,6 +328,25 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             <p className="text-[11px] text-slate-500 leading-relaxed pt-2 border-t border-slate-100">
               Chọn một lớp bên dưới để đăng ký. Sau khi đăng ký, học viện sẽ xác nhận{course.price && course.price > 0 ? " thanh toán và" : ""} xếp lớp rồi kích hoạt khóa học ngay.
             </p>
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={(e) => handleCopyCourseLink(e, course.id)}
+                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50/50 text-slate-700 hover:text-indigo-700 text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs"
+              >
+                {copiedCourseId === course.id ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Đã sao chép liên kết khóa học!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="h-4 w-4 text-indigo-500" />
+                    <span>Sao chép liên kết chia sẻ</span>
+                  </>
+                )}
+              </button>
+            </div>
           </aside>
         </div>
 

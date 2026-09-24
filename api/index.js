@@ -9256,6 +9256,63 @@ app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), valida
     client2.release();
   }
 }));
+app.get("/api/admin/crm/outbox", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {
+  const configured = Boolean(process.env.CRM_WEBHOOK_URL && process.env.CRM_WEBHOOK_SECRET);
+  const webhookUrl = process.env.CRM_WEBHOOK_URL ? process.env.CRM_WEBHOOK_URL.replace(/^(https?:\/\/[^\/]+).*/, "$1/...") : null;
+  if (isDevMockDb) {
+    return res.json({
+      configured,
+      webhookUrl,
+      counts: { total: 0, pending: 0, sent: 0, failed: 0 },
+      recentEvents: []
+    });
+  }
+  const countsRow = (await pool.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+      COUNT(*) FILTER (WHERE status = 'sent')::int AS sent,
+      COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+    FROM crm_outbox
+  `)).rows[0];
+  const recentEvents = (await pool.query(`
+    SELECT id, event_type AS "eventType", status, attempts, last_error AS "lastError",
+           created_at AS "createdAt", sent_at AS "sentAt"
+    FROM crm_outbox
+    ORDER BY created_at DESC
+    LIMIT 20
+  `)).rows;
+  res.json({
+    configured,
+    webhookUrl,
+    counts: {
+      total: Number(countsRow?.total || 0),
+      pending: Number(countsRow?.pending || 0),
+      sent: Number(countsRow?.sent || 0),
+      failed: Number(countsRow?.failed || 0)
+    },
+    recentEvents
+  });
+}));
+app.post("/api/admin/crm/outbox/sync", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) {
+    return res.json({ success: true, configured: false, sent: 0, failed: 0, message: "Dev mock DB in use" });
+  }
+  if (req.body?.retryFailed) {
+    await pool.query(`
+      UPDATE crm_outbox
+      SET status = 'pending', attempts = 0, next_attempt_at = NOW(), last_error = NULL
+      WHERE status = 'failed'
+    `);
+  }
+  const result = await runCrmOutboxJob();
+  const configured = Boolean(process.env.CRM_WEBHOOK_URL && process.env.CRM_WEBHOOK_SECRET);
+  res.json({
+    success: true,
+    configured,
+    ...result
+  });
+}));
 app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
