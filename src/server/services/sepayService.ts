@@ -4,6 +4,7 @@ import { notificationsRepository } from "../repositories/notifications";
 import { notifyRole } from "../notify";
 import { generateId } from "../ids";
 import { confirmCoursePayment, placeEnrollment, isServiceError } from "./enrollmentService";
+import { sendPaymentConfirmationEmail } from "./email";
 
 export interface SepayWebhookPayload {
   id: number | string;
@@ -430,6 +431,39 @@ export async function processSepayWebhook(
     relatedEntityType: "transaction",
     relatedEntityId: matchedTx.id
   }).catch(err => console.error("[notify] failed to notify admin on sepay payment:", err));
+
+  void (async () => {
+    try {
+      const student = (await pool.query("SELECT name, email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+      if (!student?.email) return;
+
+      let sectionCode: string | null = null;
+      let teacherName: string | null = null;
+      if (placedSectionId) {
+        const sec = (await pool.query(
+          `SELECT cs.section_code, u.name AS teacher_name
+           FROM course_sections cs
+           LEFT JOIN users u ON u.id = cs.teacher_id
+           WHERE cs.id = $1`,
+          [placedSectionId]
+        )).rows[0];
+        sectionCode = sec?.section_code || null;
+        teacherName = sec?.teacher_name || null;
+      }
+
+      await sendPaymentConfirmationEmail({
+        to: student.email,
+        name: student.name || "Học viên",
+        courseTitle: matchedTx.course_title,
+        amount: receivedAmount,
+        transactionId: matchedTx.id,
+        sectionCode,
+        teacherName
+      });
+    } catch (emailErr) {
+      console.error("[SePay] Failed to send payment confirmation email:", emailErr);
+    }
+  })();
 
   return {
     success: true,
