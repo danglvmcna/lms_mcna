@@ -454,7 +454,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
               title="Việc cần làm"
               action={<Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)}>Làm mới</Button>}
             />
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Card as="button" type="button" interactive onClick={() => setActiveSubTab("orders")} className="flex items-center gap-4 p-5 text-left">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><ClipboardList className="h-6 w-6" /></span>
                 <span className="min-w-0 flex-1">

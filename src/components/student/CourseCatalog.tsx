@@ -141,7 +141,7 @@ export default function CourseCatalog({ store, currentUser, myEnrollments, viewi
           title={course.title}
         />
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-10">
             <div className="text-[16px] leading-relaxed text-slate-600 whitespace-pre-line">
               <LinkedText text={course.description} />
@@ -214,7 +214,7 @@ export default function CourseCatalog({ store, currentUser, myEnrollments, viewi
                         </Callout>
                       )}
 
-                      <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+                      <ul className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {(section.schedule || []).map((slot, index) => (
                           <li key={index} className="flex items-center gap-3 rounded-2xl bg-canvas px-4 py-3">
                             <span className="w-[4.5rem] shrink-0 text-sm font-bold text-slate-900">{slot.dayOfWeek}</span>

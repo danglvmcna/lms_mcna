@@ -51,7 +51,7 @@ export default function StudentOrders({ store, currentUser, myEnrollments, openP
       {due.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Cần thanh toán</h2>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {due.map(enrollment => {
               const course = store.courses.find(c => c.id === enrollment.courseId);
               const pendingTx = (store.transactions || []).find(tx => tx.studentId === currentUser.id && tx.courseId === enrollment.courseId && tx.status === "pending" && supportsVietQr(tx.paymentMethod));

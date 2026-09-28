@@ -144,7 +144,7 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
               onChange={e => setReplyContent(e.target.value)}
               placeholder="Viết câu trả lời…"
               rows={1}
-              className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none"
+              className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-base text-slate-900 sm:text-[15px] placeholder:text-slate-400 focus:outline-none"
             />
             <Button type="submit" aria-label="Gửi" loading={isSubmitting} disabled={!replyContent.trim()} className="h-11 w-11 !px-0">
               {!isSubmitting && <Send className="h-4 w-4" />}

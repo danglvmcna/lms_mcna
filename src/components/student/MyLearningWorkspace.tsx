@@ -99,7 +99,7 @@ function ClassList({ store, currentUser, myEnrollments, setLearningCourseId, ope
       <PageHeader title="Lớp học của tôi" subtitle={`${active.length} lớp đang học${waiting.length ? ` · ${waiting.length} đang chờ` : ""}`} />
 
       {active.length > 0 && (
-        <section className="grid gap-4 md:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {active.map(({ enrollment, course, section }) => {
             const progress = courseProgress(store, enrollment);
             const next = upcomingSessions(store, course.id, section?.id)[0];
@@ -144,7 +144,7 @@ function ClassList({ store, currentUser, myEnrollments, setLearningCourseId, ope
       {waiting.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Đang chờ xác nhận</h2>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {waiting.map(({ enrollment, course, section }) => {
               const status = ENROLLMENT_STATUS[enrollment.status] || ENROLLMENT_STATUS.pending;
               const pendingTx = enrollment.status === "pending_payment"
@@ -432,7 +432,7 @@ function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, 
   const lessonIndex = (lesson: Lesson) => sessions.flatMap(s => s.lessons).findIndex(l => l.id === lesson.id) + 1;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* Outline */}
       <nav aria-label="Các buổi học" className="hidden lg:block">
         <div className="sticky top-10 space-y-3">
@@ -636,7 +636,7 @@ function LessonReader({ lesson, lessons, session, completed, onToggle, onOpenLes
             noteDirtyRef.current = true;
           }}
           placeholder="Ghi lại ý chính, câu hỏi muốn hỏi giảng viên, hoặc điều cần ôn lại…"
-          className="min-h-32 w-full resize-y rounded-[1.25rem] border border-amber-200/70 bg-amber-50/50 px-4 py-3.5 text-[15px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-400/15"
+          className="min-h-32 w-full resize-y rounded-[1.25rem] border border-amber-200/70 bg-amber-50/50 px-4 py-3.5 text-base sm:text-[15px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-400/15"
         />
       </section>
 

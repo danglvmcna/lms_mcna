@@ -219,7 +219,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-[28px]">Bắt đầu chỉ với 3 bước</h2>
             <p className="mt-2 text-[15px] text-slate-500">Không cần kinh nghiệm. MCNA hỗ trợ bạn từ lúc chọn lớp đến buổi học đầu tiên.</p>
           </div>
-          <ol className="grid gap-4 md:grid-cols-3">
+          <ol className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {STEPS.map((step, index) => (
               <li key={step.title} className="rounded-[1.5rem] bg-canvas p-6">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 font-display text-base font-bold text-white">{index + 1}</span>
@@ -244,7 +244,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
       return (
         <div className="mx-auto max-w-6xl space-y-6 px-5 py-10 sm:px-8">
           <Skeleton className="h-8 w-40" />
-          <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4"><Skeleton className="h-12 w-3/4" /><Skeleton className="h-32" /><Skeleton className="h-48" /></div>
             <Skeleton className="h-[420px]" />
           </div>
@@ -272,7 +272,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
           <ArrowLeft className="h-4 w-4" /> Tất cả khóa học
         </button>
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-10">
             <section className="space-y-5">
               <div className="flex flex-wrap gap-2">
@@ -339,7 +339,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                       </div>
 
                       {scheduleList.length > 0 && (
-                        <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+                        <ul className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {scheduleList.map((slot, index) => (
                             <li key={index} className="flex items-center gap-3 rounded-2xl bg-canvas px-4 py-3">
                               <span className="w-[4.5rem] shrink-0 text-sm font-bold text-slate-900">{slot.dayOfWeek}</span>
