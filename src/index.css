@@ -228,8 +228,12 @@ button, a, input, select, textarea {
   background-color: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 0.875rem;
-  font-size: 0.9375rem;
+  /* 16px on phones so iOS Safari does not zoom the page when a field gets focus. */
+  font-size: 1rem;
   color: #0f172a;
+}
+@media (min-width: 640px) {
+  .mcna-input, .mcna-select, .mcna-textarea { font-size: 0.9375rem; }
 }
 .mcna-input, .mcna-select { height: 2.75rem; padding: 0 0.875rem; }
 .mcna-select { padding-right: 2.25rem; }

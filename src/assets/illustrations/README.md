@@ -1,8 +1,8 @@
-# Mascot illustrations
+# Bít illustrations
 
-Drop a transparent `.webp` or `.png` here named after one of the `IllustrationName`
-values in `src/components/ui/brand.tsx` (for example `welcome.webp`). It is picked up at
-build time and shown wherever that illustration is used. Screens render a plain icon
-fallback for any name that has no file yet.
+Scene illustrations of Bít, the MCNA mascot. Each `<name>.svg` here is registered at build time by
+`src/components/ui/brand.tsx` and shown wherever `<Illustration name="<name>">` is used; a name
+without a file falls back to a plain icon.
 
-`scripts/generate-illustrations.sh` generates the full set from the mascot reference.
+The SVGs are generated from shared parts by `scripts/mascot/build-illustrations.mjs`. Change the
+character or a scene there and run `node scripts/mascot/build-illustrations.mjs` to rebuild the set.

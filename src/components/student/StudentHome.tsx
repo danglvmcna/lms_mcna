@@ -93,7 +93,7 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
       {todos.length > 0 && (
         <section className="space-y-3">
           <SectionTitle title="Cần bạn chú ý" />
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {todos.map(todo => (
               <Card key={todo.key} className="flex items-center gap-4 p-4">
                 <span className={cx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", todo.kind === "payment" ? "bg-amber-50 text-amber-600" : "bg-violet-50 text-violet-600")}>
@@ -121,7 +121,7 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
             title="Tiếp tục học"
             action={<button type="button" onClick={() => go("learning")} className="inline-flex items-center gap-0.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700">Tất cả <ChevronRight className="h-4 w-4" /></button>}
           />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {learning.map(item => (
               <Card key={item.enrollment.id} as="button" type="button" interactive onClick={() => openClassroom(item.course.id)} className="group flex flex-col gap-4 p-5 text-left">
                 <div className="flex items-start gap-4">
@@ -162,7 +162,7 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
             title={classes.length ? "Có thể bạn sẽ thích" : "Khóa học đang mở"}
             action={<button type="button" onClick={() => go("catalog")} className="inline-flex items-center gap-0.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700">Khám phá <ChevronRight className="h-4 w-4" /></button>}
           />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {suggestions.map(course => (
               <Card key={course.id} as="button" type="button" interactive onClick={() => openCourse(course.id)} className="group overflow-hidden text-left">
                 <CourseCover src={course.thumbnail} title={course.title} category={course.category} className="aspect-[16/9] w-full" />

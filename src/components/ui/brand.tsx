@@ -2,7 +2,7 @@ import React from "react";
 import { cx } from "./primitives";
 
 /**
- * Mascot and scene illustrations. Artwork lives in src/assets/illustrations/<name>.(webp|png)
+ * Bít, the MCNA mascot, in scene illustrations. Artwork lives in src/assets/illustrations/<name>.(svg|webp|png)
  * and is registered automatically at build time; a name without a file renders its fallback,
  * so layouts never show a broken image.
  */
@@ -21,10 +21,10 @@ export type IllustrationName =
   | "inbox"       // mascot with a tray: empty notifications
   | "teach";      // mascot at a whiteboard: teacher empty states
 
-const illustrationFiles = import.meta.glob("../../assets/illustrations/*.{webp,png}", { eager: true, import: "default" }) as Record<string, string>;
+const illustrationFiles = import.meta.glob("../../assets/illustrations/*.{svg,webp,png}", { eager: true, import: "default" }) as Record<string, string>;
 
 export const ILLUSTRATIONS: Partial<Record<IllustrationName, string>> = Object.fromEntries(
-  Object.entries(illustrationFiles).map(([path, url]) => [path.split("/").pop()!.replace(/\.(webp|png)$/, ""), url])
+  Object.entries(illustrationFiles).map(([path, url]) => [path.split("/").pop()!.replace(/\.(svg|webp|png)$/, ""), url])
 );
 
 export function Illustration({ name, className, alt = "", fallback = null, eager }: { name: IllustrationName; className?: string; alt?: string; fallback?: React.ReactNode; eager?: boolean }) {
