@@ -23,7 +23,9 @@ export const notificationsRepository = {
       type: row.type,
       message: row.message,
       isRead: Boolean(row.is_read),
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      relatedEntityType: row.related_entity_type || undefined,
+      relatedEntityId: row.related_entity_id || undefined
     }));
   },
 

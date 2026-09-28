@@ -5,12 +5,12 @@ import {
   MapPin, Calendar, CalendarDays, Trash2, AlertCircle, Layers, Folder, FolderOpen, Video, ArrowRight, ArrowLeft, Upload, ExternalLink, Play, CheckCircle2
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
-import { Badge, Button, buttonClass, Card, CourseCover, cx, EmptyState, PageHeader, SearchField, SectionTitle } from "../ui";
+import { Badge, Button, buttonClass, Callout, Card, CourseCover, cx, EmptyState, PageHeader, SearchField, SectionTitle, Segmented } from "../ui";
 import { AppStore } from "../../store";
 import { ZoomLogo } from "../icons/BrandLogos";
 import SessionMaterialsEditor from "../SessionMaterialsEditor";
 import { api } from "../../api";
-import ForumDiscussion from "../ForumDiscussion";
+import ForumDiscussion, { needsReply } from "../ForumDiscussion";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
 
 const DAYS_OF_WEEK = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
@@ -128,14 +128,52 @@ export default function CourseBuilder(props: ComponentProps) {
   } = props;
 
   const [preselectedSessionId, setPreselectedSessionId] = React.useState("");
+  const [forumPostId, setForumPostId] = React.useState<string | null>(null);
+  // Where to land once the course opens, when arriving from a notification or a course card.
+  const pendingForum = React.useRef<{ courseId: string; sectionId: string | null; postId: string | null } | null>(null);
+
+  const showForum = (sectionId: string | null, postId: string | null) => {
+    setSelectedClassSectionId(sectionId);
+    setSelectedFolderSessionNumber(null);
+    setClassDetailTab("forum");
+    setForumPostId(postId);
+  };
 
   React.useEffect(() => {
-    setSelectedClassSectionId(null);
     setSelectedClassLessonId("");
-    setSelectedFolderSessionNumber(null);
     setPreselectedSessionId("");
+    const pending = pendingForum.current;
+    if (pending && pending.courseId === selectedCourseId) {
+      pendingForum.current = null;
+      showForum(pending.sectionId, pending.postId);
+      return;
+    }
+    setSelectedClassSectionId(null);
+    setSelectedFolderSessionNumber(null);
     setClassDetailTab("lessons");
+    setForumPostId(null);
   }, [selectedCourseId]);
+
+  const openForum = (courseId: string, sectionId: string | null = null, postId: string | null = null) => {
+    // A course with a single class opens straight into that class's discussion.
+    const classes = (store.courseSections || []).filter((section: any) => section.courseId === courseId);
+    const target = sectionId || (classes.length === 1 ? classes[0].id : null);
+    if (courseId === selectedCourseId) {
+      showForum(target, postId);
+    } else {
+      pendingForum.current = { courseId, sectionId: target, postId };
+      setSelectedCourseId(courseId);
+    }
+  };
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const { courseId, sectionId, postId } = (event as CustomEvent).detail || {};
+      if (courseId) openForum(courseId, sectionId || null, postId || null);
+    };
+    window.addEventListener("mcna:open_forum", handler);
+    return () => window.removeEventListener("mcna:open_forum", handler);
+  });
 
   // Session Edit State for Teacher
   const [showEditSessionModal, setShowEditSessionModal] = React.useState(false);
@@ -499,6 +537,9 @@ export default function CourseBuilder(props: ComponentProps) {
   };
 
   const courseSections = (store.courseSections || []).filter((s: any) => s.courseId === activeCourse?.id);
+  const forumPosts: any[] = store.forumPosts || [];
+  const unansweredCount = (courseId: string, sectionId?: string | null) =>
+    forumPosts.filter(post => post.courseId === courseId && (!sectionId || post.sectionId === sectionId) && needsReply(post)).length;
   const courseAttendanceSessions = (store.attendanceSessions || [])
     .filter((session: any) => session.courseId === activeCourse?.id)
     .sort((a: any, b: any) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -713,6 +754,61 @@ export default function CourseBuilder(props: ComponentProps) {
   };
   const courseStatus = (status: string) => COURSE_STATUS[status] || COURSE_STATUS.draft;
 
+  // Courses where a learner's question has no answer yet, surfaced on the course list.
+  const waitingCourses = myCourses
+    .map((course: any) => ({ course, count: unansweredCount(course.id) }))
+    .filter((item: any) => item.count > 0);
+  const waitingTotal = waitingCourses.reduce((total: number, item: any) => total + item.count, 0);
+
+  const renderForumPane = () => {
+    if (!activeCourse) return null;
+    if (selectedClassSection) {
+      return (
+        <ForumDiscussion
+          key={selectedClassSection.id}
+          courseId={activeCourse.id}
+          sectionId={selectedClassSection.id}
+          store={store}
+          currentUser={currentUser}
+          onRefreshData={onRefreshData}
+          triggerToast={(message: string, type?: any) => triggerToast?.(message, type)}
+          initialPostId={forumPostId}
+        />
+      );
+    }
+    if (courseSections.length === 0) {
+      return (
+        <Card>
+          <EmptyState compact illustration="chat" icon={<MessageSquare className="h-6 w-6" />} title="Khóa học chưa có lớp" description="Mỗi lớp có một góc thảo luận riêng. Khi bạn được phân công lớp, câu hỏi của học viên sẽ hiện ở đây." />
+        </Card>
+      );
+    }
+    return (
+      <section className="space-y-3">
+        <SectionTitle title="Thảo luận theo lớp" description="Mỗi lớp có một góc thảo luận riêng. Chọn lớp để xem và trả lời câu hỏi của học viên." />
+        <Card as="ul" className="divide-y divide-slate-100 overflow-hidden">
+          {courseSections.map((sec: any) => {
+            const threads = forumPosts.filter(post => post.sectionId === sec.id);
+            const waiting = threads.filter(needsReply).length;
+            return (
+              <li key={sec.id}>
+                <button type="button" onClick={() => showForum(sec.id, null)} className="group flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-slate-900/[0.025] md:px-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600"><MessageSquare className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-slate-900 group-hover:text-indigo-700">Lớp {sec.sectionCode}</span>
+                    <span className="mt-0.5 block text-[13px] text-slate-500">{threads.length ? `${threads.length} chủ đề` : "Chưa có thảo luận"}</span>
+                  </span>
+                  {waiting > 0 && <Badge tone="warning" dot>{waiting} chưa trả lời</Badge>}
+                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 group-hover:text-indigo-500" />
+                </button>
+              </li>
+            );
+          })}
+        </Card>
+      </section>
+    );
+  };
+
   return (
     <>
         {/* Level 1: courses this teacher is responsible for */}
@@ -730,6 +826,22 @@ export default function CourseBuilder(props: ComponentProps) {
                 </>
               }
             />
+
+            {waitingTotal > 0 && (
+              <Callout tone="warning" icon={<MessageSquare className="h-5 w-5" />} title={`${waitingTotal} câu hỏi của học viên đang chờ bạn trả lời`}>
+                <ul className="mt-1 space-y-1">
+                  {waitingCourses.map(({ course, count }: any) => (
+                    <li key={course.id}>
+                      <button type="button" onClick={() => openForum(course.id)} className="inline-flex max-w-full items-center gap-1 text-left font-semibold underline-offset-2 hover:underline">
+                        <span className="truncate">{course.title}</span>
+                        <span className="shrink-0">· {count} câu hỏi</span>
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Callout>
+            )}
 
             {filteredCourses.length === 0 ? (
               <Card>
@@ -765,6 +877,11 @@ export default function CourseBuilder(props: ComponentProps) {
                         <span className="inline-flex items-center gap-1.5"><Layers className="h-4 w-4" />{sectionsCount ? `${sectionsCount} lớp` : "Chưa lập lớp"}</span>
                         <span className="inline-flex items-center gap-1.5"><BookOpen className="h-4 w-4" />{lessonsCount} bài học</span>
                         <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4" />{enrolledCount} học viên</span>
+                        {unansweredCount(course.id) > 0 && (
+                          <button type="button" onClick={() => openForum(course.id)} className="inline-flex items-center gap-1.5 font-semibold text-amber-700 hover:underline">
+                            <MessageSquare className="h-4 w-4" />{unansweredCount(course.id)} câu hỏi chờ trả lời
+                          </button>
+                        )}
                       </div>
                       <div className="mt-auto flex gap-2 p-5 pt-4">
                         {currentUser.role !== "teacher" && (
@@ -814,7 +931,7 @@ export default function CourseBuilder(props: ComponentProps) {
               <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
                 <button
                   type="button"
-                  onClick={() => setSelectedClassSectionId(null)}
+                  onClick={() => { setSelectedClassSectionId(null); setForumPostId(null); }}
                   className={cx("h-10 shrink-0 rounded-full px-4 text-sm font-semibold", !selectedClassSectionId ? "bg-slate-900 text-white" : "bg-white text-slate-600 shadow-card ring-1 ring-slate-200/70 hover:text-slate-900")}
                 >
                   Giáo trình chung
@@ -825,7 +942,7 @@ export default function CourseBuilder(props: ComponentProps) {
                     <button
                       key={sec.id}
                       type="button"
-                      onClick={() => setSelectedClassSectionId(sec.id)}
+                      onClick={() => { setSelectedClassSectionId(sec.id); setForumPostId(null); }}
                       className={cx("inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold", selected ? "bg-slate-900 text-white" : "bg-white text-slate-600 shadow-card ring-1 ring-slate-200/70 hover:text-slate-900")}
                     >
                       Lớp {sec.sectionCode}
@@ -862,9 +979,22 @@ export default function CourseBuilder(props: ComponentProps) {
                   </div>
                 </Card>
               )}
+
+              {!selectedFolderSessionNumber && (
+                <Segmented
+                  value={classDetailTab}
+                  onChange={tab => (tab === "forum" ? openForum(activeCourse.id, selectedClassSectionId) : setClassDetailTab(tab))}
+                  options={[
+                    { value: "lessons", label: "Buổi học" },
+                    { value: "forum", label: "Thảo luận", count: unansweredCount(activeCourse.id, selectedClassSectionId) }
+                  ]}
+                />
+              )}
             </header>
 
-            {!selectedFolderSessionNumber ? (
+            {!selectedFolderSessionNumber && classDetailTab === "forum" ? (
+              renderForumPane()
+            ) : !selectedFolderSessionNumber ? (
               <section className="space-y-3">
                 <SectionTitle title="Buổi học" description={`${courseSessions.length} buổi · chọn một buổi để quản lý tài liệu và video`} />
                 {courseSessions.length === 0 ? (

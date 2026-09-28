@@ -61,6 +61,21 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
       const { relatedEntityType, relatedEntityId, message } = notif;
       const text = (message || "").toLowerCase();
 
+      // Class discussion: open the course on its Thảo luận tab, at the thread when we know it.
+      const forumClassCode = /^Diễn đàn lớp (\S+):/.exec(message || "")?.[1];
+      if (relatedEntityType === "forum_post" || forumClassCode) {
+        const post = relatedEntityType === "forum_post" ? (store?.forumPosts || []).find((p: any) => p.id === relatedEntityId) : undefined;
+        const section = post
+          ? (store?.courseSections || []).find(sec => sec.id === post.sectionId)
+          : (store?.courseSections || []).find(sec => sec.sectionCode === forumClassCode);
+        const courseId = post?.courseId || section?.courseId;
+        setActiveSubTab("courses");
+        if (courseId) {
+          window.dispatchEvent(new CustomEvent("mcna:open_forum", { detail: { courseId, sectionId: section?.id || null, postId: post?.id || null } }));
+        }
+        return;
+      }
+
       if (
         relatedEntityType === "course" ||
         relatedEntityType === "section" ||
@@ -86,7 +101,7 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, [store?.courses, store?.courseSections]);
+  }, [store?.courses, store?.courseSections, store?.forumPosts]);
 
   // Selection states
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);

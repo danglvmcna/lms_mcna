@@ -2382,12 +2382,12 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     message: `Đã kích hoạt thành công đơn ghi danh cho học viên ${sName}.`
   });
   if (targetSectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `Học viên mới (${sName}) vừa được xếp vào lớp "${sec.title || targetSectionId}" của bạn.`
+        message: `Học viên mới (${sName}) vừa được xếp vào lớp "${sec.section_code || targetSectionId}" của bạn.`
       });
     }
   }
@@ -2431,12 +2431,12 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     message: `Đã duyệt ghi danh cho học viên ${approveSName}.`
   });
   if (sectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `Học viên mới (${approveSName}) vừa được xếp vào lớp "${sec.title || sectionId}" của bạn.`
+        message: `Học viên mới (${approveSName}) vừa được xếp vào lớp "${sec.section_code || sectionId}" của bạn.`
       });
     }
   }
@@ -3141,7 +3141,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: post.id
         });
       }
     }
@@ -3150,7 +3152,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: post.id
       });
     }
   }
@@ -3228,7 +3232,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: postAuthorId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
 
@@ -3241,7 +3247,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: postId
         });
       }
     }
@@ -3250,7 +3258,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
   }

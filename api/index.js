@@ -3973,7 +3973,9 @@ var notificationsRepository = {
       type: row.type,
       message: row.message,
       isRead: Boolean(row.is_read),
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      relatedEntityType: row.related_entity_type || void 0,
+      relatedEntityId: row.related_entity_id || void 0
     }));
   },
   async create(db, input) {
@@ -8201,12 +8203,12 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     message: `\u0110\xE3 k\xEDch ho\u1EA1t th\xE0nh c\xF4ng \u0111\u01A1n ghi danh cho h\u1ECDc vi\xEAn ${sName}.`
   });
   if (targetSectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || targetSectionId}" c\u1EE7a b\u1EA1n.`
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || targetSectionId}" c\u1EE7a b\u1EA1n.`
       });
     }
   }
@@ -8247,12 +8249,12 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     message: `\u0110\xE3 duy\u1EC7t ghi danh cho h\u1ECDc vi\xEAn ${approveSName}.`
   });
   if (sectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || sectionId}" c\u1EE7a b\u1EA1n.`
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || sectionId}" c\u1EE7a b\u1EA1n.`
       });
     }
   }
@@ -8891,7 +8893,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`
+          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: post.id
         });
       }
     }
@@ -8899,7 +8903,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: post.id
       });
     }
   }
@@ -8968,7 +8974,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: postAuthorId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 b\xECnh lu\u1EADn v\xE0o b\xE0i vi\u1EBFt "${postTitle}" c\u1EE7a b\u1EA1n.`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 b\xECnh lu\u1EADn v\xE0o b\xE0i vi\u1EBFt "${postTitle}" c\u1EE7a b\u1EA1n.`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
     const studentsRes = await pool.query(
@@ -8980,7 +8988,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`
+          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: postId
         });
       }
     }
@@ -8988,7 +8998,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
   }
