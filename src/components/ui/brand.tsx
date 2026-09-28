@@ -2,9 +2,9 @@ import React from "react";
 import { cx } from "./primitives";
 
 /**
- * Mascot and scene illustrations. Each entry is filled in once its artwork is
- * generated into /public/illustrations; until then <Illustration> renders its
- * fallback so layouts never show a broken image.
+ * Mascot and scene illustrations. Artwork lives in src/assets/illustrations/<name>.(webp|png)
+ * and is registered automatically at build time; a name without a file renders its fallback,
+ * so layouts never show a broken image.
  */
 export type IllustrationName =
   | "welcome"     // mascot waving: landing hero, sign-in panel
@@ -21,7 +21,11 @@ export type IllustrationName =
   | "inbox"       // mascot with a tray: empty notifications
   | "teach";      // mascot at a whiteboard: teacher empty states
 
-export const ILLUSTRATIONS: Partial<Record<IllustrationName, string>> = {};
+const illustrationFiles = import.meta.glob("../../assets/illustrations/*.{webp,png}", { eager: true, import: "default" }) as Record<string, string>;
+
+export const ILLUSTRATIONS: Partial<Record<IllustrationName, string>> = Object.fromEntries(
+  Object.entries(illustrationFiles).map(([path, url]) => [path.split("/").pop()!.replace(/\.(webp|png)$/, ""), url])
+);
 
 export function Illustration({ name, className, alt = "", fallback = null, eager }: { name: IllustrationName; className?: string; alt?: string; fallback?: React.ReactNode; eager?: boolean }) {
   const [failed, setFailed] = React.useState(false);
@@ -54,7 +58,7 @@ export function BrandLockup({ className, compact, subtitle = "Technology School"
       <BrandMark className="h-8 w-8" />
       <span className="flex flex-col leading-none">
         <span className="font-display text-[17px] font-bold tracking-tight text-slate-900">MCNA</span>
-        {!compact && <span className="mt-1 text-[11px] font-medium text-slate-500">{subtitle}</span>}
+        {!compact && <span className="mt-1 whitespace-nowrap text-[11px] font-medium text-slate-500">{subtitle}</span>}
       </span>
     </span>
   );

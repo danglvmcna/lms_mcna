@@ -432,7 +432,8 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
       <header className="sticky top-0 z-40 border-b border-slate-200/60 surface-glass">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-5 sm:px-8">
           <button type="button" onClick={() => setSelectedCourseId(null)} aria-label="Trang chủ MCNA" className="rounded-xl">
-            <BrandLockup />
+            <span className="block sm:hidden"><BrandLockup compact /></span>
+            <span className="hidden sm:block"><BrandLockup /></span>
           </button>
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" size="sm" onClick={onLogin}>Đăng nhập</Button>

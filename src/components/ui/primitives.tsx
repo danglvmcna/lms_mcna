@@ -5,7 +5,7 @@ export const cx = (...classes: Array<string | false | null | undefined>) => clas
 
 /* ------------------------------------------------------------------ Buttons */
 
-export type ButtonVariant = "primary" | "secondary" | "tinted" | "ghost" | "danger" | "dark" | "success";
+export type ButtonVariant = "primary" | "secondary" | "tinted" | "ghost" | "danger" | "dark" | "success" | "zoom" | "light" | "onDark";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANTS: Record<ButtonVariant, string> = {
@@ -15,7 +15,13 @@ const VARIANTS: Record<ButtonVariant, string> = {
   ghost: "text-slate-600 hover:bg-slate-900/5 hover:text-slate-900",
   danger: "bg-rose-50 text-rose-700 hover:bg-rose-100",
   dark: "bg-slate-900 text-white hover:bg-slate-800",
-  success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+  success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+  /** Zoom's own blue, used only for "join the Zoom class" actions. */
+  zoom: "bg-[#0B5CFF] text-white hover:bg-[#004BE5]",
+  /** Solid white button for dark surfaces. */
+  light: "bg-white text-slate-900 hover:bg-indigo-50",
+  /** Outlined button for dark surfaces. */
+  onDark: "text-white ring-1 ring-inset ring-white/25 hover:bg-white/10"
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -56,13 +62,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   );
 });
 
-export function IconButton({ label, className, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+export function IconButton({ label, className, children, tone = "neutral", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; tone?: "neutral" | "danger" }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      className={cx("inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-900/5 hover:text-slate-900 active:scale-95", className)}
+      className={cx(
+        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 active:scale-95",
+        tone === "danger" ? "hover:bg-rose-50 hover:text-rose-600" : "hover:bg-slate-900/5 hover:text-slate-900",
+        className
+      )}
       {...rest}
     >
       {children}

@@ -56,7 +56,7 @@ export default function StudentOrders({ store, currentUser, myEnrollments, openP
               const course = store.courses.find(c => c.id === enrollment.courseId);
               const pendingTx = (store.transactions || []).find(tx => tx.studentId === currentUser.id && tx.courseId === enrollment.courseId && tx.status === "pending" && supportsVietQr(tx.paymentMethod));
               return (
-                <Card key={enrollment.id} className="overflow-hidden border-amber-200/80">
+                <Card key={enrollment.id} className="overflow-hidden !border-amber-200/80">
                   <div className="flex items-center gap-4 p-5">
                     <CourseCover src={course?.thumbnail} title={course?.title} category={course?.category} className="h-14 w-14 shrink-0 rounded-2xl" iconSize="h-5 w-5" />
                     <div className="min-w-0 flex-1">

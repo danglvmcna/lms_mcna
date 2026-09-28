@@ -110,28 +110,28 @@ export default function SendNotificationModal({
             <X className="h-5 w-5" />
           </button>
 
-          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 mb-4">
-            <div className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
-              <Bell className="h-4.5 w-4.5" />
+          <div className="mb-5 flex items-start gap-3.5 pr-10">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <Bell className="h-5 w-5" />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 leading-tight">
-                Gửi Thông báo Hệ thống
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold leading-snug text-slate-900">
+                Gửi thông báo
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-sm leading-relaxed text-slate-500">
                 Gửi trong LMS tới người dùng đang hoạt động; thao tác này không gửi email.
               </p>
             </div>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+            <div className="mb-4 flex items-center gap-2 rounded-2xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
               <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleSubmit} className="space-y-5 text-sm">
             {/* Đối tượng nhận */}
             <div className="space-y-1.5">
               <label className="font-semibold text-slate-700 flex items-center justify-between">
@@ -256,12 +256,12 @@ export default function SendNotificationModal({
             </div>
 
             {/* Action buttons */}
-            <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100">
+            <div className="flex justify-end items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-transparent hover:bg-slate-100 text-slate-600 rounded-xl font-medium transition cursor-pointer"
+                className="mcna-btn-ghost"
               >
                 Hủy
               </button>

@@ -483,7 +483,7 @@ function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, 
               <p className="font-semibold text-slate-900">{timing === "today" ? "Buổi học diễn ra hôm nay" : `Học trực tuyến · ${relativeDay(session.date)}`}</p>
               <p className="text-sm text-slate-500">Vào phòng Zoom của lớp đúng giờ để học cùng giảng viên.</p>
             </div>
-            <a href={meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ className: "bg-[#0B5CFF] shadow-none hover:bg-[#004BE5]" })}>
+            <a href={meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ variant: "zoom" })}>
               <Video className="h-4 w-4" /> Vào lớp Zoom
             </a>
           </Card>
@@ -641,7 +641,7 @@ function LessonReader({ lesson, lessons, session, completed, onToggle, onOpenLes
       </section>
 
       {/* Completion */}
-      <Card className={cx("flex flex-col items-stretch gap-4 p-5 sm:flex-row sm:items-center", completed && "border-emerald-200 bg-emerald-50/60")}>
+      <Card className={cx("flex flex-col items-stretch gap-4 p-5 sm:flex-row sm:items-center", completed && "!border-emerald-200 !bg-emerald-50/60")}>
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className={cx("flex h-11 w-11 shrink-0 items-center justify-center rounded-full", completed ? "bg-emerald-500 text-white" : "bg-indigo-50 text-indigo-600")}>
             <Check className="h-5 w-5" strokeWidth={3} />

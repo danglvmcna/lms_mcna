@@ -851,7 +851,7 @@ export default function CourseBuilder(props: ComponentProps) {
                   <div className="flex shrink-0 items-center gap-2">
                     {selectedClassSection.meetingUrl ? (
                       <>
-                        <a href={selectedClassSection.meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "sm", className: "bg-[#0B5CFF] shadow-none hover:bg-[#004BE5]" })} title={selectedClassSection.meetingUrl}>
+                        <a href={selectedClassSection.meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "sm", variant: "zoom" })} title={selectedClassSection.meetingUrl}>
                           <Video className="h-4 w-4" /> Vào phòng Zoom
                         </a>
                         <Button size="sm" variant="ghost" onClick={() => handleOpenEditZoom(selectedClassSection)}>Đổi link</Button>
@@ -1310,7 +1310,7 @@ export default function CourseBuilder(props: ComponentProps) {
                 {/* Sub-form for schedule slots */}
                 <div className="border-t border-slate-100 pt-4 space-y-3">
                   <div className="flex justify-between items-center">
-                    <h5 className="font-semibold text-slate-900 text-xs text-indigo-600">
+                    <h5 className="text-xs font-semibold text-indigo-600">
                       Thời khóa biểu chi tiết ({formSlots.length})
                     </h5>
                     <button

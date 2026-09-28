@@ -77,11 +77,11 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
               {nextUp.section?.meetingUrl && (
-                <a href={nextUp.section.meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "lg", className: "bg-white !text-slate-900 shadow-none hover:bg-indigo-50" })}>
+                <a href={nextUp.section.meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "lg", variant: "light" })}>
                   <Video className="h-5 w-5 text-indigo-600" /> Vào lớp Zoom
                 </a>
               )}
-              <Button size="lg" variant="ghost" className="text-white ring-1 ring-inset ring-white/25 hover:bg-white/10 hover:text-white" onClick={() => openClassroom(nextUp.course.id)}>
+              <Button size="lg" variant="onDark" onClick={() => openClassroom(nextUp.course.id)}>
                 Xem lớp học
               </Button>
             </div>

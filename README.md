@@ -58,6 +58,9 @@ Nền tảng bán và vận hành khóa học trực tuyến của Học viện 
 * `src/server/`: backend - repositories PostgreSQL, cache Redis, xác thực JWT, scheduler, tích hợp CRM và email.
 * `scripts/`: migration, seed, đối soát schema và kiểm thử E2E.
 * `server.ts`: máy chủ Express, kiêm proxy Vite dev server.
+* `src/components/ui/`: hệ thống thiết kế dùng chung (nút, hộp thoại dạng sheet, toast, badge, ảnh bìa khóa học, trạng thái trống); token màu và kiểu chữ ở `src/index.css`.
+* `src/components/layout/AppShell.tsx`: khung ứng dụng cho cả ba vai trò (thanh bên trên máy tính, thanh tab dưới trên điện thoại).
+* `src/assets/illustrations/`: hình minh họa linh vật. Thả file `<tên>.webp|png` vào đây là tự hiển thị; tạo cả bộ bằng `scripts/generate-illustrations.sh` (cần Codex CLI và ảnh mẫu `public/brand/mascot.png`).
 
 ### 2. Thiết lập môi trường
 

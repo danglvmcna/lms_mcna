@@ -532,7 +532,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <div className="flex gap-1">
                       <IconButton label="Quản lý bài học" onClick={() => handleOpenManageLessons(c)}><BookOpen className="h-[18px] w-[18px]" /></IconButton>
                       <IconButton label="Chỉnh sửa khóa học" onClick={() => handleOpenEditCourse(c)}><Edit className="h-[18px] w-[18px]" /></IconButton>
-                      <IconButton label="Xóa khóa học" onClick={() => handleDeleteCourse(c.id, c.title)} className="hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-[18px] w-[18px]" /></IconButton>
+                      <IconButton label="Xóa khóa học" onClick={() => handleDeleteCourse(c.id, c.title)} tone="danger"><Trash2 className="h-[18px] w-[18px]" /></IconButton>
                     </div>
                   </div>
                 </Card>
@@ -595,7 +595,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       <div className="flex justify-end gap-1">
                         <IconButton label="Thảo luận của lớp" onClick={() => { setSelectedSectionForForum(sec); setShowForumModal(true); }}><MessageSquare className="h-[18px] w-[18px]" /></IconButton>
                         <IconButton label="Sửa lớp học" onClick={() => handleOpenEditSection(sec)}><Edit className="h-[18px] w-[18px]" /></IconButton>
-                        <IconButton label="Xóa lớp học" onClick={() => handleDeleteSection(sec.id, sec.sectionCode)} className="hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-[18px] w-[18px]" /></IconButton>
+                        <IconButton label="Xóa lớp học" onClick={() => handleDeleteSection(sec.id, sec.sectionCode)} tone="danger"><Trash2 className="h-[18px] w-[18px]" /></IconButton>
                       </div>
                     </td>
                   </tr>
