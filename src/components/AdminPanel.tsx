@@ -429,7 +429,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
   const SortTh = ({ field, children, className }: { field: string; children: React.ReactNode; className?: string }) => (
     <th className={cx("mcna-th", className)}>
       <button type="button" onClick={() => handleSort(field)} className="inline-flex items-center gap-1 hover:text-slate-900">
-        {children} <span className="text-slate-400">{sortIndicator(field)}</span>
+        {children} <span className="text-slate-500">{sortIndicator(field)}</span>
       </button>
     </th>
   );
@@ -554,7 +554,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                     {userDirTab === "student" && (
                       <td className="mcna-td">
                         <div className="text-slate-700">{usr.phone || "—"}</div>
-                        <div className="text-xs text-slate-400">{usr.schoolEmail || "Chưa cấp email trường"}</div>
+                        <div className="text-xs text-slate-500">{usr.schoolEmail || "Chưa cấp email trường"}</div>
                       </td>
                     )}
                     <td className="mcna-td">
@@ -567,13 +567,13 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                       {usr.id !== currentUser.id ? (
                         <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>
                       ) : (
-                        <span className="text-xs text-slate-400">Bạn</span>
+                        <span className="text-xs text-slate-500">Bạn</span>
                       )}
                     </td>
                   </tr>
                 ))}
                 {paginatedUsers.length === 0 && (
-                  <tr><td colSpan={userDirTab === "student" ? 6 : 5} className="mcna-td py-12 text-center text-slate-400">Không có tài khoản phù hợp.</td></tr>
+                  <tr><td colSpan={userDirTab === "student" ? 6 : 5} className="mcna-td py-12 text-center text-slate-500">Không có tài khoản phù hợp.</td></tr>
                 )}
               </tbody>
             </table>
@@ -611,7 +611,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 </div>
                 <p className="text-sm text-slate-500">
                   Hàng đợi gửi sự kiện sang CRM: đăng ký mới, kích hoạt khóa học, học phí.
-                  {crmOutbox?.webhookUrl && <span className="ml-1 font-mono text-xs text-slate-400">({crmOutbox.webhookUrl})</span>}
+                  {crmOutbox?.webhookUrl && <span className="ml-1 font-mono text-xs text-slate-500">({crmOutbox.webhookUrl})</span>}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -650,11 +650,11 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                   {crmOutbox.recentEvents.map(evt => (
                     <li key={evt.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                       <div className="min-w-0">
-                        <p className="font-mono text-[13px] font-semibold text-slate-800">{evt.eventType} <span className="font-normal text-slate-400">#{evt.id.slice(0, 14)}</span></p>
+                        <p className="font-mono text-[13px] font-semibold text-slate-800">{evt.eventType} <span className="font-normal text-slate-500">#{evt.id.slice(0, 14)}</span></p>
                         {evt.lastError && <p className="line-clamp-1 break-all text-xs text-rose-600">Lỗi: {evt.lastError}</p>}
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
-                        <span className="text-xs text-slate-400">{new Date(evt.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                        <span className="text-xs text-slate-500">{new Date(evt.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
                         <Badge tone={evt.status === "sent" ? "success" : evt.status === "pending" ? "warning" : "danger"}>
                           {evt.status === "sent" ? "Đã gửi" : evt.status === "pending" ? `Chờ (${evt.attempts})` : `Lỗi (${evt.attempts})`}
                         </Badge>
@@ -680,13 +680,13 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 <li key={log.id || i} className="px-5 py-3.5 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-mono text-[13px] font-semibold text-slate-900">{log.action}</span>
-                    <time className="text-xs text-slate-400">{new Date(log.createdAt).toLocaleString("vi-VN")}</time>
+                    <time className="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString("vi-VN")}</time>
                   </div>
                   <p className="mt-1 break-words text-slate-700">{log.detail}</p>
-                  <p className="mt-1 break-all text-xs text-slate-400">Người thực hiện: {log.userId} · Đối tượng: {log.target}</p>
+                  <p className="mt-1 break-all text-xs text-slate-500">Người thực hiện: {log.userId} · Đối tượng: {log.target}</p>
                 </li>
               ))}
-              {filteredAuditLogs.length === 0 && <li className="py-12 text-center text-sm text-slate-400">Không có bản ghi phù hợp.</li>}
+              {filteredAuditLogs.length === 0 && <li className="py-12 text-center text-sm text-slate-500">Không có bản ghi phù hợp.</li>}
             </Card>
           </section>
         </div>

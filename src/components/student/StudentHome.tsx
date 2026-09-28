@@ -106,7 +106,7 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
                 {todo.kind === "payment" ? (
                   todo.tx ? <Button size="sm" onClick={() => openPayment(todo.tx!)}>Thanh toán</Button> : <Button size="sm" variant="secondary" onClick={() => go("orders")}>Xem</Button>
                 ) : (
-                  <span className="hidden text-right text-xs leading-snug text-slate-400 sm:block">MCNA sẽ báo<br />khi có lớp</span>
+                  <span className="hidden text-right text-xs leading-snug text-slate-500 sm:block">MCNA sẽ báo<br />khi có lớp</span>
                 )}
               </Card>
             ))}

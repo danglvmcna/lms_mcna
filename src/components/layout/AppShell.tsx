@@ -43,10 +43,10 @@ function AccountMenu({ user, onOpenProfile, onOpenPassword, onLogout, onDone, cl
       </div>
       <div className="my-1 h-px bg-slate-100" />
       <button type="button" className={item} onClick={() => { onDone(); onOpenProfile(); }}>
-        <UserRound className="h-[18px] w-[18px] text-slate-400" /> Hồ sơ của tôi
+        <UserRound className="h-[18px] w-[18px] text-slate-500" /> Hồ sơ của tôi
       </button>
       <button type="button" className={item} onClick={() => { onDone(); onOpenPassword(); }}>
-        <KeyRound className="h-[18px] w-[18px] text-slate-400" /> Đổi mật khẩu
+        <KeyRound className="h-[18px] w-[18px] text-slate-500" /> Đổi mật khẩu
       </button>
       <div className="my-1 h-px bg-slate-100" />
       <button type="button" className={cx(base, "text-rose-600 hover:bg-rose-50")} onClick={() => { onDone(); onLogout(); }}>
@@ -109,7 +109,7 @@ export default function AppShell({ user, nav, active, onNavigate, onOpenProfile,
         <nav aria-label="Điều hướng chính" className="flex-1 space-y-6 overflow-y-auto px-3 pb-6 pt-2">
           {groups.map((group, index) => (
             <div key={group.label || index} className="space-y-0.5">
-              {group.label && <p className="px-3 pb-1.5 text-xs font-semibold text-slate-400">{group.label}</p>}
+              {group.label && <p className="px-3 pb-1.5 text-xs font-semibold text-slate-500">{group.label}</p>}
               {group.items.map(item => {
                 const selected = item.id === active;
                 const Icon = item.icon;
@@ -124,7 +124,7 @@ export default function AppShell({ user, nav, active, onNavigate, onOpenProfile,
                       selected ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-900/[0.04] hover:text-slate-900"
                     )}
                   >
-                    <Icon className={cx("h-5 w-5 shrink-0", selected ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} strokeWidth={selected ? 2.2 : 1.9} />
+                    <Icon className={cx("h-5 w-5 shrink-0", selected ? "text-indigo-600" : "text-slate-500 group-hover:text-slate-600")} strokeWidth={selected ? 2.2 : 1.9} />
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     {!!item.badge && (
                       <span className={cx("min-w-6 rounded-full px-1.5 text-center text-xs font-semibold leading-6", selected ? "bg-indigo-600 text-white" : "bg-slate-900/[0.06] text-slate-600")}>
@@ -223,7 +223,7 @@ export default function AppShell({ user, nav, active, onNavigate, onOpenProfile,
               const Icon = item.icon;
               return (
                 <button key={item.id} type="button" onClick={() => navigate(item.id)} className={cx("flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] font-medium", item.id === active ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-900/5")}>
-                  <Icon className="h-5 w-5 text-slate-400" /> <span className="flex-1">{item.label}</span>
+                  <Icon className="h-5 w-5 text-slate-500" /> <span className="flex-1">{item.label}</span>
                   {!!item.badge && <span className="rounded-full bg-slate-900/[0.06] px-2 text-xs font-semibold leading-6 text-slate-600">{item.badge}</span>}
                 </button>
               );

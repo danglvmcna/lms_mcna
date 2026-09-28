@@ -106,7 +106,7 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
             <Avatar name={op.name} size={40} />
             <div className="min-w-0">
               <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">{op.name} <Badge tone={ROLE[op.role]?.tone || "neutral"}>{ROLE[op.role]?.label || "Thành viên"}</Badge></p>
-              <p className="text-xs text-slate-400">{relativeTime(selectedPost.createdAt)}</p>
+              <p className="text-xs text-slate-500">{relativeTime(selectedPost.createdAt)}</p>
             </div>
           </div>
           <h2 className="text-xl font-bold leading-snug text-slate-900">{selectedPost.title}</h2>
@@ -125,7 +125,7 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
                   <p className={cx("mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold", mine ? "text-indigo-100" : "text-slate-500")}>
                     {mine ? "Bạn" : replyAuthor.name}
                     {!mine && replyAuthor.role === "teacher" && <Badge tone="warning">Giảng viên</Badge>}
-                    <span className={cx("font-normal", mine ? "text-indigo-200" : "text-slate-400")}>{relativeTime(reply.createdAt)}</span>
+                    <span className={cx("font-normal", mine ? "text-indigo-200" : "text-slate-500")}>{relativeTime(reply.createdAt)}</span>
                   </p>
                   <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{reply.content}</p>
                 </div>
@@ -204,7 +204,7 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-semibold leading-snug text-slate-900 group-hover:text-indigo-700">{post.title}</span>
                     <span className="mt-0.5 line-clamp-2 block text-sm text-slate-500">{post.content}</span>
-                    <span className="mt-1.5 block text-xs text-slate-400">{postAuthor.name} · {relativeTime(post.createdAt)}</span>
+                    <span className="mt-1.5 block text-xs text-slate-500">{postAuthor.name} · {relativeTime(post.createdAt)}</span>
                   </span>
                   <span className={cx("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", replies ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500")}>
                     <MessageCircle className="h-3.5 w-3.5" /> {replies}

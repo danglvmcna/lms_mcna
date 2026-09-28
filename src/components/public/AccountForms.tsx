@@ -30,7 +30,7 @@ export function IntentBanner({ intent, onClear }: { intent: EnrollIntent; onClea
           {intent.courseTitle || "Khóa học đã chọn"}{intent.sectionCode ? ` · ${intent.sectionCode}` : ""}
         </p>
       </div>
-      <button type="button" onClick={onClear} aria-label="Bỏ chọn lớp" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+      <button type="button" onClick={onClear} aria-label="Bỏ chọn lớp" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700">
         <X className="h-4 w-4" />
       </button>
     </div>

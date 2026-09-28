@@ -144,7 +144,7 @@ export function SearchField({ value, onChange, placeholder, className, autoFocus
         className="h-11 w-full rounded-full border border-slate-200 bg-white pl-10 pr-10 text-[15px] text-slate-900 shadow-card placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
-        <button type="button" aria-label="Xóa tìm kiếm" onClick={() => onChange("")} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+        <button type="button" aria-label="Xóa tìm kiếm" onClick={() => onChange("")} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700">
           <X className="h-4 w-4" />
         </button>
       )}

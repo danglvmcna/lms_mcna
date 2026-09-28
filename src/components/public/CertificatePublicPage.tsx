@@ -42,7 +42,7 @@ export default function CertificatePublicPage({ code }: { code: string }) {
               <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-50 text-rose-500"><ShieldCheck className="h-8 w-8" /></span>
               <h2 className="mt-4 text-lg font-bold">Không xác thực được</h2>
               <p className="mt-2 text-sm text-slate-500">{error}</p>
-              <p className="mt-4 font-mono text-xs text-slate-400">Mã: {code.toUpperCase()}</p>
+              <p className="mt-4 font-mono text-xs text-slate-500">Mã: {code.toUpperCase()}</p>
             </div>
           )}
           {certificate && (

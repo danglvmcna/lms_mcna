@@ -182,7 +182,7 @@ export default function PaymentQrModal({ transaction, course, onClose, onRefresh
           </a>
           <Button block variant="ghost" onClick={onClose}>Để sau</Button>
         </div>
-        <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400"><ShieldCheck className="h-3.5 w-3.5" /> Mã đơn {transaction.id}</p>
+        <p className="flex items-center justify-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Mã đơn {transaction.id}</p>
       </div>
     </Dialog>
   );

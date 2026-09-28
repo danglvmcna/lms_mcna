@@ -165,7 +165,7 @@ export default function NotificationInbox({ store, currentUser, onRefreshData, t
                       <TypeIcon type={note.type} />
                       <span className="min-w-0 flex-1">
                         <span className={cx("block text-[15px] leading-snug", unread ? "font-semibold text-slate-900" : "text-slate-700")}>{note.message}</span>
-                        <span className="mt-1 block text-xs text-slate-400">{relativeTime(note.createdAt)}</span>
+                        <span className="mt-1 block text-xs text-slate-500">{relativeTime(note.createdAt)}</span>
                       </span>
                       {unread && <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-500" aria-label="Chưa đọc" />}
                       <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />

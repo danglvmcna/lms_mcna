@@ -236,7 +236,7 @@ export default function CourseCatalog({ store, currentUser, myEnrollments, viewi
                                 <li key={session.id} className="flex items-center gap-3 py-2.5 text-sm">
                                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600">{index + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-slate-700">{session.topic}</span>
-                                  {session.date && <span className="shrink-0 text-xs text-slate-400">{formatDate(session.date)}</span>}
+                                  {session.date && <span className="shrink-0 text-xs text-slate-500">{formatDate(session.date)}</span>}
                                 </li>
                               ))}
                             </ol>
@@ -263,7 +263,7 @@ export default function CourseCatalog({ store, currentUser, myEnrollments, viewi
                     <li key={lesson.id} className="flex items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-sm font-bold text-slate-600">{index + 1}</span>
                       <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-800">{lesson.title.replace(/^\d+\.\s*/, "")}</span>
-                      {lesson.duration && <span className="shrink-0 text-xs text-slate-400">{lesson.duration.replace("mins", "phút")}</span>}
+                      {lesson.duration && <span className="shrink-0 text-xs text-slate-500">{lesson.duration.replace("mins", "phút")}</span>}
                     </li>
                   ))}
                 </Card>

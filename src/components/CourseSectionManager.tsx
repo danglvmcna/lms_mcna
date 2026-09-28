@@ -580,7 +580,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <td className="mcna-td">
                       <div className="space-y-1 text-[13px] text-slate-600">
                         {(sec.schedule || []).length === 0 ? <span className="text-amber-700">Chưa xếp lịch</span> : sec.schedule.map((slot: any, index: number) => (
-                          <div key={index} className="whitespace-nowrap">{slot.dayOfWeek} {slot.startTime}–{slot.endTime} <span className="text-slate-400">· {slot.room || "Trực tuyến"}</span></div>
+                          <div key={index} className="whitespace-nowrap">{slot.dayOfWeek} {slot.startTime}–{slot.endTime} <span className="text-slate-500">· {slot.room || "Trực tuyến"}</span></div>
                         ))}
                         {(sec.meetingUrl || sec.groupChatUrl) && (
                           <div className="flex flex-wrap gap-1.5 pt-1">
@@ -602,7 +602,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                 );
               })}
               {visibleSections.length === 0 && (
-                <tr><td colSpan={8} className="mcna-td py-12 text-center text-slate-400">Không có lớp phù hợp.</td></tr>
+                <tr><td colSpan={8} className="mcna-td py-12 text-center text-slate-500">Không có lớp phù hợp.</td></tr>
               )}
             </tbody>
           </table>
@@ -776,7 +776,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 font-sans">Các lớp học phần tương ứng</h4>
-                        <p className="text-xs text-slate-400 font-sans">Thời khóa biểu, phòng học và giảng viên</p>
+                        <p className="text-xs text-slate-500 font-sans">Thời khóa biểu, phòng học và giảng viên</p>
                       </div>
                       <button
                         type="button"
@@ -802,7 +802,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                               <div className="flex justify-between items-start">
                                 <div>
                                   <span className="font-mono font-bold text-indigo-700 text-xs block">{sec.sectionCode}</span>
-                                  <span className="text-xs text-slate-400 font-sans">Sĩ số: {currentCount}/{sec.maxStudents}</span>
+                                  <span className="text-xs text-slate-500 font-sans">Sĩ số: {currentCount}/{sec.maxStudents}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <button
@@ -827,7 +827,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteSection(sec.id, sec.sectionCode)}
-                                    className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded cursor-pointer transition"
+                                    className="p-1 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded cursor-pointer transition"
                                     title="Xóa lớp học"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -869,7 +869,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         })}
 
                       {(store.courseSections || []).filter((sec: CourseSection) => sec.courseId === editingCourseId).length === 0 && (
-                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 font-sans">
+                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 font-sans">
                           Chưa có lớp học phần nào được tạo cho môn học này.
                         </div>
                       )}
@@ -1103,7 +1103,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                             type="button"
                             disabled={sectionSlots.length === 1}
                             onClick={() => setSectionSlots(sectionSlots.filter((_, sIdx) => sIdx !== idx))}
-                            className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded disabled:opacity-40 cursor-pointer transition"
+                            className="p-1 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded disabled:opacity-40 cursor-pointer transition"
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -1196,7 +1196,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         </button>
                         <button
                           onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
-                          className="p-1.5 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
+                          className="p-1.5 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded-lg cursor-pointer transition"
                           title="Xóa bài học"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1206,7 +1206,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   ))}
 
                 {(store.lessons || []).filter((l: any) => l.courseId === selectedCourseForLessons.id).length === 0 && (
-                  <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 font-sans">
+                  <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500 font-sans">
                     Chưa có bài học nào được tạo cho khóa học này.
                   </div>
                 )}
@@ -1375,7 +1375,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
                   if (sectionRegs.length === 0) {
                     return (
-                      <div className="py-12 text-center text-slate-400 italic">
+                      <div className="py-12 text-center text-slate-500 italic">
                         Hiện chưa có học viên nào được xếp vào lớp này.
                       </div>
                     );

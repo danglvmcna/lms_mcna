@@ -164,7 +164,7 @@ export default function NotificationBell({ placement = "topbar" }: { placement?:
                     <TypeIcon type={notif.type} />
                     <span className="min-w-0 flex-1">
                       <span className={cx("line-clamp-3 text-[14px] leading-snug", hasUnread ? "font-semibold text-slate-900" : "text-slate-600")}>{notif.message}</span>
-                      <span className="mt-1 block text-xs text-slate-400">
+                      <span className="mt-1 block text-xs text-slate-500">
                         {relativeTime(notif.createdAt)}{group.length > 1 ? ` · ${group.length} thông báo giống nhau` : ""}
                       </span>
                     </span>

@@ -348,7 +348,7 @@ function SessionPath({ sessions, nextNumber, meetingUrl, isSessionDone, onOpen }
             <span
               className={cx(
                 "relative z-10 mt-4 flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-lg font-bold ring-4 ring-canvas md:h-16 md:w-16",
-                done ? "bg-emerald-500 text-white" : isNext ? "bg-indigo-600 text-white shadow-primary" : timing === "past" ? "bg-white text-slate-500 ring-canvas shadow-card" : "bg-white text-slate-400 shadow-card"
+                done ? "bg-emerald-500 text-white" : isNext ? "bg-indigo-600 text-white shadow-primary" : timing === "past" ? "bg-white text-slate-500 ring-canvas shadow-card" : "bg-white text-slate-500 shadow-card"
               )}
               aria-hidden
             >
@@ -454,7 +454,7 @@ function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, 
                     <span className={cx("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold", selected ? "bg-indigo-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200")}>{item.number}</span>
                     <span className="min-w-0">
                       <span className={cx("block truncate text-sm font-semibold", selected ? "text-indigo-700" : "text-slate-700")}>{cleanTopic(item.topic) || lessonTitle(item.lessons[0]) || item.title}</span>
-                      <span className="block text-xs text-slate-400">{item.date ? formatDate(item.date) : "Chưa xếp lịch"}</span>
+                      <span className="block text-xs text-slate-500">{item.date ? formatDate(item.date) : "Chưa xếp lịch"}</span>
                     </span>
                   </button>
                 </li>
@@ -625,7 +625,7 @@ function LessonReader({ lesson, lessons, session, completed, onToggle, onOpenLes
           <label htmlFor="lesson-note" className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
             <NotebookPen className="h-[18px] w-[18px] text-amber-500" /> Ghi chú của tôi
           </label>
-          <span className="text-xs text-slate-400" aria-live="polite">{noteSaving ? "Đang lưu…" : noteDirty ? "Chưa lưu" : note ? "Đã lưu" : ""}</span>
+          <span className="text-xs text-slate-500" aria-live="polite">{noteSaving ? "Đang lưu…" : noteDirty ? "Chưa lưu" : note ? "Đã lưu" : ""}</span>
         </div>
         <textarea
           id="lesson-note"

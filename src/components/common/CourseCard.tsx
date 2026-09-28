@@ -25,13 +25,13 @@ export default function CourseCard({ title, category, level, description, thumbn
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
           {category && <span className="font-semibold text-indigo-600">{category}</span>}
-          {level && <span className="text-slate-400">· {level}</span>}
+          {level && <span className="text-slate-500">· {level}</span>}
         </div>
         <h3 className="line-clamp-2 text-[17px] font-bold leading-snug text-slate-900 group-hover:text-indigo-700">{title}</h3>
         {description && <p className="line-clamp-2 text-sm leading-relaxed text-slate-500">{description}</p>}
         <div className="mt-auto flex items-end justify-between gap-3 pt-3">
           <div>
-            {hasDiscount && <p className="text-xs text-slate-400 line-through">{formatVnd(originalPrice!)}</p>}
+            {hasDiscount && <p className="text-xs text-slate-500 line-through">{formatVnd(originalPrice!)}</p>}
             <p className="text-base font-bold text-slate-900">{formatPrice(price)}</p>
           </div>
           {status}

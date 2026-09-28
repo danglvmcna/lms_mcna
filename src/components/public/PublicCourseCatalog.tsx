@@ -362,7 +362,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                                 <li key={session.id} className="flex items-center gap-3 py-2.5 text-sm">
                                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600">{index + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-slate-700">{session.topic}</span>
-                                  {session.date && <span className="shrink-0 text-xs text-slate-400">{formatDate(session.date)}</span>}
+                                  {session.date && <span className="shrink-0 text-xs text-slate-500">{formatDate(session.date)}</span>}
                                 </li>
                               ))}
                             </ol>
@@ -383,7 +383,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                     <li key={lesson.id || idx} className="flex items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-sm font-bold text-slate-600">{idx + 1}</span>
                       <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-800">{lesson.title.replace(/^\d+\.\s*/, "")}</span>
-                      {lesson.duration && <span className="shrink-0 text-xs text-slate-400">{lesson.duration.replace("mins", "phút")}</span>}
+                      {lesson.duration && <span className="shrink-0 text-xs text-slate-500">{lesson.duration.replace("mins", "phút")}</span>}
                     </li>
                   ))}
                 </ol>
@@ -396,7 +396,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
               <CourseCover src={course.thumbnail} title={course.title} category={course.category} className="aspect-[16/10] w-full" iconSize="h-12 w-12" />
               <div className="space-y-5 p-6">
                 <div>
-                  {hasDiscount && <p className="text-sm text-slate-400 line-through">{formatVnd(course.originalPrice!)}</p>}
+                  {hasDiscount && <p className="text-sm text-slate-500 line-through">{formatVnd(course.originalPrice!)}</p>}
                   <p className="font-display text-3xl font-bold tracking-tight text-slate-900">{formatPrice(course.price)}</p>
                 </div>
                 <Button block size="lg" onClick={scrollToClasses} disabled={sections.length === 0}>
