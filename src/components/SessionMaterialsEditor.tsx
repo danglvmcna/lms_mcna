@@ -230,7 +230,7 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
                       <span className={`font-bold text-xs truncate ${isLight ? "text-slate-900" : "text-white"}`}>
                         {material.title}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 border ${meta.badgeStyle}`}>
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-mono font-bold uppercase tracking-wider shrink-0 border ${meta.badgeStyle}`}>
                         {meta.badge}
                       </span>
                     </div>
@@ -251,7 +251,7 @@ export default function SessionMaterialsEditor({ sessionId, triggerToast, onChan
                       </span>
                     ) : null}
                     {uploadTime && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-mono font-medium ${
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-mono font-medium ${
                         isLight
                           ? "bg-slate-50 text-slate-600 border-slate-200"
                           : "bg-white/5 text-white/60 border-white/10"

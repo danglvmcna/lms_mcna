@@ -16,11 +16,16 @@ import {
   Mail,
   ChevronLeft,
   ChevronRight,
-  Users
+  Users,
+  ClipboardList,
+  Wallet,
+  Hourglass,
+  TrendingUp
 } from "lucide-react";
 import { api } from "../../api";
 import { Enrollment, User, Course, CourseSection, Transaction } from "../../types";
 import ModalPortal from "../ModalPortal";
+import { Avatar, Badge, Button, Card, EmptyState, PageHeader, SearchField, StatTile } from "../ui";
 
 interface AdminOrdersManagerProps {
   store: any;
@@ -175,124 +180,29 @@ export default function AdminOrdersManager({
     return new Intl.NumberFormat("vi-VN").format(amount) + "\u00A0đ";
   };
 
-  const getInitials = (name?: string) => {
-    if (!name) return "HV";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "HV";
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
 
-  const getAvatarColor = (name?: string) => {
-    const styles = [
-      "bg-slate-100 text-slate-700 border-slate-200",
-      "bg-sky-50 text-sky-700 border-sky-200/80",
-      "bg-indigo-50 text-indigo-700 border-indigo-200/80",
-      "bg-emerald-50 text-emerald-700 border-emerald-200/80",
-      "bg-amber-50 text-amber-800 border-amber-200/80",
-      "bg-purple-50 text-purple-700 border-purple-200/80",
-    ];
-    if (!name) return styles[0];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return styles[Math.abs(hash) % styles.length];
-  };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            Học viên & Đơn hàng
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Quản lý học viên, khóa học và trạng thái học tập.
-          </p>
-        </div>
+      <PageHeader title="Ghi danh" subtitle="Xác nhận học phí, xếp lớp và kích hoạt học viên." />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatTile label="Tổng đơn" value={orders.length} icon={<ClipboardList className="h-[18px] w-[18px]" />} />
+        <StatTile label="Chờ thanh toán" value={pendingPaymentCount} tone="amber" icon={<Wallet className="h-[18px] w-[18px]" />} hint={pendingPaymentCount ? "Cần xác nhận" : "Đã xử lý hết"} />
+        <StatTile label="Chờ xếp lớp" value={pendingPlacementCount} tone="sky" icon={<Hourglass className="h-[18px] w-[18px]" />} hint={pendingPlacementCount ? "Chờ phân bổ" : "Đã xử lý hết"} />
+        <StatTile label="Doanh thu" value={<span className="text-xl sm:text-2xl" title={formatMoney(totalRevenue)}>{formatMoney(totalRevenue)}</span>} tone="emerald" icon={<TrendingUp className="h-[18px] w-[18px]" />} hint={`${activeCount} học viên đang học`} />
       </div>
 
-      {/* KPI Metric Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-medium text-slate-500">Tổng đơn đăng ký</p>
-          <div className="flex items-baseline justify-between mt-2">
-            <h3 className="text-2xl font-bold font-mono text-slate-900">{orders.length}</h3>
-            <span className="text-xs text-slate-400 font-mono">100%</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Chờ thanh toán</p>
-            {pendingPaymentCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            )}
-          </div>
-          <div className="flex items-baseline justify-between mt-2">
-            <h3 className="text-2xl font-bold font-mono text-amber-900">{pendingPaymentCount}</h3>
-            <span className="text-xs text-amber-700 font-medium">Cần xác nhận</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Chờ xếp lớp</p>
-            {pendingPlacementCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-sky-500" />
-            )}
-          </div>
-          <div className="flex items-baseline justify-between mt-2">
-            <h3 className="text-2xl font-bold font-mono text-sky-900">{pendingPlacementCount}</h3>
-            <span className="text-xs text-sky-700 font-medium">Chờ phân bổ</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <p className="text-xs font-medium text-slate-500">Đang học / Doanh thu</p>
-          <div className="mt-2">
-            <h3 className="text-lg sm:text-xl font-bold font-mono text-slate-900 truncate" title={formatMoney(totalRevenue)}>
-              {formatMoney(totalRevenue)}
-            </h3>
-            <span className="text-xs text-emerald-700 font-medium block mt-1">
-              {activeCount} học viên đang học
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar Toolbar */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm theo tên học viên, SĐT, email, mã đơn..."
-            className="mcna-input mcna-input-search !pl-9 w-full bg-slate-50/50 focus:bg-white"
-          />
-        </div>
-
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="mcna-select text-xs sm:text-sm"
-          >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <SearchField value={search} onChange={setSearch} placeholder="Tìm theo tên, SĐT, email, mã đơn…" className="flex-1" />
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Lọc theo trạng thái" className="mcna-select !w-auto !rounded-full">
             <option value="all">Tất cả trạng thái ({orders.length})</option>
             <option value="pending_payment">Chờ thanh toán ({pendingPaymentCount})</option>
             <option value="pending">Chờ xếp lớp ({pendingPlacementCount})</option>
             <option value="active">Đang học ({activeCount})</option>
           </select>
-
-          <select
-            value={courseFilter}
-            onChange={e => setCourseFilter(e.target.value)}
-            className="mcna-select text-xs sm:text-sm max-w-[220px]"
-            aria-label="Lọc đơn theo khóa học"
-          >
+          <select value={courseFilter} onChange={e => setCourseFilter(e.target.value)} aria-label="Lọc đơn theo khóa học" className="mcna-select !w-auto max-w-[240px] !rounded-full">
             <option value="all">Tất cả khóa học</option>
             {courses
               .filter(course => orders.some(order => order.courseId === course.id))
@@ -301,15 +211,8 @@ export default function AdminOrdersManager({
                 <option key={course.id} value={course.id}>{course.title}</option>
               ))}
           </select>
-
           {(search || statusFilter !== "all" || courseFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}
-              className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition shrink-0 cursor-pointer"
-            >
-              Đặt lại
-            </button>
+            <Button size="sm" variant="ghost" onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); }}>Đặt lại</Button>
           )}
         </div>
       </div>
@@ -327,29 +230,28 @@ export default function AdminOrdersManager({
         {paginatedOrders.map(order => {
           const activeSection = order.currentSection || order.requestedSection;
           const isPending = order.status === "pending_payment" || order.status === "pending";
-          return <article key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="font-semibold text-slate-900">{order.student?.name || "Chưa đặt tên"}</h3>
-                <p className="truncate text-xs text-slate-500">{order.student?.email || "—"}</p>
+          return <Card key={order.id} className="space-y-3 p-4">
+            <div className="flex items-center gap-3">
+              <Avatar name={order.student?.name} size={40} />
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-semibold text-slate-900">{order.student?.name || "Chưa đặt tên"}</h3>
+                <p className="truncate text-[13px] text-slate-500">{order.student?.email || "—"}</p>
               </div>
-              <span className={`shrink-0 text-xs font-medium ${order.status === "active" ? "text-emerald-700" : "text-amber-700"}`}>
+              <Badge tone={order.status === "active" ? "success" : order.status === "pending" ? "info" : "warning"} dot>
                 {order.status === "active" ? "Đang học" : order.status === "pending" ? "Chờ xếp lớp" : "Chờ thanh toán"}
-              </span>
+              </Badge>
             </div>
-            <div className="border-t border-slate-100 pt-3 text-sm">
-              <p className="font-medium text-slate-800">{order.course?.title || "Khóa học chưa xác định"}</p>
-              <p className="mt-1 text-xs text-slate-500">{activeSection ? `Lớp ${activeSection.sectionCode}` : "Chưa chọn lớp"}</p>
+            <div className="rounded-2xl bg-canvas p-3 text-sm">
+              <p className="font-semibold text-slate-800">{order.course?.title || "Khóa học chưa xác định"}</p>
+              <p className="mt-0.5 text-[13px] text-slate-500">{activeSection ? `Lớp ${activeSection.sectionCode}` : "Chưa chọn lớp"}</p>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between gap-3">
               <span className="font-semibold text-slate-900">{formatMoney(order.price)}</span>
-              {isPending && <button type="button" onClick={() => handleQuickActivate(order)} disabled={activatingId === order.id} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                {activatingId === order.id ? "Đang xử lý..." : "Kích hoạt"}
-              </button>}
+              {isPending && <Button size="sm" onClick={() => handleQuickActivate(order)} loading={activatingId === order.id} icon={<Check className="h-4 w-4" />}>Kích hoạt</Button>}
             </div>
-          </article>;
+          </Card>;
         })}
-        {paginatedOrders.length === 0 && <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Không có học viên phù hợp.</div>}
+        {paginatedOrders.length === 0 && <Card><EmptyState compact icon={<ClipboardList className="h-6 w-6" />} title="Không có đơn phù hợp" /></Card>}
       </div>
 
       {/* Orders Data Table */}
@@ -357,9 +259,9 @@ export default function AdminOrdersManager({
         <table className="mcna-table min-w-[900px]">
           <thead className="mcna-thead">
             <tr>
-              <th className="mcna-th pl-4 min-w-[220px]">Học viên</th>
-              <th className="mcna-th min-w-[240px]">Khóa học</th>
-              <th className="mcna-th min-w-[170px] whitespace-nowrap">Lớp học</th>
+              <th className="mcna-th pl-4 min-w-[200px]">Học viên</th>
+              <th className="mcna-th min-w-[200px]">Khóa học</th>
+              <th className="mcna-th min-w-[140px] whitespace-nowrap">Lớp học</th>
               <th className="mcna-th text-right whitespace-nowrap min-w-[130px]">Học phí</th>
               <th className="mcna-th text-center whitespace-nowrap min-w-[140px]">Trạng thái</th>
               <th className="mcna-th text-right pr-4 whitespace-nowrap min-w-[140px]">Hành động</th>
@@ -396,11 +298,7 @@ export default function AdminOrdersManager({
                     {/* Column 1: Học viên (Primary Identity) */}
                     <td className="mcna-td pl-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`w-[38px] h-[38px] rounded-full flex items-center justify-center font-mono font-semibold text-xs shrink-0 border select-none ${getAvatarColor(order.student?.name)}`}
-                        >
-                          {getInitials(order.student?.name)}
-                        </div>
+                        <Avatar name={order.student?.name} size={38} />
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 text-sm truncate">
                             {order.student?.name || "Chưa đặt tên"}
@@ -460,22 +358,13 @@ export default function AdminOrdersManager({
                     {/* Column 5: Trạng thái */}
                     <td className="mcna-td py-3.5 text-center whitespace-nowrap">
                       {order.status === "pending_payment" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/60">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                          Chờ thanh toán
-                        </span>
+                        <Badge tone="warning" dot>Chờ thanh toán</Badge>
                       )}
                       {order.status === "pending" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200/60">
-                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
-                          Chờ xếp lớp
-                        </span>
+                        <Badge tone="info" dot>Chờ xếp lớp</Badge>
                       )}
                       {order.status === "active" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          Đang học
-                        </span>
+                        <Badge tone="success" dot>Đang học</Badge>
                       )}
                     </td>
 
@@ -535,10 +424,10 @@ export default function AdminOrdersManager({
       {/* Select Section Modal if multiple sections available */}
       {selectedEnrollmentForPlacement && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-150 font-sans">
+          <div className="mcna-overlay">
+            <div className="mcna-dialog sm:max-w-md">
               <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-900">
+                <h4 className="text-sm font-semibold text-slate-900">
                   Chọn lớp học phần để xếp lớp
                 </h4>
                 <button
@@ -576,18 +465,18 @@ export default function AdminOrdersManager({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-mono font-bold text-slate-900">{s.sectionCode}</p>
-                              <p className="mt-1 text-[10px] text-slate-500">
+                              <p className="mt-1 text-xs text-slate-500">
                                 {s.openingDate ? `Khai giảng ${new Date(s.openingDate).toLocaleDateString("vi-VN")}` : "Chưa chốt ngày khai giảng"}
                               </p>
                             </div>
-                            <span className={`inline-flex items-center gap-1 rounded-md font-mono px-2 py-0.5 text-[10px] font-semibold ${isFull ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-md font-mono px-2 py-0.5 text-xs font-semibold ${isFull ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
                               <Users className="h-3 w-3" /> {enrolledCount}/{s.maxStudents}
                             </span>
                           </div>
                           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
                             <div className={`h-full rounded-full ${isFull ? "bg-rose-500" : fillPercentage >= 80 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${fillPercentage}%` }} />
                           </div>
-                          <p className="mt-1.5 text-[10px] text-slate-500">{isFull ? "Lớp đã đủ sĩ số" : `Còn ${seatsLeft} chỗ trống`}</p>
+                          <p className="mt-1.5 text-xs text-slate-500">{isFull ? "Lớp đã đủ sĩ số" : `Còn ${seatsLeft} chỗ trống`}</p>
                         </button>
                       );
                     })}
@@ -597,7 +486,7 @@ export default function AdminOrdersManager({
               <div className="pt-3 flex justify-end gap-2 text-xs border-t border-slate-100">
                 <button
                   onClick={() => setSelectedEnrollmentForPlacement(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Hủy
                 </button>
