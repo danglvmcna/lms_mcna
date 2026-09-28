@@ -1,27 +1,29 @@
 # LMS MCNA - Hệ thống học trực tuyến Học viện Công nghệ MCNA
 
-Nền tảng bán và vận hành khóa học trực tuyến của Học viện MCNA: danh mục khóa học công khai, học viên tự đăng ký, admin duyệt đơn và xếp lớp, giảng viên dạy - điểm danh - chấm bài, tích hợp CRM MCNA.
+Nền tảng bán và vận hành khóa học trực tuyến của Học viện MCNA: danh mục khóa học công khai, học viên tự đăng ký và thanh toán VietQR, học trực tuyến qua Zoom với tài liệu từng buổi, admin xác nhận học phí và xếp lớp, tích hợp CRM MCNA.
 
 ---
 
 ## 👥 Ba vai trò
 
 ### 1. Quản trị viên (`admin`)
-* **Đơn hàng & Ghi danh**: duyệt đơn đăng ký, xác nhận thanh toán, xếp học viên vào lớp (lẻ hoặc hàng loạt).
-* **Khóa học & Lớp học**: quản lý khóa học, lớp, lịch học hàng tuần, số buổi, ngày khai giảng, link phòng học và nhóm chat.
-* **Duyệt khóa học**: phê duyệt hoặc trả về khóa học do giảng viên gửi lên.
+* **Tổng quan**: số liệu, việc cần làm và bảng **Cấu hình hệ thống** (SePay, email, nơi lưu tài liệu, CRM) cho biết máy chủ đang thiếu cài đặt nào.
+* **Ghi danh**: xác nhận học phí, kích hoạt và xếp học viên vào lớp; học viên nhận thông báo và email.
+* **Khóa học & lớp**: tạo/sửa khóa học và bài học; mở lớp với lịch tuần, sĩ số, link Zoom, nhóm Zalo; cảnh báo trùng lịch; buổi học tự sinh theo lịch; xem và trả lời thảo luận của lớp.
 * **Người dùng**: tạo tài khoản lẻ hoặc nhập CSV, đổi vai trò, khóa/mở tài khoản, gửi liên kết đặt lại mật khẩu.
-* **Nhật ký hệ thống**: tra cứu audit log.
+* **Thông báo** gửi hàng loạt và **Nhật ký & CRM** (audit log, hàng đợi đồng bộ CRM).
 
 ### 2. Giảng viên (`teacher`)
-* **Khóa học & Bài giảng**: soạn khóa học, bài học, ngân hàng câu hỏi và đề kiểm tra.
-* **Lớp học & Điểm danh**: điểm danh từng buổi, tạo mã điểm danh cho học viên tự check-in, tự chấm công, đính kèm tài liệu buổi học (slide, tài liệu, video YouTube, link ngoài).
-* **Bài tập & Chấm điểm**: chấm bài, sổ điểm, thống kê lớp.
+* **Khóa học của tôi**: các khóa được phân công; nhắc số câu hỏi của học viên đang chờ trả lời.
+* **Buổi học & tài liệu**: tạo/sửa buổi học, gắn video ghi hình, đăng slide, file dữ liệu (Excel, CSV, PBIX, Word, PDF), video YouTube.
+* **Thảo luận**: xem và trả lời câu hỏi theo từng lớp, tạo chủ đề cho cả lớp; bấm thông báo mở thẳng câu hỏi.
 
 ### 3. Học viên (`student`)
-* **Khám phá khóa học**: duyệt danh mục, xem lịch lớp, đăng ký lớp.
-* **Lớp học của tôi**: học bài, đánh dấu hoàn thành, làm bài kiểm tra, nộp bài tập, tải tài liệu buổi học.
-* **Đơn hàng & Thanh toán**: theo dõi đơn đăng ký và lịch sử giao dịch.
+* **Khám phá**: xem khóa học, chọn lớp theo lịch, đăng ký và thanh toán VietQR (lớp tự mở khi SePay xác nhận).
+* **Lớp học của tôi**: vào Zoom, nhóm lớp, tài liệu và video từng buổi, ghi chú bài học, đánh dấu đã học, thảo luận.
+* **Học phí & thông báo**: lịch sử giao dịch; thông báo trong LMS và email cho các việc quan trọng (được xếp lớp, học phí được xác nhận).
+
+> Bài kiểm tra, bài tập và chấm điểm, sổ điểm, chứng chỉ: phần máy chủ vẫn còn nhưng đã ẩn khỏi giao diện từ 23/09/2026. Điểm danh đã gỡ bỏ.
 
 ---
 
@@ -34,7 +36,7 @@ Nền tảng bán và vận hành khóa học trực tuyến của Học viện 
 
 ### Khóa học → Lớp → Buổi → Tài liệu
 * Mỗi lớp (`course_sections`) tự sinh các buổi "Buổi N" (`attendance_sessions`) theo số buổi và lịch học.
-* Giảng viên/Admin mở một buổi trong màn **Điểm danh** để thêm tài liệu (`session_materials`): slide (`.ppt/.pptx/.pdf`), Word/PDF (`.doc/.docx/.pdf`), video YouTube hoặc liên kết ngoài.
+* Giảng viên mở một buổi trong **Khóa học của tôi** để thêm tài liệu (`session_materials`): slide (`.ppt/.pptx/.pdf`), file dữ liệu và văn bản (`.xlsx/.csv/.pbix/.doc/.docx/.pdf/.zip`), video YouTube hoặc liên kết ngoài.
 * File nằm trong bucket **private** của Supabase Storage; học viên chỉ tải được qua `GET /api/materials/:id/download` khi đã được xếp vào lớp (link ký hạn 60 giây). Chưa cấu hình Supabase thì file lưu ở `MATERIALS_DIR`.
 
 ### Tự đăng ký tài khoản
@@ -144,15 +146,22 @@ npm start             # chạy production
 * `DATABASE_URL`, `JWT_SECRET`
 * `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_WEBHOOK_TOLERANCE_SECONDS`, `PASSWORD_RESET_TOKEN_TTL_MINUTES`
 
-#### Google Workspace & email
-* `SCHOOL_EMAIL_DOMAIN`, `GOOGLE_ADMIN_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `LMS_LOGIN_URL`
-* SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM`
+#### Thanh toán
+* `SEPAY_API_KEY`: bắt buộc để webhook SePay tự xác nhận chuyển khoản và mở lớp. Thiếu key thì quản trị phải bấm **Kích hoạt** cho từng đơn.
+
+#### Email
+* SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (mặc định người gửi là `"MCNA LMS" <SMTP_USER>`).
+* `LMS_LOGIN_URL`: địa chỉ LMS, dùng cho nút "Mở MCNA LMS" trong email thông báo.
+* Google Workspace (không bắt buộc, cấp email trường cho học viên): `SCHOOL_EMAIL_DOMAIN`, `GOOGLE_ADMIN_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_JSON`. Học viên chưa có email trường vẫn nhận email quan trọng (được xếp lớp, học phí được xác nhận) ở email đã đăng ký.
 
 #### Tài liệu buổi học
 * `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` (bucket **private**), hoặc `MATERIALS_DIR` khi chạy không có Supabase.
 
 #### CRM
 * `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET`, `CRM_API_KEY`, `CRM_INBOUND_SECRET`, `CRM_SIGNATURE_TOLERANCE_SECONDS`
+* `CRON_SECRET`: xác thực lịch gửi lại hàng đợi CRM (Vercel Cron và GitHub Actions).
+
+Sau khi triển khai, quản trị vào **Tổng quan → Cấu hình hệ thống** để xem mục nào còn thiếu (chỉ hiện có hay chưa, không hiện giá trị).
 
 ---
 
