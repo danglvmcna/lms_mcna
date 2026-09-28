@@ -54,6 +54,8 @@ interface WorkspaceProps extends StudentViewProps {
   learningCourseId: string | null;
   setLearningCourseId: (id: string | null) => void;
   focusSessionNumber: number | null;
+  /** Open the discussion tab (and this thread, when the id is known). `at` makes repeat clicks count. */
+  focusThread?: { id: string; at: number } | null;
   onToggleLesson: (enrollmentId: string, lessonId: string) => Promise<unknown> | void;
 }
 
@@ -177,7 +179,7 @@ function ClassList({ store, currentUser, myEnrollments, setLearningCourseId, ope
 
 /* ====================================================================== Classroom */
 
-function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCourseId, focusSessionNumber, onToggleLesson, onRefreshData, toast }: WorkspaceProps & { courseId: string }) {
+function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCourseId, focusSessionNumber, focusThread, onToggleLesson, onRefreshData, toast }: WorkspaceProps & { courseId: string }) {
   const course = store.courses.find(c => c.id === courseId);
   const enrollment = myEnrollments.find(e => e.courseId === courseId);
   const section = enrollment ? enrollmentSection(store, currentUser.id, courseId) : undefined;
@@ -190,12 +192,14 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
   const [sessionNumber, setSessionNumber] = useState<number | null>(focusSessionNumber);
   const [lessonId, setLessonId] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [threadToOpen, setThreadToOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    setTab("sessions");
+    setTab(focusThread ? "discussion" : "sessions");
+    setThreadToOpen(focusThread?.id || null);
     setSessionNumber(focusSessionNumber);
     setLessonId(null);
-  }, [courseId, focusSessionNumber]);
+  }, [courseId, focusSessionNumber, focusThread]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -264,7 +268,7 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
       </div>
       <Segmented
         value={tab}
-        onChange={value => { setTab(value); setSessionNumber(null); setLessonId(null); }}
+        onChange={value => { setTab(value); setSessionNumber(null); setLessonId(null); setThreadToOpen(null); }}
         options={[
           { value: "sessions", label: <><BookOpen className="h-4 w-4" /> Buổi học</> },
           { value: "discussion", label: <><MessagesSquare className="h-4 w-4" /> Thảo luận</> }
@@ -279,7 +283,7 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
       {!activeSession && !activeLesson && header}
 
       {tab === "discussion" ? (
-        <ForumDiscussion courseId={courseId} sectionId={sectionId} store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={toast} />
+        <ForumDiscussion key={threadToOpen || "list"} courseId={courseId} sectionId={sectionId} store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={toast} initialPostId={threadToOpen} />
       ) : activeLesson ? (
         <LessonReader
           lesson={activeLesson}

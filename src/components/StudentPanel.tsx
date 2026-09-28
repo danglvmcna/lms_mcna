@@ -31,6 +31,8 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
   const [viewingCourseId, setViewingCourseId] = useState<string | null>(null);
   const [learningCourseId, setLearningCourseId] = useState<string | null>(null);
   const [focusSessionNumber, setFocusSessionNumber] = useState<number | null>(null);
+  // A discussion thread to open in the classroom, set when arriving from a notification.
+  const [focusThread, setFocusThread] = useState<{ id: string; at: number } | null>(null);
   const [paymentGuideTx, setPaymentGuideTx] = useState<Transaction | null>(null);
 
   // Choosing a tab in the navigation always returns to that tab's top level.
@@ -38,6 +40,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
     setViewingCourseId(null);
     setLearningCourseId(null);
     setFocusSessionNumber(null);
+    setFocusThread(null);
   }, [navNonce]);
 
   // Refresh when the inbox opens, then poll every 30s while it stays open.
@@ -55,6 +58,20 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
       if (!notif) return;
       const { relatedEntityType, relatedEntityId, message } = notif;
       const text = (message || "").toLowerCase();
+
+      // Class discussion: open the classroom on its Thảo luận tab, at the thread when we know it.
+      const forumClassCode = /^Diễn đàn lớp (\S+):/.exec(message || "")?.[1];
+      if (relatedEntityType === "forum_post" || forumClassCode) {
+        const post = relatedEntityType === "forum_post" ? (store?.forumPosts || []).find(p => p.id === relatedEntityId) : undefined;
+        const courseId = post?.courseId || (store?.courseSections || []).find(sec => sec.sectionCode === forumClassCode)?.courseId;
+        setActiveSubTab("learning");
+        setViewingCourseId(null);
+        setLearningCourseId(courseId || null);
+        setFocusSessionNumber(null);
+        setFocusThread(courseId ? { id: post?.id || "", at: Date.now() } : null);
+        return;
+      }
+      setFocusThread(null);
 
       if (relatedEntityType === "transaction" || text.includes("thanh toán") || text.includes("học phí") || text.includes("đơn hàng")) {
         setActiveSubTab("orders");
@@ -85,7 +102,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, [store?.courses, store?.enrollments]);
+  }, [store?.courses, store?.enrollments, store?.forumPosts, store?.courseSections]);
 
   const myEnrollments = useMemo(() => store.enrollments.filter(e => e.studentId === currentUser.id), [store.enrollments, currentUser.id]);
 
@@ -129,6 +146,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
       setActiveSubTab(next);
       setViewingCourseId(null);
       setLearningCourseId(null);
+      setFocusThread(null);
       window.scrollTo({ top: 0 });
     },
     openCourse: courseId => {
@@ -142,6 +160,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
       setViewingCourseId(null);
       setLearningCourseId(courseId);
       setFocusSessionNumber(sessionNumber ?? null);
+      setFocusThread(null);
       window.scrollTo({ top: 0 });
     },
     openPayment: setPaymentGuideTx
@@ -157,8 +176,9 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
         <MyLearningWorkspace
           {...view}
           learningCourseId={learningCourseId}
-          setLearningCourseId={id => { setLearningCourseId(id); setFocusSessionNumber(null); }}
+          setLearningCourseId={id => { setLearningCourseId(id); setFocusSessionNumber(null); setFocusThread(null); }}
           focusSessionNumber={focusSessionNumber}
+          focusThread={focusThread}
           onToggleLesson={handleToggleLessonComplete}
         />
       )}
