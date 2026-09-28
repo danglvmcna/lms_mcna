@@ -714,7 +714,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Gavin Belson"
+                  placeholder="Ví dụ: Nguyễn Văn An"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
                   className="mcna-input w-full"
@@ -726,7 +726,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 <input
                   type="email"
                   required
-                  placeholder="Ví dụ: gavin@hooli.com"
+                  placeholder="Ví dụ: an.nguyen@gmail.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   className="mcna-input w-full"
@@ -813,7 +813,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 </p>
                 <textarea
                   required
-                  placeholder="name, email, role&#10;Gavin Belson, gavin@hooli.com, student&#10;Laurie Bream, laurie@raviga.com, teacher"
+                  placeholder="name, email, role&#10;Nguyễn Văn An, an.nguyen@gmail.com, student&#10;Trần Thị Bình, binh.tran@gmail.com, teacher"
                   value={csvText}
                   onChange={(e) => setCsvText(e.target.value)}
                   className="mcna-textarea w-full font-mono h-36 mt-1.5"
