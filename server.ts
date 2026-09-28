@@ -3141,7 +3141,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: post.id
         });
       }
     }
@@ -3150,7 +3152,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: post.id
       });
     }
   }
@@ -3228,7 +3232,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: postAuthorId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
 
@@ -3241,7 +3247,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: postId
         });
       }
     }
@@ -3250,7 +3258,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
   }

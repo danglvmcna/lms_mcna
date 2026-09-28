@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowLeft, MessageCircle, MessagesSquare, Plus, Send } from "lucide-react";
 import { api } from "../api";
 import { relativeTime } from "../lib/format";
@@ -11,6 +11,13 @@ interface ForumDiscussionProps {
   currentUser: any;
   onRefreshData: () => void;
   triggerToast: (message: string, type?: "success" | "error" | "info" | "warning") => void;
+  /** Open this thread straight away, e.g. when arriving from a notification. */
+  initialPostId?: string | null;
+}
+
+/** A thread still waits for an answer while only its author has written in it. */
+export function needsReply(post: any) {
+  return !(post.replies || []).some((reply: any) => reply.authorId !== post.authorId);
 }
 
 const ROLE: Record<string, { label: string; tone: Tone }> = {
@@ -20,19 +27,26 @@ const ROLE: Record<string, { label: string; tone: Tone }> = {
   student: { label: "Học viên", tone: "primary" }
 };
 
-export default function ForumDiscussion({ courseId, sectionId, store, currentUser, onRefreshData, triggerToast }: ForumDiscussionProps) {
+export default function ForumDiscussion({ courseId, sectionId, store, currentUser, onRefreshData, triggerToast, initialPostId }: ForumDiscussionProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [newPostTitle, setNewPostTitle] = useState("");
   const [newPostContent, setNewPostContent] = useState("");
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(initialPostId || null);
   const [replyContent, setReplyContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isStaff = currentUser.role === "teacher" || currentUser.role === "admin" || currentUser.role === "manager";
+
+  useEffect(() => {
+    if (initialPostId) setSelectedPostId(initialPostId);
+  }, [initialPostId]);
 
   // The server maps course-level posts to `undefined` while some callers pass `null` for "no section".
   const coursePosts = (store.forumPosts || [])
     .filter((post: any) => post.courseId === courseId && (post.sectionId ?? null) === (sectionId ?? null))
-    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a: any, b: any) =>
+      (isStaff ? Number(needsReply(b)) - Number(needsReply(a)) : 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   const filteredPosts = coursePosts.filter((post: any) =>
     post.title.toLowerCase().includes(searchTerm.toLowerCase()) || post.content.toLowerCase().includes(searchTerm.toLowerCase())
@@ -44,7 +58,8 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
 
   const author = (authorId: string) => {
     const user = (store.users || []).find((u: any) => u.id === authorId);
-    return user ? { name: user.name, role: user.role } : { name: "Người dùng ẩn danh", role: "student" };
+    if (authorId === currentUser.id) return { name: currentUser.name, role: currentUser.role };
+    return user ? { name: user.name, role: user.role } : { name: "Thành viên MCNA", role: "" };
   };
 
   const handleCreatePost = async (e: React.FormEvent) => {
@@ -56,7 +71,7 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
     setIsSubmitting(true);
     try {
       await api.createForumPost(courseId, { title: newPostTitle.trim(), content: newPostContent.trim(), sectionId: sectionId || undefined });
-      triggerToast("Đã đăng câu hỏi!", "success");
+      triggerToast(isStaff ? "Đã đăng chủ đề cho cả lớp." : "Đã đăng câu hỏi!", "success");
       setNewPostTitle("");
       setNewPostContent("");
       setIsCreatingPost(false);
@@ -160,19 +175,19 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
     return (
       <Card className="mx-auto max-w-2xl space-y-5 p-5 md:p-6">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Đặt câu hỏi mới</h2>
-          <p className="mt-1 text-sm text-slate-500">Câu hỏi rõ ràng sẽ nhận được câu trả lời nhanh hơn.</p>
+          <h2 className="text-xl font-bold text-slate-900">{isStaff ? "Tạo chủ đề mới" : "Đặt câu hỏi mới"}</h2>
+          <p className="mt-1 text-sm text-slate-500">{isStaff ? "Đăng lời nhắn, bài tập hoặc câu hỏi thảo luận cho cả lớp. Học viên sẽ nhận thông báo." : "Câu hỏi rõ ràng sẽ nhận được câu trả lời nhanh hơn."}</p>
         </div>
         <form onSubmit={handleCreatePost} className="space-y-4">
           <Field label="Tiêu đề" htmlFor="forum-title">
-            <input id="forum-title" type="text" value={newPostTitle} onChange={e => setNewPostTitle(e.target.value)} placeholder="Ví dụ: Vì sao vòng lặp for bị lỗi ở bài 2?" className={inputClass} />
+            <input id="forum-title" type="text" value={newPostTitle} onChange={e => setNewPostTitle(e.target.value)} placeholder={isStaff ? "Ví dụ: Bài tập về nhà buổi 4" : "Ví dụ: Vì sao vòng lặp for bị lỗi ở bài 2?"} className={inputClass} />
           </Field>
           <Field label="Nội dung" htmlFor="forum-content">
-            <textarea id="forum-content" value={newPostContent} onChange={e => setNewPostContent(e.target.value)} placeholder="Mô tả bạn đã thử gì và bị vướng ở đâu…" className="mcna-textarea h-44 resize-y" />
+            <textarea id="forum-content" value={newPostContent} onChange={e => setNewPostContent(e.target.value)} placeholder={isStaff ? "Nội dung bạn muốn gửi tới cả lớp…" : "Mô tả bạn đã thử gì và bị vướng ở đâu…"} className="mcna-textarea h-44 resize-y" />
           </Field>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="ghost" onClick={() => setIsCreatingPost(false)}>Hủy</Button>
-            <Button type="submit" loading={isSubmitting} disabled={!newPostTitle.trim() || !newPostContent.trim()}>Đăng câu hỏi</Button>
+            <Button type="submit" loading={isSubmitting} disabled={!newPostTitle.trim() || !newPostContent.trim()}>{isStaff ? "Đăng chủ đề" : "Đăng câu hỏi"}</Button>
           </div>
         </form>
       </Card>
@@ -185,9 +200,9 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900">Thảo luận {currentSection ? `lớp ${currentSection.sectionCode}` : ""}</h2>
-          <p className="text-sm text-slate-500">Hỏi bài, chia sẻ mẹo và giúp đỡ các bạn cùng lớp.</p>
+          <p className="text-sm text-slate-500">{isStaff ? "Trả lời câu hỏi của học viên. Học viên nhận thông báo ngay khi bạn trả lời." : "Hỏi bài, chia sẻ mẹo và giúp đỡ các bạn cùng lớp."}</p>
         </div>
-        {!isReadOnly && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatingPost(true)}>Đặt câu hỏi</Button>}
+        {!isReadOnly && <Button variant={isStaff ? "secondary" : "primary"} icon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatingPost(true)}>{isStaff ? "Tạo chủ đề" : "Đặt câu hỏi"}</Button>}
       </div>
 
       {coursePosts.length > 3 && <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Tìm trong thảo luận…" />}
@@ -204,7 +219,10 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-semibold leading-snug text-slate-900 group-hover:text-indigo-700">{post.title}</span>
                     <span className="mt-0.5 line-clamp-2 block text-sm text-slate-500">{post.content}</span>
-                    <span className="mt-1.5 block text-xs text-slate-500">{postAuthor.name} · {relativeTime(post.createdAt)}</span>
+                    <span className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      {postAuthor.name} · {relativeTime(post.createdAt)}
+                      {isStaff && needsReply(post) && <Badge tone="warning" dot>Chưa trả lời</Badge>}
+                    </span>
                   </span>
                   <span className={cx("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", replies ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500")}>
                     <MessageCircle className="h-3.5 w-3.5" /> {replies}
@@ -219,9 +237,9 @@ export default function ForumDiscussion({ courseId, sectionId, store, currentUse
           <EmptyState
             illustration="chat"
             icon={<MessagesSquare className="h-6 w-6" />}
-            title={searchTerm ? "Không tìm thấy thảo luận" : "Chưa có thảo luận nào"}
-            description={searchTerm ? "Thử tìm với từ khóa khác." : "Có thắc mắc về bài học? Hãy là người đầu tiên đặt câu hỏi."}
-            action={!searchTerm && !isReadOnly ? <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatingPost(true)}>Đặt câu hỏi</Button> : undefined}
+            title={searchTerm ? "Không tìm thấy thảo luận" : isStaff ? "Chưa có câu hỏi nào" : "Chưa có thảo luận nào"}
+            description={searchTerm ? "Thử tìm với từ khóa khác." : isStaff ? "Khi học viên đặt câu hỏi, bạn sẽ nhận thông báo và trả lời tại đây." : "Có thắc mắc về bài học? Hãy là người đầu tiên đặt câu hỏi."}
+            action={!searchTerm && !isReadOnly ? <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setIsCreatingPost(true)}>{isStaff ? "Tạo chủ đề" : "Đặt câu hỏi"}</Button> : undefined}
           />
         </Card>
       )}
