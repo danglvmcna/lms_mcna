@@ -255,7 +255,7 @@ export function ForgotPasswordScreen({ onGoToLogin }: { onGoToLogin: () => void 
   }
 
   return (
-    <AuthLayout title="Quên mật khẩu?" subtitle="Nhập email đăng nhập, chúng tôi sẽ gửi liên kết để bạn đặt lại mật khẩu.">
+    <AuthLayout title="Quên mật khẩu?" subtitle="Nhập email đăng nhập, chúng tôi sẽ gửi liên kết để bạn đặt lại mật khẩu." top={<Illustration name="lock" className="h-28 w-28" />}>
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <Callout tone="danger">{error}</Callout>}
         <Field label="Email" htmlFor="fp-email">

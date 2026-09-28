@@ -43,6 +43,7 @@ export default function AuthLayout({ children, onBackToCourses, title, subtitle,
       <aside className="relative hidden overflow-hidden bg-aurora lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
         <BrandLockup />
         <div className="relative z-10 max-w-md space-y-10">
+          <Illustration name="welcome" eager className="-mb-4 -ml-4 h-36 w-36 xl:h-44 xl:w-44 [@media(max-height:800px)]:hidden" />
           <h2 className="text-[40px] font-bold leading-[1.1] tracking-tight text-slate-900 xl:text-5xl">
             Học công nghệ,
             <br />
@@ -62,7 +63,6 @@ export default function AuthLayout({ children, onBackToCourses, title, subtitle,
             ))}
           </ul>
         </div>
-        <Illustration name="welcome" eager className="pointer-events-none absolute -bottom-6 right-0 h-[46%] max-h-[420px] w-auto" />
         <p className="relative z-10 text-sm text-slate-500">© {new Date().getFullYear()} MCNA Technology School</p>
       </aside>
 

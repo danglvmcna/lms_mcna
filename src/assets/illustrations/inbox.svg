@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-label="Bít báo đã đọc hết thông báo">
+<defs>
+<linearGradient id="gHead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A56E4"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient>
+<linearGradient id="gBody" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#6EE7F9"/></linearGradient>
+<linearGradient id="gSoft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E0E7FF"/><stop offset="1" stop-color="#CFFAFE"/></linearGradient>
+<linearGradient id="gCard" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#6EE7F9"/></linearGradient>
+</defs>
+<g>
+<path d="M244 60 a24 24 0 0 1 24 24 v16 l8 12 h-64 l8 -12 v-16 a24 24 0 0 1 24 -24 Z" fill="#FBBF24"/>
+<circle cx="244" cy="120" r="7" fill="#FBBF24"/>
+<circle cx="270" cy="62" r="13" fill="#34D399"/>
+<path d="M263 62 L268 67 L277 57" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</g>
+<g transform="translate(17.0 35.1) scale(0.86)">
+<ellipse cx="150" cy="322" rx="72" ry="10" fill="#0F172A" opacity=".08"/>
+<line x1="150" y1="44" x2="150" y2="66" stroke="#4F46E5" stroke-width="7" stroke-linecap="round"/>
+<circle cx="150" cy="38" r="11" fill="#6EE7F9"/><circle cx="146" cy="34" r="3.5" fill="#FFFFFF" opacity=".8"/>
+<rect x="54" y="100" width="18" height="44" rx="9" fill="#6EE7F9"/>
+<rect x="228" y="100" width="18" height="44" rx="9" fill="#6EE7F9"/>
+<rect x="68" y="62" width="164" height="124" rx="42" fill="url(#gHead)"/>
+<path d="M92 76 Q110 68 132 68" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity=".25" fill="none"/>
+<rect x="88" y="82" width="124" height="84" rx="30" fill="#0F172A"/>
+<path d="M110 116 Q122 128 134 116" stroke="#6EE7F9" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M166 116 Q178 128 190 116" stroke="#6EE7F9" stroke-width="6" stroke-linecap="round" fill="none"/>
+<path d="M136 146 Q150 156 164 146" stroke="#6EE7F9" stroke-width="5" stroke-linecap="round" fill="none"/>
+<rect x="134" y="184" width="32" height="14" rx="5" fill="#4F46E5"/>
+<rect x="90" y="194" width="120" height="104" rx="38" fill="url(#gBody)"/>
+<ellipse cx="124" cy="214" rx="18" ry="8" fill="#FFFFFF" opacity=".2" transform="rotate(-18 124 214)"/>
+<circle cx="150" cy="240" r="16" fill="#FFFFFF" opacity=".92"/><circle cx="150" cy="240" r="7" fill="#8B5CF6"/>
+<rect x="104" y="294" width="36" height="20" rx="10" fill="#4F46E5"/>
+<rect x="160" y="294" width="36" height="20" rx="10" fill="#4F46E5"/>
+<g><path d="M82 252 L218 252 L206 280 L94 280 Z" fill="url(#gSoft)" stroke="#4F46E5" stroke-width="5" stroke-linejoin="round"/></g>
+<path d="M104 226 Q82 252 114 262" stroke="#8B7CF4" stroke-width="18" stroke-linecap="round" fill="none"/><circle cx="114" cy="262" r="11" fill="#8B7CF4"/><path d="M196 226 Q218 252 186 262" stroke="#7FA6F6" stroke-width="18" stroke-linecap="round" fill="none"/><circle cx="186" cy="262" r="11" fill="#7FA6F6"/></g></svg>
