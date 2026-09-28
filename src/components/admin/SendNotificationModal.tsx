@@ -101,11 +101,11 @@ export default function SendNotificationModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative animate-in zoom-in-95 duration-150 text-slate-900 font-sans">
+      <div className="mcna-overlay">
+        <div className="mcna-dialog sm:max-w-lg">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
           >
             <X className="h-5 w-5" />
           </button>
@@ -185,12 +185,12 @@ export default function SendNotificationModal({
                   placeholder="Gõ tên hoặc email để lọc nhanh..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white text-slate-900 border border-slate-200 rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  className="mcna-input w-full"
                 />
                 <select
                   value={selectedUserId}
                   onChange={(e) => { resetDraftKey(); setSelectedUserId(e.target.value); }}
-                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
+                  className="mcna-select w-full"
                   size={Math.min(5, Math.max(2, filteredUsers.length))}
                 >
                   {filteredUsers.map(u => (
@@ -251,7 +251,7 @@ export default function SendNotificationModal({
                 value={message}
                 onChange={(e) => { resetDraftKey(); setMessage(e.target.value); }}
                 placeholder="Nhập nội dung thông báo muốn gửi tới học viên hoặc giảng viên..."
-                className="w-full px-3.5 py-2.5 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 leading-relaxed placeholder-slate-400"
+                className="mcna-textarea w-full"
               />
             </div>
 
@@ -268,7 +268,7 @@ export default function SendNotificationModal({
               <button
                 type="submit"
                 disabled={isSubmitting || !message.trim() || getRecipientCount() === 0}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mcna-btn-primary"
               >
                 <Send className="h-3.5 w-3.5" />
                 {isSubmitting ? "Đang gửi..." : "Gửi thông báo"}

@@ -30,7 +30,8 @@ import {
   Radio,
   RefreshCw,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  ClipboardList
 } from "lucide-react";
 import { CrmOutboxStatus, User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
@@ -42,12 +43,15 @@ import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";
 import SendNotificationModal from "./admin/SendNotificationModal";
+import { Avatar, Badge, Button, Callout, Card, cx, EmptyState, PageHeader, SearchField, SectionTitle, Segmented, Spinner, StatTile, useToast } from "./ui";
 
 interface AdminPanelProps {
   currentUser: User;
   onLogout: () => void;
   onRefreshData: () => void;
-  activeSystem?: "SIS" | "LMS";
+  activeSubTab: string;
+  setActiveSubTab: (tab: string) => void;
+  navNonce?: number;
   updateStore?: (updater: (draft: any) => void) => void;
 }
 
@@ -62,30 +66,9 @@ function generateClientTemporaryPassword() {
   return `Lms-${token}-1`;
 }
 
-export default function AdminPanel({ currentUser, onLogout, onRefreshData, activeSystem = "SIS", updateStore }: AdminPanelProps) {
+export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, setActiveSubTab }: AdminPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
-
-  // Navigation tab states
-  // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
-  const [activeSubTab, setActiveSubTab] = useState<
-    | "overview"
-    | "orders"
-    | "course_section_mgmt"
-    | "users"
-    | "audit"
-    | "notifications"
-  >("overview");
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
-  }, [activeSubTab]);
-
-  useEffect(() => {
-    const allowed = ["overview", "orders", "course_section_mgmt", "users", "audit", "notifications"];
-    if (!allowed.includes(activeSubTab)) {
-      setActiveSubTab("overview");
-    }
-  }, [currentUser.role]);
+  const toast = useToast();
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -159,7 +142,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   };
   const itemsPerPage = 8;
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [operationsSummary, setOperationsSummary] = useState<any | null>(null);
   const [crmOutbox, setCrmOutbox] = useState<CrmOutboxStatus | null>(null);
   const [loadingCrmOutbox, setLoadingCrmOutbox] = useState(false);
@@ -202,10 +184,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     }
   }, [activeSubTab]);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const triggerToast = (msg: string) => toast(msg);
 
   useEffect(() => {
     let cancelled = false;
@@ -446,540 +425,332 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     ] }
   ] as const;
 
+  const sortIndicator = (field: string) => (sortField === field ? (sortOrder === "asc" ? "↑" : "↓") : "");
+  const SortTh = ({ field, children, className }: { field: string; children: React.ReactNode; className?: string }) => (
+    <th className={cx("mcna-th", className)}>
+      <button type="button" onClick={() => handleSort(field)} className="inline-flex items-center gap-1 hover:text-slate-900">
+        {children} <span className="text-slate-400">{sortIndicator(field)}</span>
+      </button>
+    </th>
+  );
+
   return (
-    <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500 shadow-xs">Đang tải dữ liệu...</div>}
-      {isError && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-          <span>Không thể tải dữ liệu từ server.</span>
-          <button onClick={() => refetch()} className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold text-rose-700 hover:bg-rose-50 transition cursor-pointer shadow-xs">Thử lại</button>
+    <div className="space-y-8">
+      {isLoading && <Spinner label="Đang tải dữ liệu…" />}
+      {isError && <Callout tone="danger" title="Không thể tải dữ liệu từ máy chủ." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Thử lại</Button>} />}
+
+      {activeSubTab === "overview" && (
+        <div className="space-y-8">
+          <PageHeader title="Tổng quan" subtitle="Tình hình học viện hôm nay và những việc cần xử lý." />
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatTile label="Người dùng" value={totalUsersCount} icon={<Users className="h-[18px] w-[18px]" />} />
+            <StatTile label="Khóa học" value={totalCoursesCount} icon={<BookOpen className="h-[18px] w-[18px]" />} tone="violet" />
+            <StatTile label="Lượt ghi danh" value={totalEnrollmentsCount} icon={<TrendingUp className="h-[18px] w-[18px]" />} tone="emerald" />
+            <StatTile label="Chờ xử lý" value={operationsSummary?.pendingEnrollments ?? pendingEnrollmentsCount} icon={<ClipboardList className="h-[18px] w-[18px]" />} tone="amber" hint="Ghi danh cần duyệt" />
+          </div>
+
+          <section className="space-y-3">
+            <SectionTitle
+              title="Việc cần làm"
+              action={<Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)}>Làm mới</Button>}
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              <Card as="button" type="button" interactive onClick={() => setActiveSubTab("orders")} className="flex items-center gap-4 p-5 text-left">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><ClipboardList className="h-6 w-6" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-slate-900">{(operationsSummary?.pendingEnrollments ?? pendingEnrollmentsCount) || "Không có"} ghi danh chờ xử lý</span>
+                  <span className="block text-sm text-slate-500">Xác nhận thanh toán và xếp lớp cho học viên</span>
+                </span>
+                <ChevronRight className="h-5 w-5 text-slate-300" />
+              </Card>
+              <Card as="button" type="button" interactive onClick={() => setActiveSubTab("audit")} className="flex items-center gap-4 p-5 text-left">
+                <span className={cx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", operationsSummary?.crmFailures ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}><Radio className="h-6 w-6" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-slate-900">{operationsSummary?.crmFailures ? `${operationsSummary.crmFailures} sự kiện CRM lỗi` : "Đồng bộ CRM ổn định"}</span>
+                  <span className="block text-sm text-slate-500">Theo dõi hàng đợi gửi sang CRM</span>
+                </span>
+                <ChevronRight className="h-5 w-5 text-slate-300" />
+              </Card>
+            </div>
+          </section>
         </div>
       )}
-      {/* Toast logs alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
-          {toastMessage}
-        </div>
+
+      {activeSubTab === "orders" && (
+        <AdminOrdersManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />
       )}
 
-      {/* Main Administrative Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Quản trị học viện</h2>
-          <p className="text-sm text-slate-500 mt-1">Theo dõi việc cần xử lý và quản lý vận hành LMS.</p>
-        </div>
+      {activeSubTab === "course_section_mgmt" && (
+        <CourseSectionManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} />
+      )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {activeSubTab === "audit" && <button
-            onClick={() => setShowImportModal(true)}
-            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <Upload className="h-4 w-4 text-slate-500" /> Nhập CSV
-          </button>}
-          {activeSubTab === "audit" && <button
-            onClick={handleExportDataStore}
-            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="h-4 w-4 text-slate-500" /> Sao lưu JSON
-          </button>}
-          {activeSubTab === "notifications" && <button
-            onClick={() => setShowSendNotifModal(true)}
-            className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <Bell className="h-4 w-4 text-slate-500" /> Gửi thông báo
-          </button>}
-          {activeSubTab === "users" && <button
-            onClick={() => setShowAddUserModal(true)}
-            className="mcna-btn-primary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <UserPlus className="h-4 w-4" /> Tạo người dùng
-          </button>}
-        </div>
-      </div>
+      {activeSubTab === "notifications" && (
+        <NotificationInbox store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />
+      )}
 
-      {/* Main Two-Column Layout split sidebar list vs viewports */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
+      {activeSubTab === "users" && (
+        <div className="space-y-6">
+          <PageHeader
+            title="Người dùng"
+            subtitle="Tìm kiếm, phân quyền và khóa/mở tài khoản."
+            actions={<Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setShowAddUserModal(true)}>Tạo người dùng</Button>}
+          />
 
-        <div className="lg:hidden w-full">
-          <label htmlFor="admin-section" className="sr-only">Mục quản trị</label>
-          <select id="admin-section" value={activeSubTab} onChange={event => setActiveSubTab(event.target.value as typeof activeSubTab)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900">
-            <option value="overview">Tổng quan</option>
-            <option value="orders">Đơn hàng & Ghi danh</option>
-            <option value="course_section_mgmt">Khóa học & Lớp học</option>
-            <option value="users">Quản lý người dùng</option>
-            <option value="audit">Nhật ký hệ thống</option>
-            <option value="notifications">Thông báo hệ thống</option>
-          </select>
-        </div>
-        
-        {/* Left Column navbar structured sections */}
-        <div className="hidden lg:block w-56 xl:w-60 flex-shrink-0 space-y-4">
-          <nav aria-label="Điều hướng quản trị" className="bg-white border border-slate-200 rounded-xl p-2 text-sm space-y-3">
-            {adminNavGroups.map((group, groupIndex) => (
-              <div key={group.label} className={`space-y-1 ${groupIndex ? "border-t border-slate-100 pt-2" : ""}`}>
-                <span className="block px-2.5 py-1 text-xs font-semibold text-slate-500">{group.label}</span>
-                {group.items.map(item => {
-                  const Icon = item.icon;
-                  const selected = activeSubTab === item.id;
-                  return <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveSubTab(item.id)}
-                    aria-current={selected ? "page" : undefined}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2.5 text-left font-medium transition-colors ${selected ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
-                  >
-                    <span className="flex min-w-0 items-center gap-2"><Icon className="h-4 w-4 shrink-0" />{item.label}</span>
-                    {item.count > 0 && <span className="ml-2 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-semibold text-amber-800">{item.count}</span>}
-                  </button>;
-                })}
-              </div>
-            ))}
-          </nav>
-        </div>
-
-        {/* Right Main viewport area container */}
-        <div className="flex-1 min-w-0 w-full">
-
-          {activeSubTab === "overview" && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Tổng quan vận hành</h3>
-                <p className="mt-1 text-sm text-slate-500">Số liệu hiện tại và các việc cần theo dõi.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {[
-                  ["Người dùng", totalUsersCount],
-                  ["Khóa học", totalCoursesCount],
-                  ["Lượt ghi danh", totalEnrollmentsCount]
-                ].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{value}</p></div>)}
-              </div>
-              {operationsSummary && <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="text-base font-semibold text-slate-900">Việc cần theo dõi</h4><p className="mt-1 text-sm text-slate-500">Tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Làm mới</button></div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments],
-                    ["CRM giao thất bại", operationsSummary.crmFailures]
-                  ].map(([label, value]) => <div key={String(label)} className="border-l-2 border-indigo-300 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}
-                </div>
-              </section>}
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setActiveSubTab("orders")} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Xử lý ghi danh</button>
-                <button type="button" onClick={() => setActiveSubTab("users")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Quản lý người dùng</button>
-              </div>
-            </div>
-          )}
-          
-          {/* ORDERS & ENROLLMENTS GROUP */}
-          {activeSubTab === "orders" && (
-            <AdminOrdersManager
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-              triggerToast={triggerToast}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <Segmented<"student" | "teacher" | "admin">
+              value={userDirTab}
+              onChange={value => { setUserDirTab(value); setUserPage(1); }}
+              options={[
+                { value: "student", label: "Học viên" },
+                { value: "teacher", label: "Giảng viên" },
+                { value: "admin", label: "Quản trị" }
+              ]}
             />
-          )}
-          
-          {/* COURSE & SECTION MANAGEMENT GROUP */}
-          {activeSubTab === "course_section_mgmt" && (
-            <CourseSectionManager
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-            />
-          )}
+            <SearchField value={userSearch} onChange={value => { setUserSearch(value); setUserPage(1); }} placeholder="Tìm theo tên, email…" className="md:w-80" />
+          </div>
 
-          {activeSubTab === "notifications" && (
-            <NotificationInbox
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-              triggerToast={triggerToast}
-            />
-          )}
-
-          {/* EXISTING USER ACCESS CONTROLS REGISTRY */}
-          {activeSubTab === "users" && (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">Người dùng</h3>
-                  <p className="mt-1 text-sm text-slate-500">Tìm kiếm, phân quyền và quản lý trạng thái tài khoản.</p>
+          <div className="space-y-3 md:hidden">
+            {paginatedUsers.map(usr => (
+              <Card key={usr.id} className="space-y-3 p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar name={usr.name} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">{usr.name}</p>
+                    <p className="truncate text-[13px] text-slate-500">{usr.email}</p>
+                  </div>
+                  <Badge tone={usr.isActive ? "success" : "danger"} dot>{usr.isActive ? "Hoạt động" : "Đã khóa"}</Badge>
                 </div>
-
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <input
-                    type="text"
-                    placeholder="Tìm theo tên, email..."
-                    value={userSearch}
-                    onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
-                    className="px-3 py-1.5 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
-                  />
-
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: "student", label: "Học Viên" },
-                  { id: "teacher", label: "Giảng Viên" },
-                  { id: "admin", label: "Quản Trị Viên" }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => { setUserDirTab(tab.id as "student" | "teacher" | "admin"); setUserPage(1); }}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${userDirTab === tab.id ? "bg-indigo-600 text-white border-indigo-600 shadow-xs" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"}`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="space-y-3 md:hidden">
-                {paginatedUsers.map(usr => <article key={usr.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><h4 className="font-semibold text-slate-900">{usr.name}</h4><p className="truncate text-xs text-slate-500">{usr.email}</p></div>
-                    <span className={`shrink-0 text-xs font-medium ${usr.isActive ? "text-emerald-700" : "text-rose-700"}`}>{usr.isActive ? "Đang hoạt động" : "Đang khóa"}</span>
-                  </div>
-                  {userDirTab === "student" && <p className="text-sm text-slate-600">{usr.phone || "Chưa có số điện thoại"}</p>}
-                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <label className="text-xs text-slate-500">Vai trò <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800 disabled:opacity-50"><option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option></select></label>
-                    {usr.id !== currentUser.id && <button type="button" onClick={() => handleToggleUserStatus(usr.id)} className="text-sm font-medium text-indigo-700">{usr.isActive ? "Khóa" : "Kích hoạt"}</button>}
-                  </div>
-                </article>)}
-                {paginatedUsers.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Không có tài khoản phù hợp.</p>}
-              </div>
-              <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] uppercase text-slate-500 font-semibold tracking-wider">
-                        <th className="py-3 px-3.5 cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSort("name")}>
-                          Họ và Tên {sortField === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-                        </th>
-                        <th className="py-3 px-3.5 cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSort("email")}>
-                          Email cá nhân {sortField === "email" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-                        </th>
-                        {userDirTab === "student" && (
-                          <th className="py-3 px-3.5 cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSort("phone")}>
-                            Số điện thoại {sortField === "phone" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-                          </th>
-                        )}
-                        <th className="py-3 px-3.5 cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSort("role")}>
-                          Quyền hạn {sortField === "role" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-                        </th>
-                        <th className="py-3 px-3.5 cursor-pointer select-none hover:text-slate-900 transition" onClick={() => handleSort("isActive")}>
-                          Trạng thái khóa {sortField === "isActive" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-                        </th>
-                        <th className="py-3 px-3.5 text-right">Khóa/Mở Khóa</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {paginatedUsers.map(usr => {
-                        return (
-                          <tr key={usr.id} className="hover:bg-slate-50/60 transition">
-                            <td className="py-3 px-3.5 font-semibold text-slate-900">{usr.name}</td>
-                            <td className="py-3 px-3.5 font-mono text-slate-600">{usr.email}</td>
-                            {userDirTab === "student" && (
-                              <td className="py-3 px-3.5 text-slate-600">
-                                <div className="font-mono text-indigo-600 font-medium">{usr.phone || "Chưa có SĐT"}</div>
-                                <div className="text-[10px] text-slate-400">{usr.schoolEmail || "Chưa cấp email trường"}</div>
-                              </td>
-                            )}
-                            <td className="py-3 px-3.5">
-                              <select
-                                value={usr.role}
-                                onChange={(e) => handleUpdateUserRole(usr.id, e.target.value as User["role"])}
-                                disabled={usr.id === currentUser.id}
-                                className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-700 disabled:opacity-50"
-                              >
-                                <option value="student">Học viên</option>
-                                <option value="teacher">Giảng viên</option>
-                                <option value="admin">Quản trị viên</option>
-                              </select>
-                            </td>
-                            <td className="py-3 px-3.5">
-                              {usr.isActive ? (
-                                <span className="text-emerald-700 font-semibold text-[11px] bg-emerald-50 px-2 py-0.5 rounded-md">Đang hoạt động</span>
-                              ) : (
-                                <span className="text-red-700 font-semibold text-[11px] bg-red-50 px-2 py-0.5 rounded-md">Đang khóa</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3.5 text-right">
-                              {usr.id !== currentUser.id ? (
-                                <button
-                                  onClick={() => handleToggleUserStatus(usr.id)}
-                                  className={`px-2.5 py-1 rounded-lg transition text-[11px] font-semibold cursor-pointer ${usr.isActive ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"}`}
-                                >
-                                  {usr.isActive ? "Khóa" : "Kích hoạt"}
-                                </button>
-                              ) : (
-                                <span className="text-slate-400 text-[11px]">Tài khoản hiện hành</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {paginatedUsers.length === 0 && (
-                        <tr>
-                          <td colSpan={userDirTab === "student" ? 6 : 5} className="py-10 text-center text-slate-400">
-                            Không có tài khoản phù hợp trong thư mục này.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Paginations */}
-              {pageCount > 1 && (
-                <div className="flex justify-between items-center text-xs">
-                  <button
-                    onClick={() => setUserPage(p => Math.max(p - 1, 1))}
-                    disabled={userPage === 1}
-                    className="p-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer"
-                  >
-                    Trước
-                  </button>
-                  <span className="text-slate-500 text-[11px]">Trang {userPage} / {pageCount}</span>
-                  <button
-                    onClick={() => setUserPage(p => Math.min(p + 1, pageCount))}
-                    disabled={userPage === pageCount}
-                    className="p-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer"
-                  >
-                    Sau
-                  </button>
-                </div>
-              )}
-
-            </div>
-          )}
-
-          {/* SYSTEM SECURITY COMPLIANCE AUDIT LOGS */}
-          {activeSubTab === "audit" && (
-            <div className="space-y-6">
-              <div className="border-b border-slate-200 pb-3">
-                <h3 className="text-xl font-semibold text-slate-900">Nhật ký hệ thống &amp; Tích hợp CRM</h3>
-                <p className="mt-1 text-sm text-slate-500">Theo dõi thao tác quản trị, nhật ký bảo mật và đồng bộ dữ liệu đa kênh CRM.</p>
-              </div>
-
-              {/* CRM INTEGRATION & OUTBOX SYNC MONITOR */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Radio className="h-5 w-5 text-indigo-600" />
-                      <h4 className="text-base font-bold text-slate-900">Kết nối &amp; Đồng bộ CRM (Outbox)</h4>
-                      {crmOutbox?.configured ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="h-3 w-3" /> Webhook hoạt động
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                          <AlertTriangle className="h-3 w-3" /> Chưa cấu hình Webhook URL
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Hàng đợi gửi sự kiện tự động sang CRM (đăng ký mới, kích hoạt khóa học, đóng học phí, cấp chứng chỉ).
-                      {crmOutbox?.webhookUrl && <span className="font-mono text-[11px] ml-1 text-slate-600">({crmOutbox.webhookUrl})</span>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {crmOutbox && crmOutbox.counts.failed > 0 && (
-                      <button
-                        type="button"
-                        disabled={syncingCrm}
-                        onClick={() => handleSyncCrm(true)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer transition disabled:opacity-50"
-                      >
-                        Thử lại {crmOutbox.counts.failed} sự kiện lỗi
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={syncingCrm || loadingCrmOutbox}
-                      onClick={() => handleSyncCrm(false)}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer transition inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${syncingCrm ? "animate-spin" : ""}`} />
-                      {syncingCrm ? "Đang đồng bộ..." : "Đồng bộ CRM ngay"}
-                    </button>
-                  </div>
-                </div>
-
-                {crmSyncMessage && (
-                  <div className="p-3 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-700 flex items-center justify-between">
-                    <span>{crmSyncMessage}</span>
-                    <button type="button" onClick={() => setCrmSyncMessage(null)} className="text-slate-400 hover:text-slate-600 font-bold ml-2">×</button>
-                  </div>
-                )}
-
-                {/* Metrics */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-center">
-                    <span className="text-[11px] text-slate-500 font-medium block">Tổng sự kiện</span>
-                    <span className="text-xl font-bold font-mono text-slate-900">{crmOutbox?.counts.total ?? "—"}</span>
-                  </div>
-                  <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3 text-center">
-                    <span className="text-[11px] text-emerald-700 font-medium block">Đã gửi thành công</span>
-                    <span className="text-xl font-bold font-mono text-emerald-600">{crmOutbox?.counts.sent ?? "—"}</span>
-                  </div>
-                  <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-center">
-                    <span className="text-[11px] text-amber-700 font-medium block">Đang chờ gửi</span>
-                    <span className="text-xl font-bold font-mono text-amber-600">{crmOutbox?.counts.pending ?? "—"}</span>
-                  </div>
-                  <div className="bg-rose-50/50 border border-rose-200/60 rounded-xl p-3 text-center">
-                    <span className="text-[11px] text-rose-700 font-medium block">Thất bại</span>
-                    <span className="text-xl font-bold font-mono text-rose-600">{crmOutbox?.counts.failed ?? "—"}</span>
-                  </div>
-                </div>
-
-                {/* Recent events list */}
-                {crmOutbox?.recentEvents && crmOutbox.recentEvents.length > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Sự kiện gần đây</span>
-                      <button
-                        type="button"
-                        onClick={loadCrmOutbox}
-                        className="text-xs text-indigo-600 hover:text-indigo-700 cursor-pointer font-medium"
-                      >
-                        Làm mới danh sách
-                      </button>
-                    </div>
-                    <div className="divide-y divide-slate-100 border border-slate-200/70 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
-                      {crmOutbox.recentEvents.map(evt => (
-                        <div key={evt.id} className="p-2.5 text-xs flex flex-wrap items-center justify-between gap-2 bg-white hover:bg-slate-50">
-                          <div className="space-y-0.5 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold text-slate-800">{evt.eventType}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">#{evt.id.slice(0, 14)}</span>
-                            </div>
-                            {evt.lastError && (
-                              <p className="text-[11px] text-rose-600 line-clamp-1 break-all">Lỗi: {evt.lastError}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-[11px] text-slate-400">{new Date(evt.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              evt.status === "sent" ? "bg-emerald-100 text-emerald-800" :
-                              evt.status === "pending" ? "bg-amber-100 text-amber-800" :
-                              "bg-rose-100 text-rose-800"
-                            }`}>
-                              {evt.status === "sent" ? "Đã gửi" : evt.status === "pending" ? `Chờ (${evt.attempts})` : `Lỗi (${evt.attempts})`}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Reactive filter inputs */}
-              <div className="flex flex-col md:flex-row gap-3 bg-white border border-slate-200/80 p-3.5 rounded-xl text-xs shadow-xs">
-                <div className="flex-1 space-y-1">
-                  <span className="text-[11px] text-slate-500 font-semibold block">Tìm kiếm nhật ký</span>
-                  <input
-                    type="text"
-                    placeholder="Tìm theo hành động, user ID, target, hoặc nội dung..."
-                    value={auditSearch}
-                    onChange={(e) => setAuditSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
-                  />
-                </div>
-                <div className="w-full md:w-48 space-y-1">
-                  <span className="text-[11px] text-slate-500 font-semibold block">Lọc theo hành động</span>
-                  <select
-                    value={auditFilterAction}
-                    onChange={(e) => setAuditFilterAction(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-lg focus:outline-none font-sans"
-                  >
-                    <option value="all">Tất cả hành động</option>
-                    {Array.from(new Set((store?.auditLogs || []).map(l => l.action))).map(act => (
-                      <option key={act} value={act}>{act}</option>
-                    ))}
+                {userDirTab === "student" && <p className="text-sm text-slate-600">{usr.phone || "Chưa có số điện thoại"}</p>}
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                  <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label="Vai trò" className="mcna-select !h-9 !w-auto text-sm">
+                    <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option>
                   </select>
+                  {usr.id !== currentUser.id && <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>}
                 </div>
-              </div>
+              </Card>
+            ))}
+            {paginatedUsers.length === 0 && <Card><EmptyState compact icon={<Users className="h-6 w-6" />} title="Không có tài khoản phù hợp" /></Card>}
+          </div>
 
-              <div className="max-h-[520px] overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
-                {filteredAuditLogs.map((log, i) => (
-                  <div key={log.id || i} className="px-4 py-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-900">{log.action}</span><time className="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString("vi-VN")}</time></div>
-                    <p className="mt-1 break-words text-slate-700">{log.detail}</p>
-                    <p className="mt-1 break-all text-xs text-slate-500">Người thực hiện: {log.userId} · Đối tượng: {log.target}</p>
-                  </div>
+          <div className="mcna-table-wrapper hidden md:block">
+            <table className="mcna-table">
+              <thead>
+                <tr>
+                  <SortTh field="name">Họ và tên</SortTh>
+                  <SortTh field="email">Email</SortTh>
+                  {userDirTab === "student" && <SortTh field="phone">Số điện thoại</SortTh>}
+                  <SortTh field="role">Vai trò</SortTh>
+                  <SortTh field="isActive">Trạng thái</SortTh>
+                  <th className="mcna-th text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedUsers.map(usr => (
+                  <tr key={usr.id}>
+                    <td className="mcna-td">
+                      <span className="flex items-center gap-3"><Avatar name={usr.name} size={32} /><span className="font-semibold text-slate-900">{usr.name}</span></span>
+                    </td>
+                    <td className="mcna-td text-slate-600">{usr.email}</td>
+                    {userDirTab === "student" && (
+                      <td className="mcna-td">
+                        <div className="text-slate-700">{usr.phone || "—"}</div>
+                        <div className="text-xs text-slate-400">{usr.schoolEmail || "Chưa cấp email trường"}</div>
+                      </td>
+                    )}
+                    <td className="mcna-td">
+                      <select value={usr.role} onChange={e => handleUpdateUserRole(usr.id, e.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label={`Vai trò của ${usr.name}`} className="mcna-select !h-9 !w-auto text-sm">
+                        <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option>
+                      </select>
+                    </td>
+                    <td className="mcna-td"><Badge tone={usr.isActive ? "success" : "danger"} dot>{usr.isActive ? "Hoạt động" : "Đã khóa"}</Badge></td>
+                    <td className="mcna-td text-right">
+                      {usr.id !== currentUser.id ? (
+                        <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>
+                      ) : (
+                        <span className="text-xs text-slate-400">Bạn</span>
+                      )}
+                    </td>
+                  </tr>
                 ))}
-                {filteredAuditLogs.length === 0 && <div className="py-10 text-center text-sm text-slate-500">Không tìm thấy bản ghi nhật ký phù hợp.</div>}
-              </div>
+                {paginatedUsers.length === 0 && (
+                  <tr><td colSpan={userDirTab === "student" ? 6 : 5} className="mcna-td py-12 text-center text-slate-400">Không có tài khoản phù hợp.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between">
+              <Button size="sm" variant="secondary" onClick={() => setUserPage(p => Math.max(p - 1, 1))} disabled={userPage === 1}>Trước</Button>
+              <span className="text-sm text-slate-500">Trang {userPage}/{pageCount}</span>
+              <Button size="sm" variant="secondary" onClick={() => setUserPage(p => Math.min(p + 1, pageCount))} disabled={userPage === pageCount}>Sau</Button>
             </div>
           )}
-
         </div>
+      )}
 
-      </div>
+      {activeSubTab === "audit" && (
+        <div className="space-y-8">
+          <PageHeader
+            title="Nhật ký & CRM"
+            subtitle="Thao tác quản trị, nhật ký bảo mật và đồng bộ dữ liệu sang CRM."
+            actions={
+              <>
+                <Button variant="secondary" icon={<Upload className="h-4 w-4" />} onClick={() => setShowImportModal(true)}>Nhập CSV</Button>
+                <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={handleExportDataStore}>Sao lưu JSON</Button>
+              </>
+            }
+          />
+
+          <Card className="space-y-5 p-5 md:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900">Đồng bộ CRM</h2>
+                  {crmOutbox?.configured ? <Badge tone="success" dot>Webhook hoạt động</Badge> : <Badge tone="warning" dot>Chưa cấu hình webhook</Badge>}
+                </div>
+                <p className="text-sm text-slate-500">
+                  Hàng đợi gửi sự kiện sang CRM: đăng ký mới, kích hoạt khóa học, học phí.
+                  {crmOutbox?.webhookUrl && <span className="ml-1 font-mono text-xs text-slate-400">({crmOutbox.webhookUrl})</span>}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {crmOutbox && crmOutbox.counts.failed > 0 && (
+                  <Button size="sm" variant="danger" disabled={syncingCrm} onClick={() => handleSyncCrm(true)}>Thử lại {crmOutbox.counts.failed} lỗi</Button>
+                )}
+                <Button size="sm" disabled={syncingCrm || loadingCrmOutbox} onClick={() => handleSyncCrm(false)} icon={<RefreshCw className={cx("h-4 w-4", syncingCrm && "animate-spin")} />}>
+                  {syncingCrm ? "Đang đồng bộ…" : "Đồng bộ ngay"}
+                </Button>
+              </div>
+            </div>
+
+            {crmSyncMessage && <Callout tone="info" action={<Button size="sm" variant="ghost" onClick={() => setCrmSyncMessage(null)}>Đóng</Button>}>{crmSyncMessage}</Callout>}
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Tổng sự kiện", value: crmOutbox?.counts.total, tone: "text-slate-900" },
+                { label: "Đã gửi", value: crmOutbox?.counts.sent, tone: "text-emerald-600" },
+                { label: "Đang chờ", value: crmOutbox?.counts.pending, tone: "text-amber-600" },
+                { label: "Thất bại", value: crmOutbox?.counts.failed, tone: "text-rose-600" }
+              ].map(item => (
+                <div key={item.label} className="rounded-2xl bg-canvas p-4">
+                  <p className="text-[13px] text-slate-500">{item.label}</p>
+                  <p className={cx("mt-1 font-display text-2xl font-bold", item.tone)}>{item.value ?? "—"}</p>
+                </div>
+              ))}
+            </div>
+
+            {crmOutbox?.recentEvents && crmOutbox.recentEvents.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-900">Sự kiện gần đây</h3>
+                  <button type="button" onClick={loadCrmOutbox} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">Làm mới</button>
+                </div>
+                <ul className="max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-2xl ring-1 ring-slate-200/70">
+                  {crmOutbox.recentEvents.map(evt => (
+                    <li key={evt.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[13px] font-semibold text-slate-800">{evt.eventType} <span className="font-normal text-slate-400">#{evt.id.slice(0, 14)}</span></p>
+                        {evt.lastError && <p className="line-clamp-1 break-all text-xs text-rose-600">Lỗi: {evt.lastError}</p>}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs text-slate-400">{new Date(evt.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                        <Badge tone={evt.status === "sent" ? "success" : evt.status === "pending" ? "warning" : "danger"}>
+                          {evt.status === "sent" ? "Đã gửi" : evt.status === "pending" ? `Chờ (${evt.attempts})` : `Lỗi (${evt.attempts})`}
+                        </Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Card>
+
+          <section className="space-y-3">
+            <SectionTitle title="Nhật ký hệ thống" description={`${filteredAuditLogs.length} bản ghi`} />
+            <div className="flex flex-col gap-3 md:flex-row">
+              <SearchField value={auditSearch} onChange={setAuditSearch} placeholder="Tìm theo hành động, người dùng, nội dung…" className="flex-1" />
+              <select value={auditFilterAction} onChange={e => setAuditFilterAction(e.target.value)} aria-label="Lọc theo hành động" className="mcna-select md:!w-64 !rounded-full">
+                <option value="all">Tất cả hành động</option>
+                {Array.from(new Set((store?.auditLogs || []).map(l => l.action))).map(act => <option key={act} value={act}>{act}</option>)}
+              </select>
+            </div>
+            <Card as="ul" className="max-h-[560px] divide-y divide-slate-100 overflow-y-auto">
+              {filteredAuditLogs.map((log, i) => (
+                <li key={log.id || i} className="px-5 py-3.5 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-[13px] font-semibold text-slate-900">{log.action}</span>
+                    <time className="text-xs text-slate-400">{new Date(log.createdAt).toLocaleString("vi-VN")}</time>
+                  </div>
+                  <p className="mt-1 break-words text-slate-700">{log.detail}</p>
+                  <p className="mt-1 break-all text-xs text-slate-400">Người thực hiện: {log.userId} · Đối tượng: {log.target}</p>
+                </li>
+              ))}
+              {filteredAuditLogs.length === 0 && <li className="py-12 text-center text-sm text-slate-400">Không có bản ghi phù hợp.</li>}
+            </Card>
+          </section>
+        </div>
+      )}
 
       {/* USER REGISTRATION POPUP MODAL */}
       {showAddUserModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-150 text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-sm">
             <button 
               onClick={() => setShowAddUserModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               Khởi tạo người dùng hệ thống mới
             </h3>
 
             <form onSubmit={handleCreateUserSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Họ và Tên</label>
+                <label className="mcna-label">Họ và Tên</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Gavin Belson"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Địa chỉ Email</label>
+                <label className="mcna-label">Địa chỉ Email</label>
                 <input
                   type="email"
                   required
                   placeholder="Ví dụ: gavin@hooli.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Mật khẩu ban đầu</label>
+                <label className="mcna-label">Mật khẩu ban đầu</label>
                 <input
                   type="password"
                   required
                   placeholder="Tối thiểu 6 ký tự bảo mật"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Phân hệ Quyền</label>
+                <label className="mcna-label">Phân hệ Quyền</label>
                 <select
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
+                  className="mcna-select w-full"
                 >
                   <option value="student">Học Viên (Student)</option>
                   <option value="teacher">Giảng Viên (Teacher)</option>
@@ -991,13 +762,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 <button
                   type="button"
                   onClick={() => setShowAddUserModal(false)}
-                  className="px-4 py-2 bg-transparent text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Bỏ qua
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-sm"
+                  className="mcna-btn-primary"
                 >
                   Tạo tài khoản
                 </button>
@@ -1011,16 +782,16 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       {/* IMPORT MULTIPLE USERS REGISTRY CSV */}
       {showImportModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-lg">
             <button 
               onClick={() => { setShowImportModal(false); setImportMessage(null); }}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-base font-bold text-slate-900 mb-2 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               Nhập đồng loạt người dùng từ CSV
             </h3>
 
@@ -1045,7 +816,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                   placeholder="name, email, role&#10;Gavin Belson, gavin@hooli.com, student&#10;Laurie Bream, laurie@raviga.com, teacher"
                   value={csvText}
                   onChange={(e) => setCsvText(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white text-slate-900 font-mono placeholder-slate-400 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 h-36 mt-1.5 text-xs"
+                  className="mcna-textarea w-full font-mono h-36 mt-1.5"
                 />
               </div>
 
@@ -1053,13 +824,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 <button
                   type="button"
                   onClick={() => { setShowImportModal(false); setImportMessage(null); }}
-                  className="px-4 py-2 bg-transparent text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Bỏ qua
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-sm"
+                  className="mcna-btn-primary"
                 >
                   Xác nhận tải tệp lên
                 </button>

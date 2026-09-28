@@ -33,37 +33,26 @@ import NotificationInbox from "./NotificationInbox";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
+import { Button, Callout, Spinner, useToast } from "./ui";
 
 interface TeacherPanelProps {
   currentUser: User;
   onLogout: () => void;
   onRefreshData: () => void;
-  activeSystem?: "SIS" | "LMS";
+  activeSubTab: string;
+  setActiveSubTab: (tab: string) => void;
+  /** Bumped when the teacher picks a tab in the app navigation, so the course view returns to its list. */
+  navNonce: number;
   updateStore?: (updater: (draft: LMSDataStore) => void) => void;
 }
 
-export default function TeacherPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS", updateStore }: TeacherPanelProps) {
+export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab, setActiveSubTab, navNonce, updateStore }: TeacherPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
-
-  // Local active sub-module state
-  const [activeSubTab, setActiveSubTab] = useState<string>("courses");
-  const [showSidebar, setShowSidebar] = useState(false);
-
-  const handleNavClick = (tab: string) => {
-    setActiveSubTab(tab);
-    setShowSidebar(false);
-  };
+  const toast = useToast();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
-  }, [activeSubTab]);
-
-  useEffect(() => {
-    const allowed = ["courses", "notifications"];
-    if (!allowed.includes(activeSubTab)) {
-      setActiveSubTab("courses");
-    }
-  }, []);
+    setSelectedCourseId(null);
+  }, [navNonce]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -159,14 +148,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   const [gradingScore, setGradingScore] = useState(100);
   const [gradingFeedback, setGradingFeedback] = useState("");
 
-  // General feedback messaging
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const triggerToast = (msg: string) => toast(msg);
 
   // Get active teacher datasets
   const myCourses = store.courses.filter(c => c.teacherId === currentUser.id);
@@ -547,10 +529,6 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   const myAssignmentIds = myAssignments.map(a => a.id);
   const studentSubmissionsRaw = store.submissions.filter(sub => myAssignmentIds.includes(sub.assignmentId));
 
-  const unreadTeacherNotificationsCount = (store.notifications || []).filter(
-    (n: any) => n.userId === currentUser.id && !n.isRead
-  ).length;
-
   const teacherPanelProps = {
     activeSubTab, setActiveSubTab, selectedCourseId, setSelectedCourseId, selectedQuizId, setSelectedQuizId,
     selectedEssayId, setSelectedEssayId, assessmentType, setAssessmentType,
@@ -570,96 +548,39 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
 
   return (
     <div className="space-y-5">
-      {isLoading && <p className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">Đang tải dữ liệu giảng dạy...</p>}
-      {isError && <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><span>Không thể tải dữ liệu lớp học.</span><button type="button" onClick={() => refetch()} className="font-semibold underline">Thử lại</button></div>}
-      {/* Toast Alert bottom right */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
-          {toastMessage}
-        </div>
+      {isLoading && <Spinner label="Đang tải dữ liệu giảng dạy…" />}
+      {isError && <Callout tone="danger" title="Không thể tải dữ liệu lớp học." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Thử lại</Button>} />}
+
+      <CourseBuilder {...teacherPanelProps} />
+
+      {activeSubTab === "notifications" && (
+        <NotificationInbox
+          store={store}
+          currentUser={currentUser}
+          onRefreshData={onRefreshData}
+          triggerToast={triggerToast}
+        />
       )}
 
-      {/* Header section spacing */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-            Giảng dạy
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Quản lý khóa học và tài liệu học tập cho học viên.
-          </p>
-        </div>
-      </div>
-
-      {/* Side-by-side dashboard layout: sidebar navigation on the left, workspace canvas on the right */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
-        {/* Mobile: sidebar toggle bar */}
-        <div className="lg:hidden w-full">
-          <button
-            onClick={() => setShowSidebar(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:text-slate-900 transition cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <span className="font-semibold">{{
-                courses: "Khóa học & Tài liệu",
-                notifications: "Hộp thư Thông báo",
-              }[activeSubTab] || activeSubTab}</span>
-              <span className="text-slate-400">Đổi mục</span>
-            </span>
-            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${showSidebar ? "rotate-90" : ""}`} />
-          </button>
-        </div>
-
-        {/* Left Navigation Sidebar */}
-        <div className={`w-full lg:w-56 xl:w-60 shrink-0 ${showSidebar ? "block" : "hidden"} lg:block`}>
-          <nav aria-label="Điều hướng giảng viên" className="bg-white border border-slate-200 rounded-xl p-2 flex flex-col gap-0.5 w-full text-sm">
-            <span className="px-3 py-2 text-xs font-semibold text-slate-500">Giảng viên</span>
-            {[
-              { id: "courses", label: "Khóa học & Tài liệu", Icon: BookOpen },
-              { id: "notifications", label: "Hộp thư Thông báo", Icon: Bell }
-            ].map(({ id, label, Icon }) => (
-              <button key={id} type="button" onClick={() => { handleNavClick(id); if (id === "courses") setSelectedCourseId(null); }} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left font-medium transition-colors ${activeSubTab === id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-                <span className="flex min-w-0 items-center gap-2.5"><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span></span>
-                {id === "notifications" && unreadTeacherNotificationsCount > 0 && <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-xs font-semibold text-rose-700">{unreadTeacherNotificationsCount}</span>}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Active Panel View Canvas */}
-        <div className="flex-1 min-w-0 w-full">
-          <CourseBuilder {...teacherPanelProps} />
-
-          {activeSubTab === "notifications" && (
-            <NotificationInbox
-              store={store}
-              currentUser={currentUser}
-              onRefreshData={onRefreshData}
-              triggerToast={triggerToast}
-            />
-          )}
-        </div>
-      </div>
-      
       {/* MODAL 5: CREATE ASSIGNMENT FORM (Shared in Parent) */}
       {showAssignModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-start justify-center p-4 pt-10 md:pt-14 overflow-y-auto font-sans">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-lg">
             <button 
               onClick={() => setShowAssignModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               <FileText className="h-5 w-5 text-indigo-600" /> Tạo Thử thách Bài tự luận Khóa học
             </h3>
 
             <form onSubmit={handleAddAssignmentSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Chọn Khóa học tương ứng</label>
+                <label className="mcna-label">Chọn Khóa học tương ứng</label>
                 <select
                   required
                   value={selectedCourseId || ""}
@@ -668,7 +589,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                     setAssignSectionId("");
                     setAssignSessionId("");
                   }}
-                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
+                  className="mcna-select w-full"
                 >
                   <option value="" disabled>-- Chọn khóa học --</option>
                   {myCourses.map((c: any) => (
@@ -680,31 +601,31 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Tiêu đề Thử thách bài tập</label>
+                <label className="mcna-label">Tiêu đề Thử thách bài tập</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Thiết lập Express Routing Controller"
                   value={assignTitle}
                   onChange={(e) => setAssignTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Hạn chót Hoàn thành</label>
+                  <label className="mcna-label">Hạn chót Hoàn thành</label>
                   <input
                     type="datetime-local"
                     required
                     value={assignDeadline}
                     onChange={(e) => setAssignDeadline(e.target.value)}
-                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                    className="mcna-input w-full"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Điểm tối đa</label>
+                  <label className="mcna-label">Điểm tối đa</label>
                   <input
                     type="number"
                     required
@@ -712,21 +633,21 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                     max={100}
                     value={assignMaxScore}
                     onChange={(e) => setAssignMaxScore(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20"
+                    className="mcna-input w-full"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Loại bài tập</label>
+                  <label className="mcna-label">Loại bài tập</label>
                   <select
                     value={assignType}
                     onChange={(e) => {
                       const val = e.target.value as any;
                       setAssignType(val);
                     }}
-                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
+                    className="mcna-select w-full"
                   >
                     <option value="lesson">Bài tập buổi học</option>
                     <option value="chapter">Bài tập cuối chương</option>
@@ -736,7 +657,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Chọn Lớp học phần</label>
+                  <label className="mcna-label">Chọn Lớp học phần</label>
                   <select
                     required
                     value={assignSectionId || ""}
@@ -744,7 +665,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                       setAssignSectionId(e.target.value);
                       setAssignSessionId("");
                     }}
-                    className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
+                    className="mcna-select w-full"
                   >
                     <option value="" disabled>-- Chọn lớp học phần --</option>
                     {(store.courseSections || [])
@@ -759,12 +680,12 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Buổi học áp dụng</label>
+                <label className="mcna-label">Buổi học áp dụng</label>
                 <select
                   required
                   value={assignSessionId || ""}
                   onChange={(e) => setAssignSessionId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 font-sans"
+                  className="mcna-select w-full"
                 >
                   <option value="" disabled>-- Chọn buổi học --</option>
                   {(store.attendanceSessions || [])
@@ -779,13 +700,13 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Mô tả / Yêu cầu chi tiết</label>
+                <label className="mcna-label">Mô tả / Yêu cầu chi tiết</label>
                 <textarea
                   required
                   placeholder="Dán các định dạng file hoặc yêu cầu nộp sản phẩm..."
                   value={assignDesc}
                   onChange={(e) => setAssignDesc(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-900 h-24 max-h-32 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 text-xs"
+                  className="mcna-textarea w-full h-24 max-h-32"
                 />
               </div>
 
@@ -793,13 +714,13 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
                 <button
                   type="button"
                   onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 bg-transparent text-slate-500 hover:text-slate-800 transition cursor-pointer font-medium"
+                  className="mcna-btn-ghost"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-sm"
+                  className="mcna-btn-primary"
                 >
                   Tạo Thử thách
                 </button>
