@@ -1,4 +1,4 @@
-import { CrmOutboxStatus, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial } from "./types";
+import { CrmOutboxStatus, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SystemStatus } from "./types";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -204,6 +204,7 @@ export const api = {
   deleteAssignment: (id: string) => apiFetch(`/api/assignments/${id}`, { method: "DELETE" }),
   updateAttendanceSession: (id: string, payload: unknown) => apiFetch(`/api/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   getCrmOutboxStatus: () => apiFetch<CrmOutboxStatus>("/api/admin/crm/outbox"),
+  getSystemStatus: () => apiFetch<SystemStatus>("/api/admin/system/status"),
   syncCrmOutbox: (payload?: { retryFailed?: boolean }) =>
     apiFetch<{ success: boolean; configured: boolean; sent: number; failed: number }>("/api/admin/crm/outbox/sync", {
       method: "POST",

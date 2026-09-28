@@ -299,19 +299,13 @@ export default function AdminOrdersManager({
                     <td className="mcna-td pl-4 py-3.5">
                       <div className="flex items-center gap-3">
                         <Avatar name={order.student?.name} size={38} />
-                        <div className="min-w-0">
+                        {/* Capped width keeps a long email from pushing the Kích hoạt column off screen. */}
+                        <div className="min-w-0 max-w-[15rem]">
                           <div className="font-semibold text-slate-900 text-sm truncate">
                             {order.student?.name || "Chưa đặt tên"}
                           </div>
-                          <div className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
-                            <span>{order.student?.email || "—"}</span>
-                            {order.student?.phone && (
-                              <>
-                                <span className="text-slate-300 font-bold">·</span>
-                                <span className="font-mono text-slate-500">{order.student?.phone}</span>
-                              </>
-                            )}
-                          </div>
+                          <div className="mt-0.5 truncate text-xs text-slate-500" title={order.student?.email || undefined}>{order.student?.email || "—"}</div>
+                          {order.student?.phone && <div className="font-mono text-xs text-slate-500">{order.student.phone}</div>}
                         </div>
                       </div>
                     </td>

@@ -415,13 +415,15 @@ export async function processSepayWebhook(
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`
+      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`,
+      emailFallback: true
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`
+      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`,
+      emailFallback: true
     });
   }
 

@@ -10,6 +10,11 @@ type CreateNotificationInput = {
   message: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
+  /**
+   * Important news (fee confirmed, placed in a class). Students without a school mailbox, such as
+   * everyone who signed up on the website, then also get it at the email they registered with.
+   */
+  emailFallback?: boolean;
 };
 
 export const notificationsRepository = {
@@ -83,6 +88,10 @@ export const notificationsRepository = {
           type: notification.type
         }).catch(err => {
           console.error("[Notifications Repository] School email notification dispatch error:", err);
+        });
+      } else if (input.emailFallback && userEmail) {
+        sendEmailDirect(userEmail, userName || "Học viên", notification.message).catch(err => {
+          console.error("[Notifications Repository] Sign-up email notification dispatch error:", err);
         });
       } else {
         console.log(`[Notifications Repository] Skipping email for unprovisioned student ${notification.userId}`);

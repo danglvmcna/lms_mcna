@@ -31,7 +31,9 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
-  ClipboardList
+  ClipboardList,
+  KeyRound,
+  Copy
 } from "lucide-react";
 import { CrmOutboxStatus, User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
@@ -43,7 +45,8 @@ import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";
 import SendNotificationModal from "./admin/SendNotificationModal";
-import { Avatar, Badge, Button, Callout, Card, cx, EmptyState, PageHeader, SearchField, SectionTitle, Segmented, Spinner, StatTile, useToast } from "./ui";
+import SystemStatusCard from "./admin/SystemStatusCard";
+import { Avatar, Badge, Button, Callout, Card, cx, Dialog, EmptyState, PageHeader, SearchField, SectionTitle, Segmented, Spinner, StatTile, useToast } from "./ui";
 
 interface AdminPanelProps {
   currentUser: User;
@@ -332,6 +335,36 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
     }
   };
 
+  // Password reset: emails a one-time link; the link is shown here only when the email could not be sent.
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetLink, setResetLink] = useState<{ url: string; message: string } | null>(null);
+  const [resetLinkCopied, setResetLinkCopied] = useState(false);
+
+  const closeResetDialog = () => {
+    setResetTarget(null);
+    setResetLink(null);
+    setResetLinkCopied(false);
+  };
+
+  const handleSendResetLink = async () => {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    try {
+      const result: any = await api.resetPassword(resetTarget.id);
+      if (!result?.emailSent && result?.resetUrl) {
+        setResetLink({ url: result.resetUrl, message: result.message });
+      } else {
+        toast(result?.message || `Đã gửi liên kết đặt lại mật khẩu tới ${resetTarget.email}.`, "success");
+        closeResetDialog();
+      }
+    } catch (err: any) {
+      toast(err.message || "Không thể tạo liên kết đặt lại mật khẩu.", "error");
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   // Toggle user active status action
   const handleToggleUserStatus = (userId: string) => {
     const user = store.users.find(u => u.id === userId);
@@ -473,6 +506,8 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
               </Card>
             </div>
           </section>
+
+          <SystemStatusCard />
         </div>
       )}
 
@@ -488,11 +523,43 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
         <NotificationInbox store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />
       )}
 
+      {resetTarget && (
+        <Dialog
+          onClose={closeResetDialog}
+          size="sm"
+          icon={<KeyRound className="h-5 w-5" />}
+          title="Đặt lại mật khẩu"
+          description={resetLink ? resetLink.message : <>Gửi liên kết đặt lại mật khẩu tới <strong className="font-semibold text-slate-900">{resetTarget.email}</strong>. {resetTarget.name} mở liên kết để tự đặt mật khẩu mới; liên kết dùng một lần và có thời hạn.</>}
+          footer={resetLink ? (
+            <Button onClick={closeResetDialog}>Xong</Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={closeResetDialog}>Hủy</Button>
+              <Button loading={resetBusy} onClick={handleSendResetLink}>Gửi liên kết</Button>
+            </>
+          )}
+        >
+          {resetLink && (
+            <div className="space-y-2">
+              <p className="break-all rounded-2xl bg-canvas px-4 py-3 font-mono text-[13px] text-slate-700">{resetLink.url}</p>
+              <Button
+                variant="secondary"
+                block
+                icon={resetLinkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                onClick={() => { navigator.clipboard?.writeText(resetLink.url); setResetLinkCopied(true); }}
+              >
+                {resetLinkCopied ? "Đã chép liên kết" : "Chép liên kết"}
+              </Button>
+            </div>
+          )}
+        </Dialog>
+      )}
+
       {activeSubTab === "users" && (
         <div className="space-y-6">
           <PageHeader
             title="Người dùng"
-            subtitle="Tìm kiếm, phân quyền và khóa/mở tài khoản."
+            subtitle="Tìm kiếm, phân quyền, đặt lại mật khẩu và khóa/mở tài khoản."
             actions={<Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setShowAddUserModal(true)}>Tạo người dùng</Button>}
           />
 
@@ -525,7 +592,12 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                   <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label="Vai trò" className="mcna-select !h-9 !w-auto text-sm">
                     <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option>
                   </select>
-                  {usr.id !== currentUser.id && <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>}
+                  {usr.id !== currentUser.id && (
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="secondary" icon={<KeyRound className="h-4 w-4" />} onClick={() => setResetTarget(usr)}>Mật khẩu</Button>
+                      <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>
+                    </div>
+                  )}
                 </div>
               </Card>
             ))}
@@ -565,7 +637,10 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                     <td className="mcna-td"><Badge tone={usr.isActive ? "success" : "danger"} dot>{usr.isActive ? "Hoạt động" : "Đã khóa"}</Badge></td>
                     <td className="mcna-td text-right">
                       {usr.id !== currentUser.id ? (
-                        <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>
+                        <span className="inline-flex items-center gap-2">
+                          <Button size="sm" variant="secondary" icon={<KeyRound className="h-4 w-4" />} onClick={() => setResetTarget(usr)}>Đặt lại mật khẩu</Button>
+                          <Button size="sm" variant={usr.isActive ? "danger" : "tinted"} onClick={() => handleToggleUserStatus(usr.id)}>{usr.isActive ? "Khóa" : "Mở khóa"}</Button>
+                        </span>
                       ) : (
                         <span className="text-xs text-slate-500">Bạn</span>
                       )}
@@ -738,7 +813,8 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 <input
                   type="password"
                   required
-                  placeholder="Tối thiểu 6 ký tự bảo mật"
+                  minLength={8}
+                  placeholder="Tối thiểu 8 ký tự"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
                   className="mcna-input w-full"
