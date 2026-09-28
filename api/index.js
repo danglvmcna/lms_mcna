@@ -8201,12 +8201,12 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     message: `\u0110\xE3 k\xEDch ho\u1EA1t th\xE0nh c\xF4ng \u0111\u01A1n ghi danh cho h\u1ECDc vi\xEAn ${sName}.`
   });
   if (targetSectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || targetSectionId}" c\u1EE7a b\u1EA1n.`
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || targetSectionId}" c\u1EE7a b\u1EA1n.`
       });
     }
   }
@@ -8247,12 +8247,12 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     message: `\u0110\xE3 duy\u1EC7t ghi danh cho h\u1ECDc vi\xEAn ${approveSName}.`
   });
   if (sectionId) {
-    const sec = (await pool.query("SELECT teacher_id, title FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
     if (sec?.teacher_id) {
       await notificationsRepository.create(pool, {
         userId: sec.teacher_id,
         type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.title || sectionId}" c\u1EE7a b\u1EA1n.`
+        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || sectionId}" c\u1EE7a b\u1EA1n.`
       });
     }
   }
