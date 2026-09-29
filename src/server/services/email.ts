@@ -7,7 +7,18 @@ const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || `"E16 LMS" <noreply@e16lms.edu.vn>`;
+const SMTP_FROM = process.env.SMTP_FROM || `"MCNA LMS" <${process.env.SMTP_USER || "noreply@mcna.vn"}>`;
+// Where the "open the LMS" button in notification emails points; the button is left out when unset.
+const LMS_URL = (process.env.LMS_LOGIN_URL || process.env.APP_URL || "").trim();
+
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 const TEST_RECEIVER_EMAIL = process.env.TEST_RECEIVER_EMAIL || "";
 
 const isPlaceholderSmtp = () => {
@@ -233,22 +244,22 @@ function generateEmailHtml(name: string, message: string): string {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>E16 LMS Portal</h1>
+        <h1>MCNA Technology School</h1>
       </div>
       <div class="content">
-        <p class="greeting">Kính gửi ${name},</p>
-        <p>Hệ thống Đào tạo & Quản lý Học vụ E16 xin thông báo bạn có một cập nhật mới:</p>
+        <p class="greeting">Chào ${escapeHtml(name)},</p>
+        <p>Bạn có một thông báo mới từ MCNA LMS:</p>
         <div class="message-box">
-          ${message}
+          ${escapeHtml(message)}
         </div>
-        <p>Vui lòng đăng nhập vào ứng dụng để xem thông tin chi tiết và xử lý kịp thời.</p>
-        <div class="button-container">
-          <a href="http://localhost:5173" class="button" target="_blank">Đi tới phòng học vụ</a>
-        </div>
+        <p>Đăng nhập MCNA LMS để xem chi tiết.</p>
+        ${LMS_URL ? `<div class="button-container">
+          <a href="${escapeHtml(LMS_URL)}" class="button" target="_blank">Mở MCNA LMS</a>
+        </div>` : ""}
       </div>
       <div class="footer">
-        <p>© ${new Date().getFullYear()} E16 Tech Corp. Mọi quyền được bảo lưu.</p>
-        <p>Đây là email thông báo tự động từ hệ thống quản lý học tập E16. Vui lòng không trả lời thư này.</p>
+        <p>© ${new Date().getFullYear()} MCNA Technology School · mcna.vn</p>
+        <p>Email tự động từ hệ thống học trực tuyến MCNA LMS, vui lòng không trả lời thư này. Cần hỗ trợ, bạn nhắn MCNA qua Zalo 0939 866 825.</p>
       </div>
     </div>
   </div>
@@ -268,7 +279,7 @@ export async function sendEmailDirect(recipientEmail: string, recipientName: str
       console.log(`[Email Service] Overriding recipient email from ${recipientEmail} to ${TEST_RECEIVER_EMAIL} for testing.`);
     }
 
-    const subject = `[E16 LMS] Thông báo mới từ hệ thống`;
+    const subject = `[MCNA LMS] Bạn có thông báo mới`;
     const htmlContent = generateEmailHtml(recipientName || "Học viên", message);
 
     if (isPlaceholderSmtp()) {
@@ -283,7 +294,7 @@ export async function sendEmailDirect(recipientEmail: string, recipientName: str
         to: toEmail,
         subject: subject,
         html: htmlContent,
-        text: `Kính gửi ${recipientName},\n\nBạn có một thông báo mới từ E16 LMS:\n\n${message}\n\nVui lòng đăng nhập hệ thống để xem chi tiết.`,
+        text: `Chào ${recipientName},\n\nBạn có một thông báo mới từ MCNA LMS:\n\n${message}\n\nĐăng nhập MCNA LMS để xem chi tiết.${LMS_URL ? `\n${LMS_URL}` : ""}`,
       });
 
       const previewUrl = nodemailer.getTestMessageUrl(info);

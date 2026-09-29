@@ -117,7 +117,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
-import { LMSDataStore, User } from "./src/types";
+import { LMSDataStore, SystemStatus, User } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
@@ -725,6 +725,23 @@ async function generateCertificateCode(db: Queryable) {
     if (existing.rowCount === 0) return code;
   }
   return `MCNA-${Date.now().toString(36).toUpperCase()}`;
+}
+
+/** What the learner reads (in the LMS and by email) once MCNA confirms their fee or places them in a class. */
+async function placementNotice(db: Queryable, enrollmentId: string, sectionId: string | null | undefined, feeConfirmed: boolean) {
+  const row = (await db.query(
+    `SELECT c.title, cs.section_code
+       FROM enrollments e
+       JOIN courses c ON c.id = e.course_id
+       LEFT JOIN course_sections cs ON cs.id = $2
+      WHERE e.id = $1`,
+    [enrollmentId, sectionId || null]
+  )).rows[0];
+  const course = row?.title ? `khóa "${row.title}"` : "khóa học";
+  const intro = feeConfirmed ? "MCNA đã xác nhận học phí" : "MCNA đã duyệt đăng ký";
+  return row?.section_code
+    ? `${intro} và xếp bạn vào lớp ${row.section_code} của ${course}. Vào mục Lớp học của tôi để xem lịch học, link Zoom và tài liệu.`
+    : `${intro} ${course} của bạn. Bạn sẽ nhận thông báo ngay khi được xếp lớp.`;
 }
 
 async function maybePostFinalCourseGrade(db: Queryable, studentId: string, courseId: string) {
@@ -2073,7 +2090,10 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       await notificationsRepository.create(pool, {
         userId: enrollmentRow.student_id,
         type: "success",
-        message: "Thanh toán của bạn đã được xác nhận và bạn đã được xếp vào lớp học."
+        message: await placementNotice(pool, enrollmentRow.id, placedSectionId, true),
+        relatedEntityType: "enrollment",
+        relatedEntityId: enrollmentRow.id,
+        emailFallback: true
       });
     }
     const current = (await pool.query("SELECT status FROM enrollments WHERE id = $1", [enrollmentRow.id])).rows[0];
@@ -2370,9 +2390,10 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
   await notificationsRepository.create(pool, {
     userId: studentId,
     type: "success",
-    message: targetSectionId
-      ? "Đơn đăng ký khóa học của bạn đã được kích hoạt và xếp vào lớp. Chúc bạn học tập hiệu quả!"
-      : "Đơn đăng ký khóa học của bạn đã được kích hoạt."
+    message: await placementNotice(pool, enrollmentId, targetSectionId, true),
+    relatedEntityType: "enrollment",
+    relatedEntityId: enrollmentId,
+    emailFallback: true
   });
   const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
   const sName = studentUser?.name || studentUser?.email || "Học viên";
@@ -2419,9 +2440,10 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
   await notificationsRepository.create(pool, {
     userId: enrollment.student_id,
     type: "success",
-    message: sectionId
-      ? "Yêu cầu đăng ký môn học của bạn đã được duyệt và xếp vào lớp học phần."
-      : "Yêu cầu đăng ký môn học của bạn đã được duyệt."
+    message: await placementNotice(pool, req.params.id, sectionId, false),
+    relatedEntityType: "enrollment",
+    relatedEntityId: req.params.id,
+    emailFallback: true
   });
   const approveStudentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollment.student_id])).rows[0];
   const approveSName = approveStudentUser?.name || approveStudentUser?.email || "Học viên";
@@ -3572,6 +3594,31 @@ app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), valida
   } finally {
     client.release();
   }
+}));
+
+// Which integrations this deployment has settings for, so admins can check a new environment.
+// Reports only whether each setting is present, never its value.
+app.get("/api/admin/system/status", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {
+  const has = (name: string) => Boolean((process.env[name] || "").trim());
+  let googleWorkspace = false;
+  try {
+    const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "");
+    googleWorkspace = Boolean(creds?.client_email && creds?.private_key) && has("SCHOOL_EMAIL_DOMAIN");
+  } catch {
+    googleWorkspace = false;
+  }
+  const status: SystemStatus = {
+    environment: process.env.NODE_ENV || "development",
+    sepay: has("SEPAY_API_KEY"),
+    email: hasSmtpConfig(),
+    appUrl: has("LMS_LOGIN_URL") || has("APP_URL"),
+    storage: has("SUPABASE_URL") && has("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "database",
+    crmOutbound: has("CRM_WEBHOOK_URL") && has("CRM_WEBHOOK_SECRET"),
+    crmInbound: has("CRM_API_KEY") && has("CRM_INBOUND_SECRET"),
+    cron: has("CRON_SECRET"),
+    googleWorkspace
+  };
+  res.json(status);
 }));
 
 app.get("/api/admin/crm/outbox", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {

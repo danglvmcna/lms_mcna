@@ -262,14 +262,14 @@ function wrapHtmlBody(title: string, contentHtml: string): string {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>LMS E16-MCNA</h1>
+        <h1>MCNA Technology School</h1>
       </div>
       <div class="content">
         ${contentHtml}
       </div>
       <div class="footer">
-        <p>© ${new Date().getFullYear()} E16 LMS. Mọi quyền được bảo lưu.</p>
-        <p>Đây là email thông báo tự động từ hệ thống quản lý học tập E16. Vui lòng không trả lời thư này.</p>
+        <p>© ${new Date().getFullYear()} MCNA Technology School · mcna.vn</p>
+        <p>Email tự động từ hệ thống học trực tuyến MCNA LMS, vui lòng không trả lời thư này. Cần hỗ trợ, bạn nhắn MCNA qua Zalo 0939 866 825.</p>
       </div>
     </div>
   </div>
@@ -292,13 +292,13 @@ export async function sendWelcomeEmail(
     lmsLoginUrl: string;
   }
 ): Promise<void> {
-  const subject = `[LMS E16] Chào mừng tân sinh viên - Cấp tài khoản Email trường`;
+  const subject = `[MCNA LMS] Chào mừng bạn đến với MCNA - Tài khoản email học viên`;
 
   const htmlContent = wrapHtmlBody(
-    "Chào mừng tân sinh viên",
+    "Chào mừng bạn đến với MCNA",
     `
       <p class="greeting">Chào bạn ${params.name},</p>
-      <p>Chúc mừng bạn đã gia nhập trường học E16-MCNA! Tài khoản Email chính thức của bạn tại trường đã được tạo thành công:</p>
+      <p>Chào mừng bạn đến với MCNA Technology School! Tài khoản email học viên của bạn đã được tạo:</p>
       <div class="message-box">
         <strong>Email trường:</strong> ${params.schoolEmail}<br/>
         ${params.tempPassword ? `<strong>Mật khẩu tạm thời:</strong> ${params.tempPassword}<br/>` : ""}
@@ -373,7 +373,7 @@ export async function sendLmsNotification(
     success: "[Thành công]",
   };
 
-  const prefix = prefixMap[params.type] || "[LMS E16]";
+  const prefix = prefixMap[params.type] || "[MCNA LMS]";
   const finalSubject = `${prefix} ${params.subject}`;
 
   const htmlContent = wrapHtmlBody(
@@ -382,7 +382,7 @@ export async function sendLmsNotification(
       <p class="greeting">Chào học viên,</p>
       <p>Hệ thống LMS thông báo cập nhật mới liên quan đến tài khoản của bạn:</p>
       <div class="message-box">
-        ${params.body}
+        ${escapeHtml(params.body)}
       </div>
       <p>Vui lòng đăng nhập cổng thông tin LMS để biết thêm chi tiết.</p>
     `
@@ -433,7 +433,7 @@ export async function sendPasswordResetLinkEmail(
     expiresAt: string;
   }
 ): Promise<void> {
-  const subject = `[LMS E16] Liên kết đặt lại mật khẩu`;
+  const subject = `[MCNA LMS] Liên kết đặt lại mật khẩu`;
   const safeName = escapeHtml(params.name);
   const safeResetUrl = escapeHtml(params.resetUrl);
   const expiresAt = new Date(params.expiresAt).toLocaleString("vi-VN");
@@ -501,7 +501,7 @@ export async function sendTemporaryPasswordEmail(
   userId: string,
   params: { to: string; name: string; temporaryPassword: string; loginUrl: string }
 ): Promise<void> {
-  const subject = `[LMS MCNA] Thông tin đăng nhập tài khoản học viên`;
+  const subject = `[MCNA LMS] Thông tin đăng nhập tài khoản học viên`;
   const safeName = escapeHtml(params.name);
   const safeEmail = escapeHtml(params.to);
   const safePassword = escapeHtml(params.temporaryPassword);
@@ -548,7 +548,7 @@ export async function sendAccountExistsEmail(
   userId: string,
   params: { to: string; name: string; loginUrl: string }
 ): Promise<void> {
-  const subject = `[LMS MCNA] Bạn đã có tài khoản LMS`;
+  const subject = `[MCNA LMS] Bạn đã có tài khoản LMS`;
   const safeName = escapeHtml(params.name);
   const safeLoginUrl = escapeHtml(params.loginUrl);
   const html = wrapHtmlBody(
