@@ -2087,6 +2087,11 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       client.release();
     }
 
+    // A formal payment-confirmation email is about to be sent below whenever the student has any
+    // email on file, so suppress the generic fallback notification email to avoid a duplicate send.
+    const crmConfirmStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
+    const willSendCrmPaymentConfirmationEmail = Boolean(crmConfirmStudentEmailRow?.email);
+
     if (placedSectionId) {
       await notificationsRepository.create(pool, {
         userId: enrollmentRow.student_id,
@@ -2094,7 +2099,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
         message: await placementNotice(pool, enrollmentRow.id, placedSectionId, true),
         relatedEntityType: "enrollment",
         relatedEntityId: enrollmentRow.id,
-        emailFallback: true
+        emailFallback: !willSendCrmPaymentConfirmationEmail
       });
     }
 
@@ -2435,16 +2440,18 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
   }
 
   invalidateStoreCache();
+  const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
+  const sName = studentUser?.name || studentUser?.email || "Học viên";
+  // A formal payment-confirmation email is about to be sent below whenever the student has any
+  // email on file, so suppress the generic fallback notification email to avoid a duplicate send.
   await notificationsRepository.create(pool, {
     userId: studentId,
     type: "success",
     message: await placementNotice(pool, enrollmentId, targetSectionId, true),
     relatedEntityType: "enrollment",
     relatedEntityId: enrollmentId,
-    emailFallback: true
+    emailFallback: !studentUser?.email
   });
-  const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
-  const sName = studentUser?.name || studentUser?.email || "Học viên";
   await notificationsRepository.create(pool, {
     userId: req.user!.id,
     type: "success",

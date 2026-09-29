@@ -411,20 +411,24 @@ export async function processSepayWebhook(
   // Trigger cache invalidation callback
   onSuccessfulPayment?.();
 
-  // Send notifications to the learner
+  // Send notifications to the learner. A formal payment-confirmation email is about to be sent
+  // below whenever the student has any email on file, so suppress the generic fallback
+  // notification email in that case to avoid a duplicate send.
+  const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+  const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail
     });
   }
 
