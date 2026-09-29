@@ -168,6 +168,7 @@ import { registerEventHandlers } from "./src/server/eventHandlers";
 import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
 import { getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
+import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src/server/services/email";
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
@@ -2096,6 +2097,41 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
         emailFallback: true
       });
     }
+
+    void (async () => {
+      try {
+        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
+        if (!studentUser?.email) return;
+
+        const courseRow = (await pool.query("SELECT title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
+        let sectionCode: string | null = null;
+        let teacherName: string | null = null;
+        if (placedSectionId) {
+          const secRow = (await pool.query(
+            `SELECT cs.section_code, u.name AS teacher_name
+             FROM course_sections cs
+             LEFT JOIN users u ON u.id = cs.teacher_id
+             WHERE cs.id = $1`,
+            [placedSectionId]
+          )).rows[0];
+          sectionCode = secRow?.section_code || null;
+          teacherName = secRow?.teacher_name || null;
+        }
+
+        await sendPaymentConfirmationEmail({
+          to: studentUser.email,
+          name: studentUser.name || "Học viên",
+          courseTitle: courseRow?.title || "Khóa học",
+          amount: Number(req.body.amount || courseRow?.price || 0),
+          transactionId: transactionId || enrollmentRow.id,
+          sectionCode,
+          teacherName
+        });
+      } catch (emailErr) {
+        console.error("[CRM Payment] Failed to send payment confirmation email:", emailErr);
+      }
+    })();
+
     const current = (await pool.query("SELECT status FROM enrollments WHERE id = $1", [enrollmentRow.id])).rows[0];
     return {
       status: 200,
@@ -2346,6 +2382,18 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
     relatedEntityType: "enrollment",
     relatedEntityId: result.enrollment.id
   }).catch(err => console.error("[notify] failed to notify admin on course register:", err));
+
+  if (req.user?.email) {
+    void sendCourseRegistrationEmail({
+      to: req.user.email,
+      name: studentName,
+      courseTitle: result.course.title,
+      sectionCode: result.section?.sectionCode || null,
+      price: result.course.price,
+      transactionId: result.transactionId || null,
+      studentId: req.user.id
+    }).catch(err => console.error("[email] failed to dispatch course registration email:", err));
+  }
   res.status(201).json(result.enrollment);
 }));
 // One-click activation from the admin orders screen: record the payment, then place the learner.
@@ -2412,6 +2460,39 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
       });
     }
   }
+
+  if (studentUser?.email) {
+    void (async () => {
+      try {
+        const courseDetails = (await pool.query(
+          `SELECT c.title, c.price, t.id AS tx_id, t.amount, s.section_code, u.name AS teacher_name
+           FROM enrollments e
+           JOIN courses c ON c.id = e.course_id
+           LEFT JOIN transactions t ON t.student_id = e.student_id AND t.course_id = e.course_id AND t.status = 'approved'
+           LEFT JOIN course_sections s ON s.id = $2
+           LEFT JOIN users u ON u.id = s.teacher_id
+           WHERE e.id = $1
+           ORDER BY t.created_at DESC LIMIT 1`,
+          [enrollmentId, targetSectionId || null]
+        )).rows[0];
+
+        if (courseDetails) {
+          await sendPaymentConfirmationEmail({
+            to: studentUser.email,
+            name: sName,
+            courseTitle: courseDetails.title,
+            amount: Number(courseDetails.amount || courseDetails.price || 0),
+            transactionId: courseDetails.tx_id || enrollmentId,
+            sectionCode: courseDetails.section_code || null,
+            teacherName: courseDetails.teacher_name || null
+          });
+        }
+      } catch (emailErr) {
+        console.error("[email] failed to dispatch payment confirmation email on activation:", emailErr);
+      }
+    })();
+  }
+
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
   res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
 }));
@@ -3875,6 +3956,27 @@ const reviewTransactionHandler = asyncHandler(async (req, res) => {
     client.release();
   }
   await audit(req, `finance_transaction_${req.body.status}`, req.params.id, req.body.notes || "");
+
+  if (req.body.status === "approved" && result?.student_id && result?.course_id) {
+    void (async () => {
+      try {
+        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [result.student_id])).rows[0];
+        if (!studentUser?.email) return;
+
+        const courseRow = (await pool.query("SELECT title FROM courses WHERE id = $1", [result.course_id])).rows[0];
+        await sendPaymentConfirmationEmail({
+          to: studentUser.email,
+          name: studentUser.name || "Học viên",
+          courseTitle: courseRow?.title || "Khóa học",
+          amount: Number(result.amount || 0),
+          transactionId: result.id
+        });
+      } catch (emailErr) {
+        console.error("[Transaction Review] Failed to dispatch payment confirmation email:", emailErr);
+      }
+    })();
+  }
+
   res.json(result);
 });
 

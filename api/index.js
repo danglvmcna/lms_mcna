@@ -3092,277 +3092,341 @@ var enrollmentsRepository = {
 import nodemailer from "nodemailer";
 import fs2 from "fs";
 import path2 from "path";
-var SMTP_HOST = process.env.SMTP_HOST || "";
-var SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
-var SMTP_USER = process.env.SMTP_USER || "";
-var SMTP_PASS = process.env.SMTP_PASS || "";
-var SMTP_FROM = process.env.SMTP_FROM || `"MCNA LMS" <${process.env.SMTP_USER || "noreply@mcna.vn"}>`;
-var LMS_URL = (process.env.LMS_LOGIN_URL || process.env.APP_URL || "").trim();
+var getSmtpConfig = () => ({
+  host: process.env.SMTP_HOST || "",
+  port: Number(process.env.SMTP_PORT) || 587,
+  user: process.env.SMTP_USER || "",
+  pass: process.env.SMTP_PASS || "",
+  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${process.env.SMTP_USER || "noreply@mcna.vn"}>`,
+  testReceiver: process.env.TEST_RECEIVER_EMAIL || "",
+  // Where the "open the LMS" button in notification emails points.
+  appUrl: (process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms-mcna.vercel.app").trim()
+});
 function escapeHtml(value) {
   return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-var TEST_RECEIVER_EMAIL = process.env.TEST_RECEIVER_EMAIL || "";
+var BANK_ACCOUNT_NUMBER = "099162438104";
+var BANK_NAME = "MB Bank (Ng\xE2n h\xE0ng Qu\xE2n \u0110\u1ED9i)";
+var ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
+var getAppUrl = () => getSmtpConfig().appUrl;
 var isPlaceholderSmtp = () => {
-  return !SMTP_USER || SMTP_USER.includes("your_email") || SMTP_USER.includes("example.com") || SMTP_PASS.includes("your_app_password");
+  const config = getSmtpConfig();
+  return !config.user || config.user.includes("your_email") || config.user.includes("example.com") || config.pass.includes("your_app_password");
 };
 var transporter = null;
-var etherealCredentials = null;
 async function getTransporter() {
-  if (transporter) return transporter;
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS
-      }
-    });
+  const config = getSmtpConfig();
+  if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
+    if (!transporter) {
+      transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.port === 465,
+        auth: {
+          user: config.user,
+          pass: config.pass
+        }
+      });
+    }
     return transporter;
   }
-  console.log("[Email Service] Creating Ethereal Email test account...");
-  try {
-    const testAccount = await nodemailer.createTestAccount();
-    etherealCredentials = { user: testAccount.user, pass: testAccount.pass };
-    transporter = nodemailer.createTransport({
-      host: testAccount.smtp.host,
-      port: testAccount.smtp.port,
-      secure: testAccount.smtp.secure,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass
-      }
-    });
-    console.log(`[Email Service] Ethereal Email test account created successfully!`);
-    console.log(`[Email Service] Test SMTP User: ${testAccount.user}`);
-    console.log(`[Email Service] Test SMTP Password: ${testAccount.pass}`);
-    console.log(`[Email Service] View test emails at: https://ethereal.email/messages`);
-    return transporter;
-  } catch (err) {
-    console.error("[Email Service] Failed to create Ethereal Email account, falling back to local file logging.", err);
-    throw err;
-  }
+  return null;
 }
 function logEmailMock(to, name, subject, htmlContent) {
-  const scratchDir = path2.join(process.cwd(), "scratch");
-  if (!fs2.existsSync(scratchDir)) {
-    fs2.mkdirSync(scratchDir, { recursive: true });
-  }
-  const logFile = path2.join(scratchDir, "emails.log");
-  const logEntry = `
+  try {
+    const scratchDir = path2.join(process.cwd(), "scratch");
+    if (!fs2.existsSync(scratchDir)) {
+      fs2.mkdirSync(scratchDir, { recursive: true });
+    }
+    const logFile = path2.join(scratchDir, "emails.log");
+    const logEntry = `
 ========================================
-[EMAIL MOCK DISPATCHED]
-Timestamp: ${(/* @__PURE__ */ new Date()).toISOString()}
+[EMAIL MOCK DISPATCHED] ${(/* @__PURE__ */ new Date()).toISOString()}
 To: "${name}" <${to}>
 Subject: ${subject}
 ----------------------------------------
 ${htmlContent}
 ========================================
-
 `;
-  fs2.appendFileSync(logFile, logEntry, "utf8");
-  console.log(`[Email Mock] Sent to ${to}. Logged in scratch/emails.log`);
-}
-function logPreviewUrl(to, subject, previewUrl) {
-  const scratchDir = path2.join(process.cwd(), "scratch");
-  if (!fs2.existsSync(scratchDir)) {
-    fs2.mkdirSync(scratchDir, { recursive: true });
+    fs2.appendFileSync(logFile, logEntry, "utf8");
+  } catch {
   }
-  const logFile = path2.join(scratchDir, "emails.log");
-  const logEntry = `
-========================================
-[REAL EMAIL SENT (ETHEREAL)]
-Timestamp: ${(/* @__PURE__ */ new Date()).toISOString()}
-To: ${to}
-Subject: ${subject}
-Preview link (Ctrl+Click to view): ${previewUrl}
-========================================
-
-`;
-  fs2.appendFileSync(logFile, logEntry, "utf8");
-  console.log(`[Email Service] Real email sent. Preview URL: ${previewUrl}`);
+  console.log(`[Email Mock] Sent to "${name}" <${to}>: ${subject}`);
 }
-function logRealEmailSent(to, subject, info) {
-  const scratchDir = path2.join(process.cwd(), "scratch");
-  if (!fs2.existsSync(scratchDir)) {
-    fs2.mkdirSync(scratchDir, { recursive: true });
-  }
-  const logFile = path2.join(scratchDir, "emails.log");
-  const logEntry = `
-========================================
-[REAL EMAIL SENT (SMTP PRODUCTION)]
-Timestamp: ${(/* @__PURE__ */ new Date()).toISOString()}
-To: ${to}
-Subject: ${subject}
-MessageID: ${info.messageId}
-Response: ${info.response}
-========================================
-
-`;
-  fs2.appendFileSync(logFile, logEntry, "utf8");
-  console.log(`[Email Service] Real email sent to ${to}. MessageID: ${info.messageId}`);
-}
-function generateEmailHtml(name, message) {
-  return `
-<!DOCTYPE html>
+var formatMoney = (amount) => amount > 0 ? `${new Intl.NumberFormat("vi-VN").format(amount)} \u0111` : "Mi\u1EC5n ph\xED";
+function renderBaseLayout(title, bodyContent) {
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
   <style>
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background-color: #f8fafc;
-      color: #1e293b;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      width: 100%;
-      background-color: #f8fafc;
-      padding: 30px 15px;
-      box-sizing: border-box;
-    }
-    .card {
-      max-width: 580px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border-radius: 16px;
-      border: 1px solid #e2e8f0;
-      overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    }
-    .header {
-      background-color: #4f46e5;
-      padding: 24px;
-      text-align: center;
-    }
-    .header h1 {
-      color: #ffffff;
-      margin: 0;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-    .content {
-      padding: 32px 24px;
-    }
-    .content p {
-      margin: 0 0 16px 0;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .content p.greeting {
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .message-box {
-      background-color: #f1f5f9;
-      border-left: 4px solid #4f46e5;
-      padding: 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      color: #1e293b;
-      margin: 20px 0;
-      line-height: 1.6;
-    }
-    .button-container {
-      text-align: center;
-      margin: 24px 0 0 0;
-    }
-    .button {
-      display: inline-block;
-      background-color: #4f46e5;
-      color: #ffffff !important;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 13px;
-      padding: 12px 28px;
-      border-radius: 8px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-    .footer {
-      background-color: #f8fafc;
-      padding: 20px 24px;
-      text-align: center;
-      border-top: 1px solid #e2e8f0;
-      font-size: 11px;
-      color: #64748b;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
+    .wrapper { width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; }
+    .card { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .header { background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .header p { color: #c7d2fe; margin: 4px 0 0 0; font-size: 12px; font-weight: 500; }
+    .content { padding: 32px 24px; }
+    .info-box { background-color: #f1f5f9; border-radius: 12px; padding: 16px 20px; margin: 20px 0; border: 1px solid #e2e8f0; }
+    .bank-box { background-color: #eff6ff; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bfdbfe; }
+    .success-box { background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .row-label { color: #64748b; font-weight: 500; }
+    .row-value { color: #0f172a; font-weight: 700; text-align: right; }
+    .highlight { color: #4f46e5; font-weight: 800; }
+    .highlight-green { color: #16a34a; font-weight: 800; }
+    .footer { background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; }
+    .btn-container { text-align: center; margin: 28px 0 10px 0; }
+    .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
+    .btn-green { background-color: #16a34a; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3); }
+    .mono { font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
   </style>
 </head>
 <body>
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>MCNA Technology School</h1>
+        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
+        <p>H\u1EC7 th\u1ED1ng \u0110\xE0o t\u1EA1o & Qu\u1EA3n l\xFD H\u1ECDc v\u1EE5 Tr\u1EF1c tuy\u1EBFn (MCNA LMS)</p>
       </div>
       <div class="content">
-        <p class="greeting">Ch\xE0o ${escapeHtml(name)},</p>
-        <p>B\u1EA1n c\xF3 m\u1ED9t th\xF4ng b\xE1o m\u1EDBi t\u1EEB MCNA LMS:</p>
-        <div class="message-box">
-          ${escapeHtml(message)}
-        </div>
-        <p>\u0110\u0103ng nh\u1EADp MCNA LMS \u0111\u1EC3 xem chi ti\u1EBFt.</p>
-        ${LMS_URL ? `<div class="button-container">
-          <a href="${escapeHtml(LMS_URL)}" class="button" target="_blank">M\u1EDF MCNA LMS</a>
-        </div>` : ""}
+        ${bodyContent}
       </div>
       <div class="footer">
-        <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School \xB7 mcna.vn</p>
-        <p>Email t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng h\u1ECDc tr\u1EF1c tuy\u1EBFn MCNA LMS, vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y. C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n nh\u1EAFn MCNA qua Zalo 0939 866 825.</p>
+        <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</p>
+        <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: Ban \u0110\xE0o t\u1EA1o MCNA \xB7 Website: <a href="${escapeHtml(getAppUrl())}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(getAppUrl().replace(/^https?:\/\//, ""))}</a></p>
+        <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u. Vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y, c\u1EA7n h\u1ED7 tr\u1EE3 h\xE3y nh\u1EAFn MCNA qua Zalo 0939 866 825.</p>
       </div>
     </div>
   </div>
 </body>
-</html>
-  `;
+</html>`;
+}
+async function dispatchEmail(to, name, subject, html, text) {
+  const config = getSmtpConfig();
+  let toEmail = to;
+  if (config.testReceiver && !config.testReceiver.includes("your_real_email")) {
+    toEmail = config.testReceiver;
+    console.log(`[Email Service] Overriding recipient from ${to} to test email ${toEmail}`);
+  }
+  const activeTransporter2 = await getTransporter();
+  if (!activeTransporter2) {
+    logEmailMock(toEmail, name, subject, html);
+    return;
+  }
+  try {
+    await activeTransporter2.sendMail({
+      from: config.from,
+      to: toEmail,
+      subject,
+      html,
+      text
+    });
+    console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
+  } catch (err) {
+    console.warn(`[Email Service] SMTP dispatch failed, fallback to mock log:`, err);
+    logEmailMock(toEmail, name, subject, html);
+  }
+}
+async function sendCourseRegistrationEmail(params) {
+  try {
+    const isPaid = params.price > 0;
+    const studentHex = (params.studentId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "MCNA01";
+    const txHex = (params.transactionId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "ORDER1";
+    const memoText = `MCNA ${studentHex} ${txHex}`;
+    const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${params.price}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
+    const subject = isPaid ? `[MCNA] H\u01B0\u1EDBng d\u1EABn thanh to\xE1n & X\xE1c nh\u1EADn \u0111\u0103ng k\xFD: ${params.courseTitle}` : `[MCNA] X\xE1c nh\u1EADn \u0111\u0103ng k\xFD th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. \u0110\u01A1n \u0111\u0103ng k\xFD h\u1ECDc t\u1EADp c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\xEAn h\u1EC7 th\u1ED1ng.</p>
+
+      <div class="info-box">
+        <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
+          TH\xD4NG TIN KH\xD3A H\u1ECCC \u0110\u0102NG K\xDD
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">Kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${safeCourseTitle}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
+            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${safeSectionCode}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">H\u1ECDc ph\xED:</td>
+            <td style="font-weight: 800; color: ${isPaid ? "#059669" : "#4f46e5"}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">Tr\u1EA1ng th\xE1i:</td>
+            <td style="font-weight: 700; color: ${isPaid ? "#d97706" : "#059669"}; text-align: right; padding: 4px 0;">${isPaid ? "Ch\u1EDD thanh to\xE1n" : "\u0110\xE3 ghi danh"}</td>
+          </tr>
+        </table>
+      </div>
+
+      ${isPaid ? `
+      <div class="bank-box">
+        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
+          H\u01AF\u1EDANG D\u1EAAN CHUY\u1EC2N KHO\u1EA2N H\u1ECCC PH\xCD
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Ng\xE2n h\xE0ng:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${BANK_NAME}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 t\xE0i kho\u1EA3n:</td>
+            <td style="font-weight: 800; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Ch\u1EE7 t\xE0i kho\u1EA3n:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${ACCOUNT_HOLDER}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n c\u1EA7n thanh to\xE1n:</td>
+            <td style="font-weight: 800; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">N\u1ED9i dung chuy\u1EC3n kho\u1EA3n:</td>
+            <td style="font-weight: 800; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
+          </tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 16px;">
+          <p style="font-size: 12px; color: #475569; margin: 0 0 8px 0;">Qu\xE9t m\xE3 VietQR tr\xEAn \u1EE9ng d\u1EE5ng ng\xE2n h\xE0ng \u0111\u1EC3 thanh to\xE1n nhanh:</p>
+          <img src="${vietQrUrl}" alt="VietQR MCNA" style="max-width: 220px; width: 100%; border-radius: 12px; border: 1px solid #bfdbfe; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin: 0 auto; display: block;" />
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; margin: 12px 0 0 0; line-height: 1.5; text-align: center;">
+          <em>* L\u01B0u \xFD quan tr\u1ECDng: Vui l\xF2ng ghi ch\xEDnh x\xE1c n\u1ED9i dung <strong style="color: #b91c1c;">${memoText}</strong> \u0111\u1EC3 h\u1EC7 th\u1ED1ng t\u1EF1 \u0111\u1ED9ng k\xEDch ho\u1EA1t kh\xF3a h\u1ECDc ngay sau khi nh\u1EADn ti\u1EC1n.</em>
+        </p>
+      </div>
+      ` : `
+      <p>Kh\xF3a h\u1ECDc mi\u1EC5n ph\xED \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n. B\u1EA1n c\xF3 th\u1EC3 \u0111\u0103ng nh\u1EADp ngay \u0111\u1EC3 theo d\xF5i \u0111\u1EC1 c\u01B0\u01A1ng v\xE0 l\u1ECBch h\u1ECDc.</p>
+      `}
+
+      <div class="btn-container">
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">Xem ph\xF2ng h\u1ECDc & \u0110\u01A1n \u0111\u0103ng k\xFD</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${params.name},
+
+C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc "${params.courseTitle}" t\u1EA1i MCNA Technology School.
+H\u1ECDc ph\xED: ${formatMoney(params.price)}
+${isPaid ? `
+Th\xF4ng tin chuy\u1EC3n kho\u1EA3n:
+Ng\xE2n h\xE0ng: ${BANK_NAME}
+S\u1ED1 t\xE0i kho\u1EA3n: ${BANK_ACCOUNT_NUMBER}
+Ch\u1EE7 t\xE0i kho\u1EA3n: ${ACCOUNT_HOLDER}
+S\u1ED1 ti\u1EC1n: ${formatMoney(params.price)}
+N\u1ED9i dung: ${memoText}
+` : ""}
+Truy c\u1EADp h\u1EC7 th\u1ED1ng t\u1EA1i: ${getAppUrl()}`;
+    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendCourseRegistrationEmail error:", err);
+  }
+}
+async function sendPaymentConfirmationEmail(params) {
+  try {
+    const subject = `[MCNA] X\xE1c nh\u1EADn thanh to\xE1n th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
+    const safeTeacherName = params.teacherName ? escapeHtml(params.teacherName) : "";
+    const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
+
+      <div class="success-box">
+        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          BI\xCAN NH\u1EACN THANH TO\xC1N & TH\xD4NG TIN H\u1ECCC PH\u1EA6N
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${safeCourseTitle}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n \u0111\xE3 thanh to\xE1n:</td>
+            <td style="font-weight: 800; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">M\xE3 giao d\u1ECBch:</td>
+            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${safeTransactionId}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Th\u1EDDi gian x\xE1c nh\u1EADn:</td>
+            <td style="font-weight: 600; color: #334155; text-align: right; padding: 5px 0;">${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
+            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${safeSectionCode}</td>
+          </tr>
+          ${safeTeacherName ? `
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:</td>
+            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${safeTeacherName}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Tr\u1EA1ng th\xE1i kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 800; color: #15803d; text-align: right; padding: 5px 0;">\u0110\xE3 k\xEDch ho\u1EA1t - S\u1EB5n s\xE0ng v\xE0o h\u1ECDc</td>
+          </tr>
+        </table>
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        B\u1EA1n hi\u1EC7n \u0111\xE3 c\xF3 \u0111\u1EA7y \u0111\u1EE7 quy\u1EC1n truy c\u1EADp v\xE0o t\xE0i li\u1EC7u h\u1ECDc t\u1EADp, b\xE0i gi\u1EA3ng, b\xE0i t\u1EADp v\xE0 ph\xF2ng h\u1ECDc tr\u1EF1c tuy\u1EBFn c\u1EE7a kh\xF3a h\u1ECDc. H\xE3y b\u1EAFt \u0111\u1EA7u h\xE0nh tr\xECnh h\u1ECDc t\u1EADp c\xF9ng MCNA ngay h\xF4m nay!
+      </p>
+
+      <div class="btn-container">
+        <a href="${escapeHtml(getAppUrl())}" class="btn btn-green" target="_blank">V\xE0o h\u1ECDc ngay tr\xEAn MCNA LMS</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${params.name},
+
+H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA x\xE1c nh\u1EADn \u0111\xE3 nh\u1EADn thanh to\xE1n s\u1ED1 ti\u1EC1n ${formatMoney(params.amount)} cho kh\xF3a h\u1ECDc "${params.courseTitle}".
+M\xE3 giao d\u1ECBch: ${params.transactionId || ""}
+L\u1EDBp h\u1ECDc: ${params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp"}
+Kh\xF3a h\u1ECDc \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t th\xE0nh c\xF4ng!
+Truy c\u1EADp v\xE0o h\u1ECDc ngay t\u1EA1i: ${getAppUrl()}`;
+    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendPaymentConfirmationEmail error:", err);
+  }
 }
 async function sendEmailDirect(recipientEmail, recipientName, message) {
   try {
-    let toEmail = recipientEmail;
-    if (TEST_RECEIVER_EMAIL && !TEST_RECEIVER_EMAIL.includes("your_real_email")) {
-      toEmail = TEST_RECEIVER_EMAIL;
-      console.log(`[Email Service] Overriding recipient email from ${recipientEmail} to ${TEST_RECEIVER_EMAIL} for testing.`);
-    }
-    const subject = `[MCNA LMS] B\u1EA1n c\xF3 th\xF4ng b\xE1o m\u1EDBi`;
-    const htmlContent = generateEmailHtml(recipientName || "H\u1ECDc vi\xEAn", message);
-    if (isPlaceholderSmtp()) {
-      logEmailMock(toEmail, recipientName || "H\u1ECDc vi\xEAn", subject, htmlContent);
-      return;
-    }
-    try {
-      const activeTransporter2 = await getTransporter();
-      const info = await activeTransporter2.sendMail({
-        from: SMTP_FROM,
-        to: toEmail,
-        subject,
-        html: htmlContent,
-        text: `Ch\xE0o ${recipientName},
+    const subject = `[MCNA LMS] Th\xF4ng b\xE1o m\u1EDBi t\u1EEB h\u1EC7 th\u1ED1ng`;
+    const safeName = escapeHtml(recipientName);
+    const safeMessage = escapeHtml(message);
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p>H\u1EC7 th\u1ED1ng H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin g\u1EEDi \u0111\u1EBFn b\u1EA1n th\xF4ng b\xE1o m\u1EDBi:</p>
+      <div class="info-box" style="font-size: 14px; color: #1e293b; line-height: 1.6;">
+        ${safeMessage}
+      </div>
+      <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp v\xE0o h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\u1EBFt.</p>
+      <div class="btn-container">
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">\u0110i t\u1EDBi MCNA LMS</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${recipientName},
 
 B\u1EA1n c\xF3 m\u1ED9t th\xF4ng b\xE1o m\u1EDBi t\u1EEB MCNA LMS:
 
 ${message}
 
-\u0110\u0103ng nh\u1EADp MCNA LMS \u0111\u1EC3 xem chi ti\u1EBFt.${LMS_URL ? `
-${LMS_URL}` : ""}`
-      });
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      if (previewUrl) {
-        logPreviewUrl(toEmail, subject, previewUrl);
-      } else {
-        logRealEmailSent(toEmail, subject, info);
-      }
-    } catch (smtpErr) {
-      console.warn("[Email Service] SMTP dispatch failed, falling back to local file log.", smtpErr);
-      logEmailMock(toEmail, recipientName || "H\u1ECDc vi\xEAn", subject, htmlContent);
-    }
+Truy c\u1EADp h\u1EC7 th\u1ED1ng: ${getAppUrl()}`;
+    await dispatchEmail(recipientEmail, recipientName, subject, renderBaseLayout(subject, bodyContent), plainText);
   } catch (err) {
-    console.error(`[Email Service Error] Failed to process direct email notification to ${recipientEmail}:`, err);
+    console.error(`[Email Service Error] Failed to process direct email to ${recipientEmail}:`, err);
   }
 }
 
@@ -3395,11 +3459,11 @@ var auditRepository = {
 // src/server/emailProvisioning/emailWorker.ts
 var GOOGLE_SERVICE_ACCOUNT_JSON2 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 var SCHOOL_EMAIL_DOMAIN2 = process.env.SCHOOL_EMAIL_DOMAIN || "mcna.edu.vn";
-var SMTP_HOST2 = process.env.SMTP_HOST || "smtp.gmail.com";
-var SMTP_PORT2 = Number(process.env.SMTP_PORT) || 465;
-var SMTP_USER2 = process.env.SMTP_USER || "";
-var SMTP_PASS2 = process.env.SMTP_PASS || "";
-var SMTP_FROM2 = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER2 || "noreply@mcna.vn"}>`;
+var SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
+var SMTP_PORT = Number(process.env.SMTP_PORT) || 465;
+var SMTP_USER = process.env.SMTP_USER || "";
+var SMTP_PASS = process.env.SMTP_PASS || "";
+var SMTP_FROM = process.env.SMTP_FROM || `"LMS MCNA" <${SMTP_USER || "noreply@mcna.vn"}>`;
 function getSmtpUser() {
   return (process.env.SMTP_USER || "").trim();
 }
@@ -6042,6 +6106,36 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
     relatedEntityType: "transaction",
     relatedEntityId: matchedTx.id
   }).catch((err) => console.error("[notify] failed to notify admin on sepay payment:", err));
+  void (async () => {
+    try {
+      const student = (await pool.query("SELECT name, email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+      if (!student?.email) return;
+      let sectionCode = null;
+      let teacherName = null;
+      if (placedSectionId) {
+        const sec = (await pool.query(
+          `SELECT cs.section_code, u.name AS teacher_name
+           FROM course_sections cs
+           LEFT JOIN users u ON u.id = cs.teacher_id
+           WHERE cs.id = $1`,
+          [placedSectionId]
+        )).rows[0];
+        sectionCode = sec?.section_code || null;
+        teacherName = sec?.teacher_name || null;
+      }
+      await sendPaymentConfirmationEmail({
+        to: student.email,
+        name: student.name || "H\u1ECDc vi\xEAn",
+        courseTitle: matchedTx.course_title,
+        amount: receivedAmount,
+        transactionId: matchedTx.id,
+        sectionCode,
+        teacherName
+      });
+    } catch (emailErr) {
+      console.error("[SePay] Failed to send payment confirmation email:", emailErr);
+    }
+  })();
   return {
     success: true,
     matched: true,
@@ -7975,6 +8069,37 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
         emailFallback: true
       });
     }
+    void (async () => {
+      try {
+        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
+        if (!studentUser?.email) return;
+        const courseRow = (await pool.query("SELECT title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
+        let sectionCode = null;
+        let teacherName = null;
+        if (placedSectionId) {
+          const secRow = (await pool.query(
+            `SELECT cs.section_code, u.name AS teacher_name
+             FROM course_sections cs
+             LEFT JOIN users u ON u.id = cs.teacher_id
+             WHERE cs.id = $1`,
+            [placedSectionId]
+          )).rows[0];
+          sectionCode = secRow?.section_code || null;
+          teacherName = secRow?.teacher_name || null;
+        }
+        await sendPaymentConfirmationEmail({
+          to: studentUser.email,
+          name: studentUser.name || "H\u1ECDc vi\xEAn",
+          courseTitle: courseRow?.title || "Kh\xF3a h\u1ECDc",
+          amount: Number(req.body.amount || courseRow?.price || 0),
+          transactionId: transactionId || enrollmentRow.id,
+          sectionCode,
+          teacherName
+        });
+      } catch (emailErr) {
+        console.error("[CRM Payment] Failed to send payment confirmation email:", emailErr);
+      }
+    })();
     const current = (await pool.query("SELECT status FROM enrollments WHERE id = $1", [enrollmentRow.id])).rows[0];
     return {
       status: 200,
@@ -8180,6 +8305,17 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
     relatedEntityType: "enrollment",
     relatedEntityId: result.enrollment.id
   }).catch((err) => console.error("[notify] failed to notify admin on course register:", err));
+  if (req.user?.email) {
+    void sendCourseRegistrationEmail({
+      to: req.user.email,
+      name: studentName,
+      courseTitle: result.course.title,
+      sectionCode: result.section?.sectionCode || null,
+      price: result.course.price,
+      transactionId: result.transactionId || null,
+      studentId: req.user.id
+    }).catch((err) => console.error("[email] failed to dispatch course registration email:", err));
+  }
   res.status(201).json(result.enrollment);
 }));
 app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
@@ -8241,6 +8377,36 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
         message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || targetSectionId}" c\u1EE7a b\u1EA1n.`
       });
     }
+  }
+  if (studentUser?.email) {
+    void (async () => {
+      try {
+        const courseDetails = (await pool.query(
+          `SELECT c.title, c.price, t.id AS tx_id, t.amount, s.section_code, u.name AS teacher_name
+           FROM enrollments e
+           JOIN courses c ON c.id = e.course_id
+           LEFT JOIN transactions t ON t.student_id = e.student_id AND t.course_id = e.course_id AND t.status = 'approved'
+           LEFT JOIN course_sections s ON s.id = $2
+           LEFT JOIN users u ON u.id = s.teacher_id
+           WHERE e.id = $1
+           ORDER BY t.created_at DESC LIMIT 1`,
+          [enrollmentId, targetSectionId || null]
+        )).rows[0];
+        if (courseDetails) {
+          await sendPaymentConfirmationEmail({
+            to: studentUser.email,
+            name: sName,
+            courseTitle: courseDetails.title,
+            amount: Number(courseDetails.amount || courseDetails.price || 0),
+            transactionId: courseDetails.tx_id || enrollmentId,
+            sectionCode: courseDetails.section_code || null,
+            teacherName: courseDetails.teacher_name || null
+          });
+        }
+      } catch (emailErr) {
+        console.error("[email] failed to dispatch payment confirmation email on activation:", emailErr);
+      }
+    })();
   }
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
   res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
@@ -9558,6 +9724,24 @@ var reviewTransactionHandler = asyncHandler(async (req, res) => {
     client2.release();
   }
   await audit(req, `finance_transaction_${req.body.status}`, req.params.id, req.body.notes || "");
+  if (req.body.status === "approved" && result?.student_id && result?.course_id) {
+    void (async () => {
+      try {
+        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [result.student_id])).rows[0];
+        if (!studentUser?.email) return;
+        const courseRow = (await pool.query("SELECT title FROM courses WHERE id = $1", [result.course_id])).rows[0];
+        await sendPaymentConfirmationEmail({
+          to: studentUser.email,
+          name: studentUser.name || "H\u1ECDc vi\xEAn",
+          courseTitle: courseRow?.title || "Kh\xF3a h\u1ECDc",
+          amount: Number(result.amount || 0),
+          transactionId: result.id
+        });
+      } catch (emailErr) {
+        console.error("[Transaction Review] Failed to dispatch payment confirmation email:", emailErr);
+      }
+    })();
+  }
   res.json(result);
 });
 app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.reviewTransaction), reviewTransactionHandler);
