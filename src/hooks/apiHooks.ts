@@ -1,32 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { AppStore } from "../store";
+import { AppStore, createEmptyStore } from "../store";
 import { LMSDataStore } from "../types";
-
-const createEmptyStore = (): LMSDataStore => ({
-  users: [],
-  courses: [],
-  lessons: [],
-  enrollments: [],
-  lessonProgress: [],
-  quizzes: [],
-  questions: [],
-  quizAttempts: [],
-  assignments: [],
-  submissions: [],
-  certificates: [],
-  notifications: [],
-  forumPosts: [],
-  auditLogs: [],
-  transactions: [],
-  attendanceSessions: [],
-  sessionMaterials: [],
-  attendanceRecords: [],
-  courseSections: [],
-  courseRegistrations: [],
-  systemEvents: [],
-  teacherAttendance: []
-});
 
 const hydrateStore = (store: LMSDataStore) => {
   AppStore.hydrate(store);
@@ -59,10 +34,7 @@ export function useStoreSnapshot(enabled = true) {
       return hydrateStore(await api.getStore());
     },
     enabled,
-    initialData: () => {
-      const existing = AppStore.get();
-      return (existing && existing.users && existing.users.length > 0) ? existing : undefined;
-    },
+    initialData: () => (AppStore.isHydrated() ? AppStore.get() : undefined),
     staleTime: 60_000
   });
 }
