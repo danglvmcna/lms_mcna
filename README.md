@@ -157,6 +157,10 @@ npm run build         # đóng gói frontend (dist/client) và backend (dist/ser
 npm start             # chạy production
 ```
 
+Trên máy chủ tự quản (VPS), migration còn thiếu được chạy mỗi khi ứng dụng khởi động. **Vercel không chạy bước khởi động đó**, nên `vercel.json` dùng `npm run vercel-build`: bản build **production** chạy migration còn thiếu trước rồi mới build (`scripts/deployMigrate.ts`); migration lỗi thì build dừng và bản cũ tiếp tục chạy. Bản build preview không đụng tới database. `DATABASE_URL` phải có ở bước build; nếu không, bước này bị bỏ qua (có cảnh báo trong log build) và cần chạy `npm run db:migrate` bằng tay với database đó.
+
+Khi không tải được dữ liệu sau đăng nhập (ví dụ database chưa có migration mới), LMS hiện màn "Chưa tải được dữ liệu" kèm nút thử lại, không hiển thị dữ liệu mẫu.
+
 #### Biến môi trường bắt buộc trên production
 * `NODE_ENV=production`, `PORT`
 * `DATABASE_URL`, `JWT_SECRET`
