@@ -177,6 +177,7 @@ import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src
 import { getDefaultStudentPassword, getPublicAppConfig, getSupportPhone, isDirectSale } from "./src/server/config";
 import { notifyTeacherOfPlacements, sendClassPlacementNotice } from "./src/server/services/placementNotice";
 import { importPaidEnrollments } from "./src/server/services/paidEnrollmentImport";
+import { isCrmSourceConfigured, pullCrmPaidRecords } from "./src/server/services/crmPaidSource";
 import { importMcnaCatalog, mcnaCatalog } from "./src/server/services/catalogImport";
 import { generateWelcomeLetterDraft } from "./src/server/services/welcomeLetterAi";
 import { FileMaterialType, isFileMaterialType, isPdfFile, learnerMaterialAccess, MATERIAL_EXTENSIONS, resolveUploadType } from "./src/materialAccess";
@@ -2829,8 +2830,26 @@ const rateLimitPaidImport = createIpRateLimiter("paid-import", 60, 15 * 60, "B�
 
 app.get("/api/admin/paid-enrollments/config", requireAuth, requireRole(["manager", "admin"]), (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone() });
+  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone(), crmSource: !isDevMockDb && isCrmSourceConfigured() });
 });
+
+// Paid customers read from the CRM's revenue records, as rows for the import preview. Nothing is written:
+// the class manager still checks the rows and confirms the import.
+app.get("/api/admin/paid-enrollments/crm", requireAuth, requireRole(["manager", "admin"]), rateLimitPaidImport, asyncHandler(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (isDevMockDb) return res.status(501).json({ error: "Lấy danh sách từ CRM cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  if (!isCrmSourceConfigured()) return res.status(400).json({ error: "Máy chủ chưa cấu hình kết nối tới CRM (CRM_DATABASE_URL)." });
+  const cursor = req.query.cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || !/^\d{1,20}$/.test(cursor))) return res.status(400).json({ error: "Mốc phân trang CRM không hợp lệ." });
+  try {
+    const pull = await pullCrmPaidRecords(cursor as string | undefined);
+    await audit(req, "pull_crm_paid_records", "enrollments", `Bản ghi doanh thu: ${pull.records}; dòng đủ điều kiện: ${pull.rows.length}; bỏ qua: ${pull.skipped.length}.`);
+    res.json({ ...pull, fetchedAt: new Date().toISOString() });
+  } catch (error: any) {
+    console.error("[crm-source] failed to read revenue records");
+    res.status(502).json({ error: "Không đọc được dữ liệu từ CRM. Kiểm tra kết nối CRM_DATABASE_URL rồi thử lại." });
+  }
+}));
 
 async function xlsxFirstSheetToTsv(buffer: Buffer) {
   const workbook = new ExcelJS.Workbook();

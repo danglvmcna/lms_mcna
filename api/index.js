@@ -1379,7 +1379,8 @@ var schemas = {
       course: z.string().trim().max(300),
       amount: z.coerce.number().nonnegative().optional(),
       sectionCode: z.string().trim().max(120).optional(),
-      note: z.string().trim().max(300).optional()
+      note: z.string().trim().max(300).optional(),
+      crmRef: z.string().trim().max(80).optional()
     })).min(1).max(500),
     defaultPassword: z.string().min(8).max(100).optional(),
     sendAccountEmail: z.boolean().default(true),
@@ -2333,8 +2334,8 @@ var DAY_INDEX_BY_NAME = {
   "saturday": 6
 };
 var dayOfWeekIndex = (value) => {
-  const text = normalizeDayText(value).replace(/\s+/g, " ").trim();
-  return DAY_INDEX_BY_NAME[text] ?? null;
+  const text2 = normalizeDayText(value).replace(/\s+/g, " ").trim();
+  return DAY_INDEX_BY_NAME[text2] ?? null;
 };
 var addDaysIso = (dateOnly, days) => {
   const [year, month2, day] = dateOnly.split("-").map(Number);
@@ -3271,7 +3272,7 @@ function renderBaseLayout(title, bodyContent) {
 </body>
 </html>`;
 }
-async function dispatchEmail(to, name, subject, html, text) {
+async function dispatchEmail(to, name, subject, html, text2) {
   const config = getSmtpConfig();
   let toEmail = to;
   if (config.testReceiver && !config.testReceiver.includes("your_real_email")) {
@@ -3289,7 +3290,7 @@ async function dispatchEmail(to, name, subject, html, text) {
       to: toEmail,
       subject,
       html,
-      text
+      text: text2
     });
     console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
     return "sent";
@@ -5939,11 +5940,11 @@ function formatDateVi(value) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? "" : value.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
   }
-  const text = clean(value);
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  const text2 = clean(value);
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(text2);
   if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
-  const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? text : formatDateVi(parsed);
+  const parsed = new Date(text2);
+  return Number.isNaN(parsed.getTime()) ? text2 : formatDateVi(parsed);
 }
 function formatScheduleSummary(schedule) {
   const slots = (schedule || []).filter((slot) => clean(slot?.dayOfWeek) || clean(slot?.specificDate));
@@ -6085,29 +6086,29 @@ function sha256Hex(input) {
   return crypto3.createHash("sha256").update(input).digest("hex");
 }
 function extractPaymentCodes(content, codeField) {
-  const text = `${codeField || ""} ${content || ""}`.trim();
+  const text2 = `${codeField || ""} ${content || ""}`.trim();
   const result = { rawKeywords: [] };
-  if (!text) return result;
-  const directTxMatch = text.match(/\b(tx_[a-f0-9]{6,16})\b/i);
+  if (!text2) return result;
+  const directTxMatch = text2.match(/\b(tx_[a-f0-9]{6,16})\b/i);
   if (directTxMatch) {
     result.txIdFull = directTxMatch[1].toLowerCase();
     result.rawKeywords.push(result.txIdFull);
   }
-  const mcnaTwoWordMatch = text.match(/MCNA\s*[:.\-_]?\s*([A-Za-z0-9]{4,12})\s+([A-Za-z0-9]{4,12})/i);
+  const mcnaTwoWordMatch = text2.match(/MCNA\s*[:.\-_]?\s*([A-Za-z0-9]{4,12})\s+([A-Za-z0-9]{4,12})/i);
   if (mcnaTwoWordMatch) {
     result.studentHex = mcnaTwoWordMatch[1].toLowerCase();
     result.txHex = mcnaTwoWordMatch[2].toLowerCase();
     result.rawKeywords.push(result.studentHex, result.txHex);
     return result;
   }
-  const mcnaCompactMatch = text.match(/MCNA\s*[:.\-_]?\s*([A-Fa-f0-9]{12})\b/i);
+  const mcnaCompactMatch = text2.match(/MCNA\s*[:.\-_]?\s*([A-Fa-f0-9]{12})\b/i);
   if (mcnaCompactMatch) {
     result.studentHex = mcnaCompactMatch[1].slice(0, 6).toLowerCase();
     result.txHex = mcnaCompactMatch[1].slice(6, 12).toLowerCase();
     result.rawKeywords.push(result.studentHex, result.txHex);
     return result;
   }
-  const mcnaSingleMatch = text.match(/MCNA\s*[:.\-_]?\s*([A-Za-z0-9_]{5,24})\b/i);
+  const mcnaSingleMatch = text2.match(/MCNA\s*[:.\-_]?\s*([A-Za-z0-9_]{5,24})\b/i);
   if (mcnaSingleMatch) {
     const code = mcnaSingleMatch[1].toLowerCase();
     if (code.startsWith("tx_")) {
@@ -6121,11 +6122,11 @@ function extractPaymentCodes(content, codeField) {
     }
     result.rawKeywords.push(code);
   }
-  const phoneMatch = text.match(/\b(0[35789][0-9]{8})\b/);
+  const phoneMatch = text2.match(/\b(0[35789][0-9]{8})\b/);
   if (phoneMatch && !result.phone) {
     result.phone = phoneMatch[1];
   }
-  const emailMatch = text.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
+  const emailMatch = text2.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
   if (emailMatch && !result.email) {
     result.email = emailMatch[1].toLowerCase();
   }
@@ -6665,8 +6666,8 @@ async function getGradebookReportRows(db, actor, filters = {}) {
   }));
 }
 function csvCell(value) {
-  const text = String(value ?? "");
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  const text2 = String(value ?? "");
+  const safe = /^[=+\-@]/.test(text2) ? `'${text2}` : text2;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 function toCsv(headers, rows, keys) {
@@ -6751,8 +6752,8 @@ function parseAmount(value) {
   const amount = Number(digits);
   return Number.isFinite(amount) ? amount : void 0;
 }
-function parsePaidTable(text) {
-  const lines = String(text || "").replace(/^﻿/, "").split(/\r?\n/).map((content, index) => ({ content, line: index + 1 })).filter((item) => item.content.trim());
+function parsePaidTable(text2) {
+  const lines = String(text2 || "").replace(/^﻿/, "").split(/\r?\n/).map((content, index) => ({ content, line: index + 1 })).filter((item) => item.content.trim());
   const result = { rows: [], errors: [], headerDetected: false };
   if (lines.length === 0) return result;
   const delimiter = detectDelimiter(lines.map((item) => item.content));
@@ -6801,15 +6802,22 @@ function parsePaidTable(text) {
   return result;
 }
 var titleHead = (title) => title.split(/[:–—|]| - /)[0];
+var compact = (value) => normalizeText(value).replace(/ /g, "");
+var COURSE_CODE_ALIASES = {
+  ai4work: "aiwork"
+};
 function matchCourse(input, courses) {
   const raw = String(input || "").trim();
   const wanted = normalizeText(raw);
   if (!wanted) return { course: null, candidates: [], reason: "none" };
+  const wantedCompact = COURSE_CODE_ALIASES[compact(raw)] || compact(raw);
   const rules = [
     (course) => course.id === raw,
     (course) => (course.tags || []).some((tag) => normalizeText(tag) === wanted && normalizeText(tag) !== "mcna"),
     (course) => normalizeText(course.title) === wanted,
     (course) => normalizeText(titleHead(course.title)) === wanted,
+    (course) => (course.tags || []).some((tag) => compact(tag) === wantedCompact && compact(tag) !== "mcna"),
+    (course) => compact(titleHead(course.title)) === wantedCompact,
     (course) => ` ${normalizeText(course.title)} `.includes(` ${wanted} `)
   ];
   for (const rule of rules) {
@@ -6842,6 +6850,7 @@ async function planRow(input, index, courses) {
     return { ...plan, result: { ...result, message } };
   }
   const course = match.course;
+  if (input.crmRef && input.amount === void 0) result.warnings.push("CRM kh\xF4ng ph\xE2n b\u1ED5 doanh thu cho t\u1EEBng kh\xF3a: kho\u1EA3n ghi nh\u1EADn LMS d\xF9ng gi\xE1 danh m\u1EE5c, kh\xF4ng ph\u1EA3i s\u1ED1 ti\u1EC1n th\u1EF1c thu t\u1EEBng kh\xF3a. C\u1EA7n \u0111\u1ED1i so\xE1t ri\xEAng v\u1EDBi CRM.");
   result.courseId = course.id;
   result.courseTitle = course.title;
   if (course.status !== "published") return { ...plan, course, result: { ...result, message: `Kh\xF3a h\u1ECDc "${course.title}" ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF tr\xEAn LMS.` } };
@@ -6943,7 +6952,7 @@ async function settleEnrollment(plan, studentId, actorName) {
     const payment = await confirmCoursePayment(
       client2,
       enrollmentId,
-      { amount: plan.input.amount, reference: [plan.input.note, `b\u1EA3ng \u0111\xE3 thanh to\xE1n, nh\u1EADp b\u1EDFi ${actorName}`].filter(Boolean).join(" \xB7 ") },
+      { amount: plan.input.amount, reference: [plan.input.crmRef ? `CRM revenue ${plan.input.crmRef}` : "", plan.input.note, `b\u1EA3ng \u0111\xE3 thanh to\xE1n, nh\u1EADp b\u1EDFi ${actorName}`].filter(Boolean).join(" \xB7 ") },
       "crm"
     );
     if (isServiceError(payment)) {
@@ -7080,6 +7089,130 @@ async function importPaidEnrollments(input) {
   return { results, summary };
 }
 
+// src/server/services/crmPaidSource.ts
+import pg2 from "pg";
+
+// src/crmPaidSource.ts
+var text = (value) => String(value ?? "").trim();
+function isFullyPaid(record) {
+  const status = normalizeText(record.paymentMethod);
+  const settled = ["da hoan tat thanh toan fully paid", "da hoan tat thanh toan", "fully paid"].includes(status);
+  const debt = record.debt;
+  return settled && debt !== null && debt !== void 0 && String(debt).trim() !== "" && Number.isFinite(Number(debt)) && Number(debt) === 0;
+}
+function soldCourses(courseSold) {
+  const list = Array.isArray(courseSold) ? courseSold : typeof courseSold === "string" ? courseSold.split(/[,;\n]/) : [];
+  return Array.from(new Set(list.map(text).filter(Boolean)));
+}
+function crmRecordsToPaidRows(records) {
+  const rows = [];
+  const skipped = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const record of records) {
+    const customer = text(record.customerName);
+    const saleDate = text(record.saleDate);
+    const skip = (reason) => skipped.push({ crmRef: record.id, customer, saleDate, reason });
+    if (!isFullyPaid(record)) {
+      skip(`Ch\u01B0a thanh to\xE1n \u0111\u1EE7 (tr\u1EA1ng th\xE1i CRM: ${text(record.paymentMethod) || "ch\u01B0a ghi"}${Number(record.debt || 0) > 0 ? `, c\xF2n n\u1EE3 ${Number(record.debt).toLocaleString("vi-VN")} \u0111` : ""}).`);
+      continue;
+    }
+    const email = text(record.customerEmail).toLowerCase();
+    if (!EMAIL_PATTERN.test(email) || email.length > 320) {
+      skip("CRM ch\u01B0a c\xF3 email h\u1EE3p l\u1EC7 c\u1EE7a kh\xE1ch.");
+      continue;
+    }
+    if (customer.length < 2 || customer.length > 150 || !text(record.id) || text(record.id).length > 80) {
+      skip("CRM thi\u1EBFu h\u1ECD t\xEAn h\u1EE3p l\u1EC7 ho\u1EB7c m\xE3 b\u1EA3n ghi doanh thu.");
+      continue;
+    }
+    const courses = soldCourses(record.courseSold);
+    if (courses.length === 0) {
+      skip("CRM ch\u01B0a ghi kh\xF3a h\u1ECDc \u0111\xE3 b\xE1n.");
+      continue;
+    }
+    const total = Number(record.totalRevenue || 0);
+    if (!Number.isFinite(total) || total < 0) {
+      skip("T\u1ED5ng doanh thu CRM kh\xF4ng h\u1EE3p l\u1EC7; c\u1EA7n \u0111\u1ED1i so\xE1t tr\u01B0\u1EDBc khi nh\u1EADp.");
+      continue;
+    }
+    for (const course of courses) {
+      if (course.length > 300 || text(record.customerPhone).length > 40) {
+        skip("M\xE3 kh\xF3a h\u1ECDc ho\u1EB7c s\u1ED1 \u0111i\u1EC7n tho\u1EA1i v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n; c\u1EA7n s\u1EEDa tr\xEAn CRM.");
+        continue;
+      }
+      const key2 = `${email}|${normalizeText(course)}`;
+      if (seen.has(key2)) continue;
+      seen.add(key2);
+      rows.push({
+        name: customer,
+        email,
+        phone: text(record.customerPhone) || void 0,
+        course,
+        // The CRM records one total per sale; it is only a course's own amount when the sale has one course.
+        amount: courses.length === 1 && total > 0 ? total : void 0,
+        note: [
+          `CRM ${record.id}`,
+          saleDate ? `b\xE1n ng\xE0y ${saleDate}` : "",
+          courses.length > 1 && total > 0 ? `t\u1ED5ng ${total.toLocaleString("vi-VN")} \u0111 cho ${courses.length} kh\xF3a` : ""
+        ].filter(Boolean).join(" \xB7 "),
+        crmRef: record.id
+      });
+    }
+  }
+  return { records: records.length, rows, skipped };
+}
+
+// src/server/services/crmPaidSource.ts
+var MAX_RECORDS = 500;
+var isCrmSourceConfigured = () => Boolean((process.env.CRM_DATABASE_URL || "").trim());
+var crmPool = null;
+function getCrmPool() {
+  if (!crmPool) {
+    const connectionString = (process.env.CRM_DATABASE_URL || "").trim();
+    const url = new URL(connectionString);
+    if (!["postgres:", "postgresql:"].includes(url.protocol)) throw new Error("Invalid CRM database protocol.");
+    const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    for (const key2 of ["sslmode", "sslcert", "sslkey", "sslrootcert"]) url.searchParams.delete(key2);
+    crmPool = new pg2.Pool({
+      connectionString: url.toString(),
+      max: 2,
+      idleTimeoutMillis: 3e4,
+      connectionTimeoutMillis: 1e4,
+      query_timeout: 1e4,
+      application_name: "mcna-lms-crm-readonly",
+      ssl: isLocal ? void 0 : { rejectUnauthorized: true, ...process.env.CRM_DATABASE_CA_CERT ? { ca: process.env.CRM_DATABASE_CA_CERT.replace(/\\n/g, "\n") } : {} }
+    });
+    crmPool.on("error", () => console.error("[crm-source] idle connection failed"));
+  }
+  return crmPool;
+}
+async function pullCrmPaidRecords(cursor) {
+  if (!isCrmSourceConfigured()) throw new Error("CRM source not configured.");
+  if (cursor !== void 0 && !/^\d{1,20}$/.test(cursor)) throw new Error("Invalid CRM cursor.");
+  const client2 = await getCrmPool().connect();
+  try {
+    await client2.query("BEGIN TRANSACTION READ ONLY");
+    await client2.query("SET LOCAL statement_timeout = '8000ms'");
+    const result = await client2.query(
+      `SELECT id, seq, "saleDate", "customerName", "customerPhone", "customerEmail", "customerType",
+              "courseSold", "totalRevenue", debt, "paymentMethod"
+       FROM revenue_records
+       WHERE ($2::bigint IS NULL OR seq < $2::bigint)
+       ORDER BY seq DESC
+       LIMIT $1`,
+      [MAX_RECORDS + 1, cursor || null]
+    );
+    await client2.query("COMMIT");
+    const records = result.rows.slice(0, MAX_RECORDS);
+    return { ...crmRecordsToPaidRows(records), ...result.rows.length > MAX_RECORDS ? { nextCursor: String(records.at(-1).seq) } : {} };
+  } catch (error) {
+    await client2.query("ROLLBACK").catch(() => void 0);
+    throw error;
+  } finally {
+    client2.release();
+  }
+}
+
 // src/welcomeLetter.ts
 var WELCOME_LETTER_PLACEHOLDERS = [
   { token: "{{ten_hoc_vien}}", key: "studentName", label: "T\xEAn h\u1ECDc vi\xEAn" },
@@ -7131,7 +7264,7 @@ function buildPrompt(course) {
     "- Ch\u1EC9 tr\u1EA3 v\u1EC1 n\u1ED9i dung th\u01B0 d\u1EA1ng v\u0103n b\u1EA3n thu\u1EA7n, kh\xF4ng markdown, kh\xF4ng ti\xEAu \u0111\u1EC1, kh\xF4ng gi\u1EA3i th\xEDch."
   ].filter((line) => line !== "").join("\n");
 }
-var cleanLetter = (text) => text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").replace(/\*\*/g, "").trim();
+var cleanLetter = (text2) => text2.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").replace(/\*\*/g, "").trim();
 async function generateWelcomeLetterDraft(course) {
   const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
@@ -10073,8 +10206,23 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
 var rateLimitPaidImport = createIpRateLimiter("paid-import", 60, 15 * 60, "B\u1EA1n thao t\xE1c nh\u1EADp danh s\xE1ch qu\xE1 nhanh. Vui l\xF2ng th\u1EED l\u1EA1i sau \xEDt ph\xFAt.");
 app.get("/api/admin/paid-enrollments/config", requireAuth, requireRole(["manager", "admin"]), (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone() });
+  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone(), crmSource: !isDevMockDb && isCrmSourceConfigured() });
 });
+app.get("/api/admin/paid-enrollments/crm", requireAuth, requireRole(["manager", "admin"]), rateLimitPaidImport, asyncHandler(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (isDevMockDb) return res.status(501).json({ error: "L\u1EA5y danh s\xE1ch t\u1EEB CRM c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  if (!isCrmSourceConfigured()) return res.status(400).json({ error: "M\xE1y ch\u1EE7 ch\u01B0a c\u1EA5u h\xECnh k\u1EBFt n\u1ED1i t\u1EDBi CRM (CRM_DATABASE_URL)." });
+  const cursor = req.query.cursor;
+  if (cursor !== void 0 && (typeof cursor !== "string" || !/^\d{1,20}$/.test(cursor))) return res.status(400).json({ error: "M\u1ED1c ph\xE2n trang CRM kh\xF4ng h\u1EE3p l\u1EC7." });
+  try {
+    const pull = await pullCrmPaidRecords(cursor);
+    await audit(req, "pull_crm_paid_records", "enrollments", `B\u1EA3n ghi doanh thu: ${pull.records}; d\xF2ng \u0111\u1EE7 \u0111i\u1EC1u ki\u1EC7n: ${pull.rows.length}; b\u1ECF qua: ${pull.skipped.length}.`);
+    res.json({ ...pull, fetchedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  } catch (error) {
+    console.error("[crm-source] failed to read revenue records");
+    res.status(502).json({ error: "Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c d\u1EEF li\u1EC7u t\u1EEB CRM. Ki\u1EC3m tra k\u1EBFt n\u1ED1i CRM_DATABASE_URL r\u1ED3i th\u1EED l\u1EA1i." });
+  }
+}));
 async function xlsxFirstSheetToTsv(buffer) {
   const workbook = new ExcelJS2.Workbook();
   await workbook.xlsx.load(buffer);
@@ -10094,19 +10242,19 @@ app.post("/api/admin/paid-enrollments/parse", requireAuth, requireRole(["manager
   if (!req.file) return res.status(400).json({ error: "Vui l\xF2ng ch\u1ECDn t\u1EC7p danh s\xE1ch." });
   const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
   const ext = path6.extname(fileName).toLowerCase();
-  let text;
+  let text2;
   if (ext === ".xlsx") {
     try {
-      text = await xlsxFirstSheetToTsv(req.file.buffer);
+      text2 = await xlsxFirstSheetToTsv(req.file.buffer);
     } catch {
       return res.status(400).json({ error: "Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c t\u1EC7p Excel n\xE0y. H\xE3y l\u01B0u l\u1EA1i d\u1EA1ng .xlsx ho\u1EB7c d\xE1n tr\u1EF1c ti\u1EBFp c\xE1c \xF4 v\xE0o \xF4 nh\u1EADp." });
     }
   } else if (ext === ".csv" || ext === ".txt" || ext === ".tsv") {
-    text = req.file.buffer.toString("utf8");
+    text2 = req.file.buffer.toString("utf8");
   } else {
     return res.status(400).json({ error: "Ch\u1EC9 nh\u1EADn t\u1EC7p .xlsx, .csv ho\u1EB7c .txt. V\u1EDBi Google Sheets, h\xE3y t\u1EA3i v\u1EC1 d\u1EA1ng .xlsx ho\u1EB7c d\xE1n tr\u1EF1c ti\u1EBFp c\xE1c \xF4." });
   }
-  res.json(parsePaidTable(text));
+  res.json(parsePaidTable(text2));
 }));
 app.post("/api/admin/paid-enrollments/import", requireAuth, requireRole(["manager", "admin"]), rateLimitPaidImport, validateBody(schemas.paidImport), asyncHandler(async (req, res) => {
   if (isDevMockDb) return res.status(501).json({ error: "Nh\u1EADp danh s\xE1ch c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });

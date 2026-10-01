@@ -21,6 +21,16 @@ Mỗi buổi: slide/tài liệu (chỉ xem trực tuyến) · file data (tải v
 
 ## 2. Ai làm được gì
 
+### Nguồn CRM thay cho dán bảng
+
+Khi admin đã cấu hình `CRM_DATABASE_URL`, màn nhập danh sách có nút **Lấy từ CRM**. Bấm nút chỉ đọc dữ liệu doanh thu, chưa tạo tài khoản hoặc ghi danh. Quản lý lớp vẫn bấm **Kiểm tra**, xem các dòng lỗi/không khớp khóa, rồi xác nhận **Nhập**. Xếp lớp là bước riêng sau đó.
+
+Chỉ nhận trạng thái hoàn tất thanh toán được hỗ trợ và số nợ bằng 0; bản ghi thiếu số nợ, email hợp lệ hoặc họ tên bị bỏ qua. Mã `AI4WORK`, `AIAGENT`, `AIAUTOMATION` được đối chiếu với danh mục MCNA; khóa đào tạo doanh nghiệp chưa có trong LMS không được tự đoán hoặc tự tạo.
+
+Mỗi trang đọc tối đa 500 bản ghi doanh thu; nếu còn dữ liệu, dùng **Trang CRM cũ hơn (thay danh sách)** sau khi xử lý trang hiện tại. Một người mua nhiều khóa tạo nhiều dòng: danh sách vượt 500 dòng chia thành các lô, mỗi lô cần kiểm tra và xác nhận riêng. Thêm học viên thủ công không làm mất các dòng đã đọc.
+
+Lưu ý: CRM chỉ lưu tổng tiền của đơn nhiều khóa, nên LMS không tự chia tiền. Các dòng chưa có số tiền riêng sử dụng giá danh mục trong khoản ghi nhận LMS và hiện cảnh báo; không dùng tổng đó làm báo cáo doanh thu thực thu. Mã doanh thu được giữ trong ghi chú giao dịch, không coi là mã deal. Chi tiết cấu hình: [crm-integration.md](crm-integration.md#nguồn-danh-sách-đã-thanh-toán-chỉ-đọc-từ-database-crm).
+
 | Việc | Admin hệ thống | Quản lý lớp | Giảng viên | Học viên |
 |---|---|---|---|---|
 | Tạo tài khoản admin / Quản lý lớp, đổi vai trò | ✔ | – | – | – |
