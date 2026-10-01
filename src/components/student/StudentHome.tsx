@@ -6,9 +6,11 @@ import WelcomeTour, { shouldShowWelcomeTour } from "./WelcomeTour";
 import { cleanTopic, courseProgress, enrollmentSection, hasClassroomAccess, supportsVietQr, upcomingSessions } from "./learning";
 import { callName, capitalizeFirst, formatDayLong, formatPrice, formatTimeIfSet, greeting, relativeDay } from "../../lib/format";
 import { Badge, Button, buttonClass, Card, CourseCover, cx, EmptyState, ProgressRing, SectionTitle } from "../ui";
+import { useAppConfig } from "../../appConfig";
 
 export default function StudentHome({ store, currentUser, myEnrollments, go, openCourse, openClassroom, openPayment }: StudentViewProps) {
   const [tourOpen, setTourOpen] = useState(() => shouldShowWelcomeTour(currentUser.id));
+  const isDirectSale = useAppConfig().salesMode === "direct";
 
   const classes = useMemo(() => myEnrollments
     .map(enrollment => {
@@ -29,7 +31,7 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
 
   type Todo = { key: string; kind: "payment" | "placement"; course: Course; tx?: Transaction };
   const todos: Todo[] = classes.flatMap((item): Todo[] => {
-    if (item.enrollment.status === "pending_payment") {
+    if (item.enrollment.status === "pending_payment" && !isDirectSale) {
       const tx = store.transactions.find(t => t.studentId === currentUser.id && t.courseId === item.course.id && t.status === "pending" && supportsVietQr(t.paymentMethod));
       return [{ key: item.enrollment.id, kind: "payment", course: item.course, tx }];
     }
@@ -148,15 +150,15 @@ export default function StudentHome({ store, currentUser, myEnrollments, go, ope
           <EmptyState
             illustration="study"
             icon={<Compass className="h-6 w-6" />}
-            title="Sẵn sàng cho lớp học đầu tiên?"
-            description="Chọn một khóa học bạn thích. Sau khi đăng ký, lớp học và lịch học sẽ hiện ở đây."
-            action={<Button onClick={() => go("catalog")} iconRight={<ArrowRight className="h-4 w-4" />}>Khám phá khóa học</Button>}
+            title={isDirectSale ? "Bạn chưa được xếp lớp" : "Sẵn sàng cho lớp học đầu tiên?"}
+            description={isDirectSale ? "MCNA sẽ thông báo lịch học, nhóm Zalo và tài liệu khi Quản lý lớp xếp lớp cho bạn." : "Chọn một khóa học bạn thích. Sau khi đăng ký, lớp học và lịch học sẽ hiện ở đây."}
+            action={!isDirectSale ? <Button onClick={() => go("catalog")} iconRight={<ArrowRight className="h-4 w-4" />}>Khám phá khóa học</Button> : undefined}
           />
         </Card>
       ) : null}
 
       {/* Suggestions */}
-      {suggestions.length > 0 && (
+      {!isDirectSale && suggestions.length > 0 && (
         <section className="space-y-3">
           <SectionTitle
             title={classes.length ? "Có thể bạn sẽ thích" : "Khóa học đang mở"}

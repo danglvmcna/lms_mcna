@@ -9,6 +9,8 @@ import { Badge, Button, buttonClass, Callout, Card, CourseCover, cx, EmptyState,
 import { AppStore } from "../../store";
 import { ZoomLogo } from "../icons/BrandLogos";
 import SessionMaterialsEditor from "../SessionMaterialsEditor";
+import CourseIntroEditor from "./CourseIntroEditor";
+import SessionHomeworkEditor from "./SessionHomeworkEditor";
 import { api } from "../../api";
 import ForumDiscussion, { needsReply } from "../ForumDiscussion";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
@@ -124,13 +126,16 @@ export default function CourseBuilder(props: ComponentProps) {
     myAssignments,
     studentSubmissionsRaw,
     onRefreshData,
-    triggerToast
+    triggerToast,
+    // contentOnly: opened from the admin / class-manager panel, where courses and classes are managed elsewhere.
+    contentOnly
   } = props;
 
   const [preselectedSessionId, setPreselectedSessionId] = React.useState("");
   const [forumPostId, setForumPostId] = React.useState<string | null>(null);
   // Where to land once the course opens, when arriving from a notification or a course card.
   const pendingForum = React.useRef<{ courseId: string; sectionId: string | null; postId: string | null } | null>(null);
+  const autoSelectedCourseRef = React.useRef<string | null>(null);
 
   const showForum = (sectionId: string | null, postId: string | null) => {
     setSelectedClassSectionId(sectionId);
@@ -145,6 +150,7 @@ export default function CourseBuilder(props: ComponentProps) {
     const pending = pendingForum.current;
     if (pending && pending.courseId === selectedCourseId) {
       pendingForum.current = null;
+      autoSelectedCourseRef.current = selectedCourseId;
       showForum(pending.sectionId, pending.postId);
       return;
     }
@@ -267,6 +273,14 @@ export default function CourseBuilder(props: ComponentProps) {
     setIsSavingZoom(true);
     try {
       await api.updateCourseSection(editingZoomSection.id, {
+        courseId: editingZoomSection.courseId,
+        teacherId: editingZoomSection.teacherId,
+        sectionCode: editingZoomSection.sectionCode,
+        maxStudents: editingZoomSection.maxStudents,
+        numberOfSessions: editingZoomSection.numberOfSessions,
+        schedule: editingZoomSection.schedule || [],
+        status: editingZoomSection.status,
+        openingDate: editingZoomSection.openingDate,
         meetingUrl: zoomUrlInput.trim() || null
       });
       if (triggerToast) triggerToast("Đã cập nhật link Zoom cho lớp học thành công!");
@@ -547,6 +561,20 @@ export default function CourseBuilder(props: ComponentProps) {
   const selectedClassSection = selectedClassSectionId
     ? courseSections.find((section: any) => section.id === selectedClassSectionId)
     : null;
+
+  // Session materials and homework belong to one class, so opening a course starts on its newest class.
+  React.useEffect(() => {
+    if (!activeCourse || courseSections.length === 0 || autoSelectedCourseRef.current === activeCourse.id) return;
+    autoSelectedCourseRef.current = activeCourse.id;
+    const newest = [...courseSections].sort((a: any, b: any) => String(b.openingDate || "").localeCompare(String(a.openingDate || "")))[0];
+    setSelectedClassSectionId(newest.id);
+  }, [activeCourse?.id, courseSections.length]);
+
+  // With classes present but none chosen, a "session" would silently point at some class's session.
+  const needsClassChoice = !selectedClassSectionId && courseSections.length > 0;
+  const introMaterials = activeCourse
+    ? (store.sessionMaterials || []).filter((material: any) => !material.sessionId && material.courseId === activeCourse.id)
+    : [];
   const selectedClassLesson = lessons.find((lesson: any) => lesson.id === selectedClassLessonId) || lessons[0] || null;
   const selectedClassAttendanceSessions = selectedClassSection
     ? courseAttendanceSessions.filter((session: any) => session.sectionId === selectedClassSection.id)
@@ -820,7 +848,7 @@ export default function CourseBuilder(props: ComponentProps) {
               actions={
                 <>
                   <SearchField value={courseSearch} onChange={setCourseSearch} placeholder="Tìm khóa học…" className="w-full sm:w-64" />
-                  {currentUser.role !== "teacher" && (
+                  {!contentOnly && currentUser.role !== "teacher" && (
                     <Button icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateCourse}>Tạo khóa học</Button>
                   )}
                 </>
@@ -850,7 +878,7 @@ export default function CourseBuilder(props: ComponentProps) {
                   icon={<BookOpen className="h-6 w-6" />}
                   title={myCourses.length === 0 ? "Chưa có khóa học nào" : "Không tìm thấy khóa học"}
                   description={myCourses.length === 0 ? "Khi quản trị viên phân công, khóa học của bạn sẽ hiện ở đây." : "Thử tìm với từ khóa khác."}
-                  action={myCourses.length === 0 && currentUser.role !== "teacher" ? <Button onClick={handleOpenCreateCourse}>Tạo bản nháp khóa học</Button> : undefined}
+                  action={!contentOnly && myCourses.length === 0 && currentUser.role !== "teacher" ? <Button onClick={handleOpenCreateCourse}>Tạo bản nháp khóa học</Button> : undefined}
                 />
               </Card>
             ) : (
@@ -884,7 +912,7 @@ export default function CourseBuilder(props: ComponentProps) {
                         )}
                       </div>
                       <div className="mt-auto flex gap-2 p-5 pt-4">
-                        {currentUser.role !== "teacher" && (
+                        {!contentOnly && currentUser.role !== "teacher" && (
                           <Button variant="secondary" size="sm" icon={<Edit className="h-4 w-4" />} onClick={() => handleOpenEditCourse(course)}>Sửa</Button>
                         )}
                         <Button size="sm" variant="tinted" className="flex-1" onClick={open} iconRight={<ChevronRight className="h-4 w-4" />}>Quản lý khóa học</Button>
@@ -920,10 +948,10 @@ export default function CourseBuilder(props: ComponentProps) {
                   {(activeCourse.status === "draft" || activeCourse.status === "pending" || activeCourse.status === "rejected") && (
                     <Button variant="secondary" onClick={() => handleSubmitCourseForApproval(activeCourse.id)}>Xuất bản khóa học</Button>
                   )}
-                  {activeCourse.status === "published" && currentUser.role !== "teacher" && (
+                  {!contentOnly && activeCourse.status === "published" && currentUser.role !== "teacher" && (
                     <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateSection}>Lập lớp học phần</Button>
                   )}
-                  <Button icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateSession}>Tạo buổi học</Button>
+                  <Button disabled={needsClassChoice} icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateSession}>Tạo buổi học</Button>
                 </div>
               </div>
 
@@ -992,7 +1020,10 @@ export default function CourseBuilder(props: ComponentProps) {
               )}
             </header>
 
-            {!selectedFolderSessionNumber && classDetailTab === "forum" ? (
+            {!selectedFolderSessionNumber && <CourseIntroEditor course={activeCourse} introMaterials={introMaterials} triggerToast={triggerToast || (() => {})} onChanged={onRefreshData} />}
+            {needsClassChoice && classDetailTab !== "forum" ? (
+              <Callout tone="info">Chọn một lớp để quản lý buổi học, tài liệu và bài tập riêng của lớp đó.</Callout>
+            ) : !selectedFolderSessionNumber && classDetailTab === "forum" ? (
               renderForumPane()
             ) : !selectedFolderSessionNumber ? (
               <section className="space-y-3">
@@ -1062,6 +1093,20 @@ export default function CourseBuilder(props: ComponentProps) {
                     </Card>
                   )}
                 </section>
+
+                {!needsClassChoice && currentFolderSession.sessionId && (
+                  <div className="border-t border-slate-200 pt-6">
+                    <SessionHomeworkEditor
+                      courseId={activeCourse.id}
+                      sessionId={currentFolderSession.sessionId}
+                      sessionDate={currentFolderSession.date}
+                      assignments={(courseAssignments || []).filter((assignment: any) => assignment.sessionId === currentFolderSession.sessionId)}
+                      submissions={store.submissions || []}
+                      triggerToast={triggerToast || props.triggerToast || (() => {})}
+                      onChanged={onRefreshData}
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

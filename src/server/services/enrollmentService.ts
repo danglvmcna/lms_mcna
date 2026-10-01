@@ -29,7 +29,8 @@ export type RequestEnrollmentResult = {
   registrationId?: string;
 };
 
-export type PlacementResult = { enrollment: any; registration: any | null };
+// placementChanged: the learner got a seat in a class they were not already seated in (worth an email).
+export type PlacementResult = { enrollment: any; registration: any | null; placementChanged: boolean };
 
 export const isServiceError = (value: unknown): value is ServiceError =>
   Boolean(value && typeof value === "object" && "error" in value && "status" in value);
@@ -159,21 +160,14 @@ export async function placeEnrollment(
   )).rows[0];
 
   let registration = null;
+  let placementChanged = false;
   if (sectionId) {
     const section = (await client.query("SELECT * FROM course_sections WHERE id = $1 FOR UPDATE", [sectionId])).rows[0];
     if (!section) return { error: "Course section not found.", status: 404 };
     if (section.course_id !== enrollment.course_id) return { error: "Selected section does not belong to this course.", status: 400 };
 
-    const count = Number((await client.query(
-      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-      [sectionId]
-    )).rows[0].count);
-    if (count >= section.max_students) {
-      return { error: "Lớp học phần này đã đạt sĩ số tối đa. Không thể xếp thêm học viên.", status: 400 };
-    }
-
     const existingRegistration = (await client.query(
-      `SELECT cr.id, cr.status
+      `SELECT cr.id, cr.status, cr.section_id
        FROM course_registrations cr
        JOIN course_sections cs ON cs.id = cr.section_id
        WHERE cr.student_id = $1
@@ -181,6 +175,17 @@ export async function placeEnrollment(
          AND cr.status IN ('registered', 'waitlisted')`,
       [enrollment.student_id, enrollment.course_id]
     )).rows[0];
+    const alreadySeated = existingRegistration?.section_id === sectionId && existingRegistration?.status === "registered";
+    placementChanged = !alreadySeated;
+
+    // A learner already seated in this class does not take another seat.
+    const count = Number((await client.query(
+      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
+      [sectionId]
+    )).rows[0].count);
+    if (!alreadySeated && count >= section.max_students) {
+      return { error: "Lớp học phần này đã đạt sĩ số tối đa. Không thể xếp thêm học viên.", status: 400 };
+    }
 
     if (!existingRegistration) {
       registration = (await client.query(
@@ -198,7 +203,7 @@ export async function placeEnrollment(
   }
 
   await enqueueEnrollmentEvent(client, "enrollment.status_changed", enrollmentId, origin);
-  return { enrollment, registration };
+  return { enrollment, registration, placementChanged };
 }
 
 /**

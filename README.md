@@ -1,33 +1,41 @@
 # LMS MCNA - Hệ thống học trực tuyến Học viện Công nghệ MCNA
 
-Nền tảng bán và vận hành khóa học trực tuyến của Học viện MCNA: danh mục khóa học công khai, học viên tự đăng ký và thanh toán VietQR, học trực tuyến qua Zoom với tài liệu từng buổi, admin xác nhận học phí và xếp lớp, tích hợp CRM MCNA.
+Nền tảng vận hành lớp học trực tuyến của Học viện MCNA theo mô hình **direct sale**: khách thanh toán với bộ phận tư vấn, MCNA tạo tài khoản học viên từ bảng "đã thanh toán", Quản lý lớp xếp học viên vào lớp, giảng viên đưa tài liệu từng buổi, học viên xem slide trực tuyến và tải file data.
 
 ---
 
-## 👥 Ba vai trò
+## 👥 Bốn vai trò
 
-### 1. Quản trị viên (`admin`)
-* **Tổng quan**: số liệu, việc cần làm và bảng **Cấu hình hệ thống** (SePay, email, nơi lưu tài liệu, CRM) cho biết máy chủ đang thiếu cài đặt nào.
-* **Ghi danh**: xác nhận học phí, kích hoạt và xếp học viên vào lớp; học viên nhận thông báo và email.
-* **Khóa học & lớp**: tạo/sửa khóa học và bài học; mở lớp với lịch tuần, sĩ số, link Zoom, nhóm Zalo; cảnh báo trùng lịch; buổi học tự sinh theo lịch; xem và trả lời thảo luận của lớp.
-* **Người dùng**: tạo tài khoản lẻ hoặc nhập CSV, đổi vai trò, khóa/mở tài khoản, gửi liên kết đặt lại mật khẩu.
-* **Thông báo** gửi hàng loạt và **Nhật ký & CRM** (audit log, hàng đợi đồng bộ CRM).
+### 1. Quản trị viên hệ thống (`admin`)
+* Toàn quyền của Quản lý lớp, cộng thêm: tài khoản hệ thống (admin, Quản lý lớp), đổi vai trò, nhật ký hệ thống, hàng đợi CRM, xóa khóa học.
 
-### 2. Giảng viên (`teacher`)
-* **Khóa học của tôi**: các khóa được phân công; nhắc số câu hỏi của học viên đang chờ trả lời.
-* **Buổi học & tài liệu**: tạo/sửa buổi học, gắn video ghi hình, đăng slide, file dữ liệu (Excel, CSV, PBIX, Word, PDF), video YouTube.
-* **Thảo luận**: xem và trả lời câu hỏi theo từng lớp, tạo chủ đề cho cả lớp; bấm thông báo mở thẳng câu hỏi.
+### 2. Quản lý lớp (`manager`)
+* **Học viên & Xếp lớp**: nhập bảng khách đã thanh toán (dán từ Excel/Google Sheets, tải file `.xlsx/.csv`, hoặc nhập tay), chọn học viên và gán vào mã lớp, gửi lại email xếp lớp, chuyển lớp.
+* **Khóa học & Lớp học**: nạp khóa học từ mcna.vn (làm một lần), tạo lớp có mã lớp, lịch học, ngày khai giảng, link Zoom, link nhóm Zalo và giảng viên phụ trách.
+* **Nội dung lớp học**: tài liệu mở đầu, slide, file data và bài tập về nhà của từng buổi.
+* Tài khoản học viên sinh ra từ bảng đã thanh toán. Quản lý lớp không có màn quản lý người dùng: tài khoản giảng viên, Quản lý lớp và admin do admin hệ thống tạo. Không xem được nhật ký hệ thống và hàng đợi CRM, không xóa được khóa học.
 
-### 3. Học viên (`student`)
-* **Khám phá**: xem khóa học, chọn lớp theo lịch, đăng ký và thanh toán VietQR (lớp tự mở khi SePay xác nhận).
-* **Lớp học của tôi**: vào Zoom, nhóm lớp, tài liệu và video từng buổi, ghi chú bài học, đánh dấu đã học, thảo luận.
-* **Học phí & thông báo**: lịch sử giao dịch; thông báo trong LMS và email cho các việc quan trọng (được xếp lớp, học phí được xác nhận).
+### 3. Giảng viên (`teacher`)
+* Thấy khóa học mình phụ trách và các lớp được phân công; quản lý tài liệu mở đầu, slide, file data, bài tập về nhà và video của từng buổi; điểm danh.
 
-> Bài kiểm tra, bài tập và chấm điểm, sổ điểm, chứng chỉ: phần máy chủ vẫn còn nhưng đã ẩn khỏi giao diện từ 23/09/2026. Điểm danh đã gỡ bỏ.
+### 4. Học viên (`student`)
+* **Lớp học của tôi**: chỉ hiện lớp sau khi được xếp. Mỗi buổi có slide/tài liệu (chỉ xem trực tuyến), file data (tải về) và bài tập về nhà. Đầu khóa có thư chúc mừng, sách/tài liệu tham khảo và bài luyện tập.
 
 ---
 
-## 🎓 Danh mục công khai, tự đăng ký và kết nối CRM
+## 🧭 Mô hình direct sale (mặc định)
+
+Hướng dẫn vận hành từng bước: [docs/direct-sale-van-hanh.md](docs/direct-sale-van-hanh.md).
+
+* `SALES_MODE=direct` (mặc định) đóng tự đăng ký tài khoản, tự ghi danh, quét QR và màn duyệt đơn. Trang công khai chỉ còn giới thiệu khóa học kèm nút liên hệ tư vấn.
+* Bảng "khách đã thanh toán – đăng ký khóa nào" được nhập ở **Học viên & Xếp lớp → Nhập danh sách đã thanh toán**. Mỗi dòng tạo (hoặc dùng lại) một tài khoản học viên đăng nhập bằng email cá nhân với mật khẩu mặc định, bắt đổi ở lần đăng nhập đầu, và một ghi danh "đã thanh toán – chờ xếp lớp". Nhập lại cùng bảng không tạo trùng.
+* Tài khoản mới không thấy lớp, tài liệu hay danh mục cho tới khi được xếp lớp. Khi xếp lớp, học viên nhận email gồm tên lớp, lịch học, ngày khai giảng, link nhóm Zalo, giảng viên và số điện thoại hỗ trợ.
+* Học viên chỉ tải được **file data**. Slide và tài liệu chỉ xem trong trình xem của LMS và cần bản **PDF**; file PowerPoint/Word gốc chỉ dành cho giảng viên và Quản lý lớp.
+* `SALES_MODE=self_service` mở lại luồng cũ (mô tả ở mục dưới): học viên tự đăng ký, quét QR, admin duyệt đơn.
+
+---
+
+## 🎓 Luồng tự đăng ký (`SALES_MODE=self_service`) và kết nối CRM
 
 ### Danh mục công khai
 * Khách chưa đăng nhập xem được khóa học `published` (`GET /api/public/courses`, `GET /api/public/courses/:id`): lớp đang mở, số chỗ trống, lịch hàng tuần và danh sách buổi.
@@ -36,8 +44,9 @@ Nền tảng bán và vận hành khóa học trực tuyến của Học viện 
 
 ### Khóa học → Lớp → Buổi → Tài liệu
 * Mỗi lớp (`course_sections`) tự sinh các buổi "Buổi N" (`attendance_sessions`) theo số buổi và lịch học.
-* Giảng viên mở một buổi trong **Khóa học của tôi** để thêm tài liệu (`session_materials`): slide (`.ppt/.pptx/.pdf`), file dữ liệu và văn bản (`.xlsx/.csv/.pbix/.doc/.docx/.pdf/.zip`), video YouTube hoặc liên kết ngoài.
-* File nằm trong bucket **private** của Supabase Storage; học viên chỉ tải được qua `GET /api/materials/:id/download` khi đã được xếp vào lớp (link ký hạn 60 giây). Chưa cấu hình Supabase thì file lưu ở `MATERIALS_DIR`.
+* Giảng viên/Quản lý lớp mở một buổi để thêm tài liệu (`session_materials`): slide (`.pdf/.ppt/.pptx`), tài liệu (`.pdf/.doc/.docx`), file data (`.xlsx/.xls/.csv/.pbix/.zip/.rar/.json/.txt/.sql/.ipynb/.py/.md`), video YouTube hoặc liên kết ngoài. Tài liệu mở đầu của khóa (sách/tài liệu tham khảo, bài luyện tập) dùng chung bảng này với `session_id` để trống.
+* File nằm trong bucket **private** của Supabase Storage; chưa cấu hình Supabase thì file lưu ở `MATERIALS_DIR`.
+* Học viên đã được xếp lớp: file data tải qua `GET /api/materials/:id/download`; slide/tài liệu PDF chỉ mở trong trình xem của LMS (máy chủ trả nội dung trực tiếp, không cấp link tải); slide/tài liệu chưa có bản PDF thì học viên chưa xem được. Giảng viên, Quản lý lớp và admin tải được file gốc.
 
 ### Tự đăng ký tài khoản
 * `POST /api/auth/register` (họ tên, email cá nhân, số điện thoại) tạo tài khoản học viên và gửi **mật khẩu tạm** tới email.
@@ -123,7 +132,14 @@ Trên Windows PowerShell, nếu bị chặn script: `npm.cmd run lint`.
 
 ### 4. Kiểm thử E2E
 
-Luồng danh mục → tự đăng ký → CRM → tài liệu buổi học. Server phải chạy với `NODE_ENV` khác production, có `CRM_API_KEY`/`CRM_INBOUND_SECRET`, và script dùng cùng giá trị đó với `DATABASE_URL` trỏ cùng database:
+Cả hai script cần server đang chạy với `NODE_ENV` khác production và `DATABASE_URL` trỏ cùng database với server.
+
+**Luồng direct sale** (mặc định): chặn tự đăng ký → quyền Quản lý lớp → nạp khóa học → tạo lớp → nhập bảng đã thanh toán → tài khoản trống → xếp lớp và email → tài liệu mở đầu, slide chỉ xem, file data tải được. Script tự tạo tài khoản và lớp riêng cho mỗi lần chạy:
+```bash
+E2E_BASE_URL=http://localhost:3000 npm run test:direct-sale
+```
+
+**Luồng tự đăng ký + CRM**: danh mục → tự đăng ký → CRM → tài liệu buổi học. Server phải chạy với `SALES_MODE=self_service` và có `CRM_API_KEY`/`CRM_INBOUND_SECRET`; script dùng cùng giá trị đó. Script dùng ca học và số điện thoại cố định nên mỗi database chỉ chạy được một lần:
 ```bash
 E2E_BASE_URL=http://localhost:3000 CRM_API_KEY=... CRM_INBOUND_SECRET=... npm run test:signup-crm
 ```
@@ -146,13 +162,13 @@ npm start             # chạy production
 * `DATABASE_URL`, `JWT_SECRET`
 * `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_WEBHOOK_TOLERANCE_SECONDS`, `PASSWORD_RESET_TOKEN_TTL_MINUTES`
 
-#### Thanh toán
-* `SEPAY_API_KEY`: bắt buộc để webhook SePay tự xác nhận chuyển khoản và mở lớp. Thiếu key thì quản trị phải bấm **Kích hoạt** cho từng đơn.
+#### Mô hình bán hàng
+* `SALES_MODE` (`direct` mặc định | `self_service`), `DEFAULT_STUDENT_PASSWORD` (mật khẩu mặc định cho tài khoản tạo từ bảng đã thanh toán, tối thiểu 8 ký tự), `SUPPORT_PHONE` (in trong email và trang đăng nhập), `ALLOW_HOMEWORK_DOWNLOAD` (`true` thì học viên tải được tệp đính kèm bài tập về nhà).
+* `GEMINI_API_KEY`, `GEMINI_MODEL`: soạn thư chúc mừng bằng AI. Bỏ trống thì nút soạn thư trả về thư mẫu của MCNA.
 
-#### Email
-* SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (mặc định người gửi là `"MCNA LMS" <SMTP_USER>`).
-* `LMS_LOGIN_URL`: địa chỉ LMS, dùng cho nút "Mở MCNA LMS" trong email thông báo.
-* Google Workspace (không bắt buộc, cấp email trường cho học viên): `SCHOOL_EMAIL_DOMAIN`, `GOOGLE_ADMIN_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_JSON`. Học viên chưa có email trường vẫn nhận email quan trọng (được xếp lớp, học phí được xác nhận) ở email đã đăng ký.
+#### Google Workspace & email
+* `SCHOOL_EMAIL_DOMAIN`, `GOOGLE_ADMIN_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `LMS_LOGIN_URL`
+* SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`. Hộp thư `@mcna.vn` nằm trên OneMail (`mail.mcna.vn`, cổng 465). Thiếu cấu hình SMTP thì email tài khoản và email xếp lớp không được gửi mà chỉ ghi vào `scratch/emails.log`; màn **Học viên & Xếp lớp** hiện trạng thái email của từng học viên.
 
 #### Tài liệu buổi học
 * `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` (bucket **private**), hoặc `MATERIALS_DIR` khi chạy không có Supabase.

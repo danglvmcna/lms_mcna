@@ -12,6 +12,7 @@ import CertificatePublicPage from "./components/public/CertificatePublicPage";
 import AppShell, { NavItem } from "./components/layout/AppShell";
 import { ChangePasswordDialog, ProfileDialog } from "./components/account/AccountDialogs";
 import { Spinner, ToastProvider, useToast } from "./components/ui";
+import { useAppConfigQuery } from "./appConfig";
 
 const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
 const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
@@ -29,33 +30,40 @@ const queryClient = new QueryClient({
 
 type AuthView = "catalog" | "login" | "register" | "forgot";
 
-const DEFAULT_TAB: Record<User["role"], string> = { student: "home", teacher: "courses", admin: "overview" };
+const DEFAULT_TAB: Record<User["role"], string> = { student: "home", teacher: "courses", admin: "overview", manager: "placement" };
 
-function navFor(user: User, store: LMSDataStore): NavItem[] {
+function navFor(user: User, store: LMSDataStore, direct: boolean): NavItem[] {
   const unread = (store.notifications || []).filter(n => n.userId === user.id && !n.isRead).length;
   if (user.role === "student") {
     const awaitingPayment = (store.enrollments || []).filter(e => e.studentId === user.id && e.status === "pending_payment").length;
     return [
       { id: "home", label: "Trang chủ", icon: House },
-      { id: "catalog", label: "Khám phá", icon: Compass },
+      ...(!direct ? [{ id: "catalog", label: "Khám phá", icon: Compass }] : []),
       { id: "learning", label: "Lớp học của tôi", shortLabel: "Lớp học", icon: GraduationCap },
-      { id: "orders", label: "Học phí", icon: Wallet, badge: awaitingPayment },
+      ...(!direct ? [{ id: "orders", label: "Học phí", icon: Wallet, badge: awaitingPayment }] : []),
+      { id: "extras", label: "Chứng chỉ & Ưu đãi", icon: GraduationCap, mobile: "more" },
       { id: "notifications", label: "Thông báo", icon: Bell, badge: unread, mobile: "hidden" }
     ];
   }
   if (user.role === "teacher") {
     return [
       { id: "courses", label: "Khóa học", icon: BookOpen },
+      { id: "operations", label: "Vận hành lớp học", icon: ClipboardList },
       { id: "notifications", label: "Thông báo", icon: Bell, badge: unread }
     ];
   }
   const pending = (store.enrollments || []).filter(e => e.status === "pending_payment" || e.status === "pending").length;
   return [
     { id: "overview", label: "Tổng quan", icon: LayoutDashboard, group: "Vận hành" },
-    { id: "orders", label: "Ghi danh", icon: ClipboardList, badge: pending, group: "Vận hành" },
+    { id: direct || user.role === "manager" ? "placement" : "orders", label: direct || user.role === "manager" ? "Học viên & Xếp lớp" : "Ghi danh", icon: ClipboardList, badge: pending, group: "Vận hành" },
     { id: "course_section_mgmt", label: "Khóa học & lớp", shortLabel: "Khóa học", icon: BookOpen, group: "Vận hành" },
-    { id: "users", label: "Người dùng", icon: Users, group: "Hệ thống" },
-    { id: "audit", label: "Nhật ký & CRM", icon: ScrollText, group: "Hệ thống", mobile: "more" },
+    { id: "content", label: "Nội dung lớp học", icon: BookOpen, group: "Vận hành", mobile: "more" },
+    { id: "operations", label: "Vận hành lớp học", icon: ClipboardList, group: "Vận hành", mobile: "more" },
+    ...(user.role === "admin" || user.canManageSales ? [{ id: "sales", label: "Tư vấn & Ưu đãi", icon: Wallet, group: "Vận hành", mobile: "more" as const }] : []),
+    ...(user.role === "admin" ? [
+      { id: "users", label: "Người dùng", icon: Users, group: "Hệ thống" },
+      { id: "audit", label: "Nhật ký & CRM", icon: ScrollText, group: "Hệ thống", mobile: "more" as const }
+    ] : []),
     { id: "notifications", label: "Thông báo", icon: Bell, badge: unread, group: "Hệ thống", mobile: "more" }
   ];
 }
@@ -70,6 +78,8 @@ function readAuthViewFromHash(): AuthView | null {
 function AppRoot() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { config: appConfig, isLoading: appConfigLoading } = useAppConfigQuery();
+  const isDirectSale = appConfig.salesMode === "direct";
   const [storeData, setStoreData] = useState<LMSDataStore>(AppStore.get());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -85,6 +95,7 @@ function AppRoot() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigateAuth = (view: AuthView) => {
+    if (view === "register" && isDirectSale) view = "login";
     setAuthView(view);
     const currentHash = window.location.hash.replace("#", "").toLowerCase();
     if (view === "catalog") {
@@ -157,6 +168,14 @@ function AppRoot() {
     if (currentUser) setActiveTab(DEFAULT_TAB[currentUser.role] || "home");
   }, [currentUser?.id, currentUser?.role]);
 
+  useEffect(() => {
+    if (appConfigLoading || !isDirectSale) return;
+    clearEnrollIntent();
+    setPendingIntent(null);
+    setAuthView(view => view === "register" || (view === "catalog" && !initialCourseId && !window.location.hash) ? "login" : view);
+    if (currentUser?.role === "student" && ["catalog", "orders"].includes(activeTab)) setActiveTab("learning");
+  }, [appConfigLoading, isDirectSale, currentUser?.role, activeTab]);
+
   // Submit the class a visitor picked in the public catalog once they are signed in as a student.
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
@@ -164,7 +183,7 @@ function AppRoot() {
     if (!intent) return;
     clearEnrollIntent();
     setPendingIntent(null);
-    if (currentUser.role !== "student") return;
+    if (currentUser.role !== "student" || isDirectSale) return;
     api.registerEnrollment(intent.courseId, intent.sectionId)
       .then(async () => {
         const target = [intent.sectionCode ? `lớp ${intent.sectionCode}` : "", intent.courseTitle || ""].filter(Boolean).join(" – ") || "khóa học";
@@ -173,7 +192,7 @@ function AppRoot() {
         setActiveTab("learning");
       })
       .catch((err: any) => toast(err.message || "Không thể đăng ký lớp đã chọn.", "error"));
-  }, [currentUser?.id, currentUser?.mustChangePassword]);
+  }, [currentUser?.id, currentUser?.mustChangePassword, isDirectSale]);
 
   const refreshStoreDataFromServer = async () => {
     if (AppStore.syncPromise) {
@@ -219,7 +238,7 @@ function AppRoot() {
     }).catch(() => undefined);
     setCurrentUser(null);
     setCsrfToken(null);
-    navigateAuth("catalog");
+    navigateAuth(isDirectSale ? "login" : "catalog");
     sessionStorage.removeItem("mcna_lms_active_session");
     sessionStorage.removeItem("e16_lms_active_session");
   };
@@ -229,7 +248,7 @@ function AppRoot() {
     setPendingIntent(null);
   };
 
-  const nav = useMemo(() => (currentUser ? navFor(currentUser, storeData) : []), [currentUser, storeData]);
+  const nav = useMemo(() => (currentUser ? navFor(currentUser, storeData, isDirectSale) : []), [currentUser, storeData, isDirectSale]);
 
   const navigateTab = (id: string) => {
     setActiveTab(id);
@@ -237,7 +256,7 @@ function AppRoot() {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
 
-  if (!sessionChecked) {
+  if (!sessionChecked || appConfigLoading) {
     return <div className="flex min-h-dvh items-center justify-center bg-canvas"><Spinner /></div>;
   }
 
@@ -269,10 +288,10 @@ function AppRoot() {
           onOpenProfile={() => setShowProfile(true)}
           onOpenPassword={() => setShowPassword(true)}
           onLogout={handleLogout}
-          wide={currentUser.role === "admin" || (currentUser.role === "teacher" && activeTab === "courses")}
+          wide={currentUser.role === "admin" || currentUser.role === "manager" || (currentUser.role === "teacher" && activeTab === "courses")}
         >
           <React.Suspense fallback={<Spinner />}>
-            {currentUser.role === "admin" && <AdminPanel {...panelProps} updateStore={updateStore} />}
+            {(currentUser.role === "admin" || currentUser.role === "manager") && <AdminPanel {...panelProps} updateStore={updateStore} />}
             {currentUser.role === "teacher" && <TeacherPanel {...panelProps} updateStore={updateStore} />}
             {currentUser.role === "student" && <StudentPanel {...panelProps} />}
           </React.Suspense>
@@ -287,7 +306,7 @@ function AppRoot() {
     return <ResetPasswordScreen token={resetToken} onDone={() => { setResetToken(""); navigateAuth("login"); }} />;
   }
 
-  if (authView === "register") {
+  if (authView === "register" && !isDirectSale) {
     return (
       <SignUpScreen
         intent={pendingIntent}
@@ -305,7 +324,7 @@ function AppRoot() {
     return <ForgotPasswordScreen onGoToLogin={() => navigateAuth("login")} />;
   }
 
-  if (authView === "login") {
+  if (authView === "login" || (authView === "register" && isDirectSale)) {
     return (
       <LoginScreen
         key={prefillEmail}
@@ -313,7 +332,7 @@ function AppRoot() {
         intent={pendingIntent}
         onClearIntent={clearIntent}
         onLoggedIn={handleLoggedIn}
-        onRegister={() => navigateAuth("register")}
+        onRegister={isDirectSale ? undefined : () => navigateAuth("register")}
         onForgot={() => navigateAuth("forgot")}
         onBackToCourses={() => navigateAuth("catalog")}
       />
@@ -324,6 +343,8 @@ function AppRoot() {
     <ErrorBoundary fallbackTitle="Không thể tải danh mục khóa học">
       <PublicCourseCatalog
         initialCourseId={initialCourseId}
+        salesMode={appConfig.salesMode}
+        supportPhone={appConfig.supportPhone}
         onLogin={() => navigateAuth("login")}
         onRegister={intent => {
           if (intent) {

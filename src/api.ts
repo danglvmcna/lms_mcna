@@ -1,4 +1,5 @@
-import { CrmOutboxStatus, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SystemStatus } from "./types";
+import { CrmOutboxStatus, IntroMaterialCategory, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SystemStatus } from "./types";
+import { PaidImportResponse, PaidImportRow, PaidTableParseResult } from "./paidImport";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -20,7 +21,7 @@ export function getCsrfToken(): string | null {
   return sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
 }
 
-async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T = any>(url: string, init: RequestInit = {}): Promise<T> {
   const csrfToken = getCsrfToken();
   const response = await fetch(url, {
     ...init,
@@ -50,6 +51,16 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
+
+export const operationsApi = <T = any>(path: string, payload?: unknown, method = payload === undefined ? 'GET' : 'POST') =>
+  apiFetch<T>(`/api/operations${path}`, {method, ...(payload !== undefined ? {body:JSON.stringify(payload)} : {})});
+
+/** A created material; "warning" is set when learners will not be able to read it online (not a PDF). */
+export type UploadedMaterial = SessionMaterial & { warning?: string };
+
+export type PlacementEmailCounts = { sent: number; mock: number; failed: number; skipped: number };
+export type PlacementNotice = { studentId: string; sectionId: string; email: string | null; status: "sent" | "mock" | "failed" | "skipped"; reason?: string };
+export type BulkPlacementResult = { success: boolean; count: number; placed: number; unchanged: number; emails: PlacementEmailCounts; notices: PlacementNotice[] };
 
 async function postMultipart<T>(url: string, formData: FormData, fallbackError: string): Promise<T> {
   const csrfToken = getCsrfToken();
@@ -120,21 +131,41 @@ export const api = {
     });
   },
   listSessionMaterials: (sessionId: string) => apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`),
-  uploadSessionMaterial: (sessionId: string, type: "slide" | "document", file: File, title?: string) => {
+  uploadSessionMaterial: (sessionId: string, type: "slide" | "document" | "data", file: File, title?: string) => {
     const formData = new FormData();
     formData.append("type", type);
     if (title) formData.append("title", title);
     formData.append("file", file);
-    return postMultipart<SessionMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, formData, "Tải tài liệu lên thất bại.");
+    return postMultipart<UploadedMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, formData, "Tải tài liệu lên thất bại.");
   },
   addLinkMaterial: (sessionId: string, payload: { type: "youtube" | "link"; url: string; title?: string }) =>
     apiFetch<SessionMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, { method: "POST", body: JSON.stringify(payload) }),
+  // Course opening materials: reference reading and practice exercises shown before the first session.
+  listIntroMaterials: (courseId: string) => apiFetch<SessionMaterial[]>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`),
+  uploadIntroMaterial: (courseId: string, category: IntroMaterialCategory, type: "document" | "data", file: File, title?: string) => {
+    const formData = new FormData();
+    formData.append("category", category);
+    formData.append("type", type);
+    if (title) formData.append("title", title);
+    formData.append("file", file);
+    return postMultipart<UploadedMaterial>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`, formData, "Tải tài liệu lên thất bại.");
+  },
+  addIntroLink: (courseId: string, payload: { category: IntroMaterialCategory; type: "youtube" | "link"; url: string; title?: string }) =>
+    apiFetch<SessionMaterial>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`, { method: "POST", body: JSON.stringify(payload) }),
+  reorderIntroMaterials: (courseId: string, category: IntroMaterialCategory, materialIds: string[]) =>
+    apiFetch<SessionMaterial[]>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials/order`, { method: "PUT", body: JSON.stringify({ category, materialIds }) }),
+  saveWelcomeLetter: (courseId: string, welcomeLetter: string) =>
+    apiFetch<{ courseId: string; welcomeLetter: string }>(`/api/courses/${encodeURIComponent(courseId)}/welcome-letter`, { method: "PUT", body: JSON.stringify({ welcomeLetter }) }),
+  draftWelcomeLetter: (courseId: string) =>
+    apiFetch<{ letter: string; source: "ai" | "template"; note?: string }>(`/api/courses/${encodeURIComponent(courseId)}/welcome-letter/draft`, { method: "POST", body: "{}" }),
   updateSessionMaterial: (materialId: string, payload: { title?: string; url?: string }) =>
     apiFetch<SessionMaterial>(`/api/materials/${encodeURIComponent(materialId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   reorderSessionMaterials: (sessionId: string, materialIds: string[]) =>
     apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials/order`, { method: "PUT", body: JSON.stringify({ materialIds }) }),
   deleteSessionMaterial: (materialId: string) => apiFetch(`/api/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" }),
   materialDownloadUrl: (materialId: string) => `/api/materials/${encodeURIComponent(materialId)}/download`,
+  // Read-only address for the in-app PDF viewer (learners cannot download slides or documents).
+  materialViewUrl: (materialId: string) => `/api/materials/${encodeURIComponent(materialId)}/download?inline=true`,
   getCourses: () => apiFetch("/api/courses"),
   getPublicCourses: () => apiFetch<PublicCourseSummary[]>("/api/public/courses"),
   getPublicCourse: (courseId: string) => apiFetch<PublicCourseDetail>(`/api/public/courses/${encodeURIComponent(courseId)}`),
@@ -152,9 +183,23 @@ export const api = {
   activateEnrollment: (enrollmentId: string, payload: { sectionId?: string } = {}) => apiFetch<{ success: boolean; enrollment: any; registration: any }>(`/api/enrollments/${enrollmentId}/activate`, { method: "POST", body: JSON.stringify(payload) }),
   approveEnrollment: (enrollmentId: string, payload: { sectionId?: string } = {}) => apiFetch(`/api/enrollments/${enrollmentId}/approve`, { method: "PATCH", body: JSON.stringify(payload) }),
   approveCourseRegistration: (registrationId: string) => apiFetch(`/api/course-registrations/${registrationId}/approve`, { method: "PATCH" }),
-  bulkPlaceEnrollments: (placements: any[]) => apiFetch("/api/admin/enrollments/bulk-place", { method: "POST", body: JSON.stringify({ placements }) }),
+  bulkPlaceEnrollments: (placements: Array<{ enrollmentId?: string; email?: string; sectionId?: string; sectionCode?: string }>, options: { notify?: boolean } = {}) =>
+    apiFetch<BulkPlacementResult>("/api/admin/enrollments/bulk-place", { method: "POST", body: JSON.stringify({ placements, ...options }) }),
+  resendPlacementEmail: (items: Array<{ studentId: string; sectionId: string }>) =>
+    apiFetch<{ emails: PlacementEmailCounts; notices: PlacementNotice[] }>("/api/admin/placements/resend-email", { method: "POST", body: JSON.stringify({ items }) }),
+  // Direct sale: the "paid customers" table becomes learner accounts and paid enrollments.
+  getPaidImportConfig: () => apiFetch<{ defaultPassword: string; supportPhone: string }>("/api/admin/paid-enrollments/config"),
+  parsePaidTableFile: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return postMultipart<PaidTableParseResult>("/api/admin/paid-enrollments/parse", formData, "Không đọc được tệp danh sách.");
+  },
+  importPaidEnrollments: (payload: { rows: PaidImportRow[]; defaultPassword?: string; sendAccountEmail?: boolean; dryRun?: boolean }) =>
+    apiFetch<PaidImportResponse>("/api/admin/paid-enrollments/import", { method: "POST", body: JSON.stringify(payload) }),
+  importMcnaCatalog: () =>
+    apiFetch<{ coursesCreated: number; coursesUpdated: number; lessons: number; source: string; scrapedAt: string | null }>("/api/admin/catalog/import-mcna", { method: "POST", body: "{}" }),
   requestNewSection: (courseId: string) => apiFetch(`/api/courses/${courseId}/request-section`, { method: "POST" }),
-  issueCertificate: (payload: { enrollmentId: string }) => apiFetch<LMSDataStore["certificates"][number]>("/api/certificates/issue", { method: "POST", body: JSON.stringify(payload) }),
+  issueCertificate: (payload: { enrollmentId: string; overrideReason?: string }) => apiFetch<LMSDataStore["certificates"][number]>("/api/certificates/issue", { method: "POST", body: JSON.stringify(payload) }),
   revokeCertificate: (certificateId: string) => apiFetch(`/api/certificates/${certificateId}`, { method: "DELETE" }),
   toggleProgress: (payload: { enrollmentId: string; lessonId: string }) => apiFetch("/api/progress/toggle", { method: "POST", body: JSON.stringify(payload) }),
   createQuiz: (payload: unknown) => apiFetch("/api/quizzes", { method: "POST", body: JSON.stringify(payload) }),
@@ -167,7 +212,7 @@ export const api = {
   submitQuiz: (payload: { quizId: string; answers: Record<string, string>; startedAt?: string }) => apiFetch("/api/quizzes/submit", { method: "POST", body: JSON.stringify(payload) }),
   createAssignment: (payload: unknown) => apiFetch("/api/assignments", { method: "POST", body: JSON.stringify(payload) }),
   submitAssignment: (payload: { assignmentId: string; content: string; attachmentUrl?: string }) => apiFetch<LMSDataStore["submissions"][number]>("/api/assignments/submit", { method: "POST", body: JSON.stringify(payload) }),
-  gradeAssignment: (payload: { submissionId: string; score: number; feedback: string }) => apiFetch("/api/assignments/grade", { method: "POST", body: JSON.stringify(payload) }),
+  gradeAssignment: (payload: { submissionId: string; score: number; feedback: string; expectedSubmittedAt?: string }) => apiFetch("/api/assignments/grade", { method: "POST", body: JSON.stringify(payload) }),
   createUser: (payload: unknown) => apiFetch("/api/admin/users", { method: "POST", body: JSON.stringify(payload) }),
   bulkCreateUsers: (payload: unknown) => apiFetch<{ createdCount: number; skippedCount: number; errorCount: number; errors: Array<{ row: number; email?: string; reason: string }>; created: LMSDataStore["users"] }>("/api/admin/users/bulk", { method: "POST", body: JSON.stringify(payload) }),
   setUserStatus: (userId: string, isActive: boolean) => apiFetch(`/api/admin/users/${userId}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),

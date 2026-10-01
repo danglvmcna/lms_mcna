@@ -15,6 +15,8 @@ type CreateNotificationInput = {
    * everyone who signed up on the website, then also get it at the email they registered with.
    */
   emailFallback?: boolean;
+  /** A dedicated workflow email already covers this in-app notification. */
+  skipEmail?: boolean;
 };
 
 export const notificationsRepository = {
@@ -79,7 +81,9 @@ export const notificationsRepository = {
     );
 
     // Dispatch email notification asynchronously
-    if (userRole === "student") {
+    if (input.skipEmail) {
+      // Keep the inbox entry without dispatching a second, generic email.
+    } else if (userRole === "student") {
       if (emailProvisioned) {
         // Fire and forget
         provisioningService.sendNotificationEmail(db as any, notification.userId, {

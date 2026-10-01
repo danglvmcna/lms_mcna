@@ -12,6 +12,8 @@ import { AppStore } from "../store";
 import { useToast } from "./ui";
 import { StudentTab, StudentViewProps } from "./student/types";
 import { supportsVietQr } from "./student/learning";
+import { useAppConfig } from "../appConfig";
+import StudentExtras from "./operations/StudentExtras";
 
 interface StudentPanelProps {
   currentUser: UserType;
@@ -27,6 +29,10 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
   const { store } = useApiStore();
   const toast = useToast();
   const tab = activeSubTab as StudentTab;
+  const isDirectSale = useAppConfig().salesMode === "direct";
+  useEffect(() => {
+    if (isDirectSale && ["catalog", "orders"].includes(activeSubTab)) setActiveSubTab("learning");
+  }, [isDirectSale, activeSubTab]);
 
   const [viewingCourseId, setViewingCourseId] = useState<string | null>(null);
   const [learningCourseId, setLearningCourseId] = useState<string | null>(null);
@@ -74,7 +80,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
       setFocusThread(null);
 
       if (relatedEntityType === "transaction" || text.includes("thanh toán") || text.includes("học phí") || text.includes("đơn hàng")) {
-        setActiveSubTab("orders");
+        setActiveSubTab(isDirectSale ? "extras" : "orders");
         setLearningCourseId(null);
       } else if (
         relatedEntityType === "enrollment" ||
@@ -93,7 +99,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
           if (courseId) setLearningCourseId(courseId);
         }
       } else if (relatedEntityType === "course") {
-        setActiveSubTab("catalog");
+        setActiveSubTab(isDirectSale ? "learning" : "catalog");
         setLearningCourseId(null);
       } else {
         setActiveSubTab("notifications");
@@ -102,7 +108,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, [store?.courses, store?.enrollments, store?.forumPosts, store?.courseSections]);
+  }, [store?.courses, store?.enrollments, store?.forumPosts, store?.courseSections, isDirectSale]);
 
   const myEnrollments = useMemo(() => store.enrollments.filter(e => e.studentId === currentUser.id), [store.enrollments, currentUser.id]);
 
@@ -169,7 +175,7 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
   return (
     <>
       {tab === "home" && <StudentHome {...view} />}
-      {tab === "catalog" && (
+      {tab === "catalog" && !isDirectSale && (
         <CourseCatalog {...view} viewingCourseId={viewingCourseId} setViewingCourseId={setViewingCourseId} onEnroll={handleEnrollIntoCourse} />
       )}
       {tab === "learning" && (
@@ -182,10 +188,11 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
           onToggleLesson={handleToggleLessonComplete}
         />
       )}
-      {tab === "orders" && <StudentOrders {...view} />}
+      {tab === "orders" && !isDirectSale && <StudentOrders {...view} />}
+      {tab === "extras" && <StudentExtras />}
       {tab === "notifications" && <NotificationInbox store={store} currentUser={currentUser} onRefreshData={onRefreshData} title="Thông báo" />}
 
-      {paymentGuideTx && (
+      {paymentGuideTx && !isDirectSale && (
         <PaymentQrModal
           transaction={paymentGuideTx}
           course={store.courses.find(c => c.id === paymentGuideTx.courseId)}

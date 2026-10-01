@@ -31,8 +31,17 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
+          // The PDF worker ships as .mjs; it is emitted as .js so any web server serves it with a JavaScript type.
+          assetFileNames(assetInfo) {
+            const name = assetInfo.names?.[0] ?? '';
+            return name.endsWith('.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]';
+          },
           manualChunks(id) {
             if (id.includes('node_modules')) {
+              // The PDF viewer is only fetched when a learner opens a document.
+              if (id.includes('pdfjs-dist')) {
+                return 'vendor-pdf';
+              }
               if (id.includes('react/') || id.includes('react-dom/')) {
                 return 'vendor-react';
               }

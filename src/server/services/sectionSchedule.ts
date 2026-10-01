@@ -15,8 +15,9 @@ export type SectionPayload = {
   status: "pending" | "open" | "closed" | "cancelled";
   openingDate?: string;
   numberOfSessions?: number;
-  meetingUrl?: string;
-  groupChatUrl?: string;
+  // undefined keeps the stored link, null clears it.
+  meetingUrl?: string | null;
+  groupChatUrl?: string | null;
 };
 
 export const normalizeDayText = (value: any) => String(value || "")
@@ -177,6 +178,8 @@ export async function ensureSectionAttendanceSessionsForSchedule(
 
     if (current) {
       usedIds.add(current.id);
+      // Actual teaching history must not move when future timetable/teacher assignments change.
+      if (current.taught_at) continue;
       const sets = ["teacher_id = $1"];
       const values: any[] = [section.teacher_id];
       let paramIndex = values.length + 1;
@@ -238,6 +241,15 @@ export async function ensureSectionAttendanceSessionsForSchedule(
     })
     .map((row: any) => row.id);
   if (excessGeneratedIds.length > 0) {
+    await db.query("SELECT id FROM attendance_sessions WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE", [excessGeneratedIds]);
+    // A schedule edit must never erase submitted homework or actual teaching history.
+    const protectedRows = await db.query(`SELECT s.id FROM attendance_sessions s WHERE s.id=ANY($1::text[])
+      AND (${columns.includes("taught_at") ? "s.taught_at IS NOT NULL OR" : ""}
+        EXISTS(SELECT 1 FROM attendance_records r WHERE r.session_id=s.id) OR
+        EXISTS(SELECT 1 FROM assignments a WHERE a.session_id=s.id) OR
+        EXISTS(SELECT 1 FROM session_materials m WHERE m.session_id=s.id)
+        ${columns.includes("taught_at") ? "OR EXISTS(SELECT 1 FROM session_solutions sol WHERE sol.session_id=s.id)" : ""})`, [excessGeneratedIds]);
+    if (protectedRows.rowCount) throw Object.assign(new Error("Không thể giảm số buổi đã có điểm danh, bài tập, tài liệu hoặc lịch sử giảng dạy."), {status:409});
     await db.query("DELETE FROM attendance_sessions WHERE id = ANY($1)", [excessGeneratedIds]);
   }
 }
@@ -288,13 +300,13 @@ export async function upsertCourseSection(db: any, section: SectionPayload) {
     placeholders.push(`$${values.length}`);
     updates.push("number_of_sessions = EXCLUDED.number_of_sessions");
   }
-  if (columns.has("meeting_url")) {
+  if (columns.has("meeting_url") && section.meetingUrl !== undefined) {
     insertColumns.push("meeting_url");
     values.push(section.meetingUrl || null);
     placeholders.push(`$${values.length}`);
     updates.push("meeting_url = EXCLUDED.meeting_url");
   }
-  if (columns.has("group_chat_url")) {
+  if (columns.has("group_chat_url") && section.groupChatUrl !== undefined) {
     insertColumns.push("group_chat_url");
     values.push(section.groupChatUrl || null);
     placeholders.push(`$${values.length}`);

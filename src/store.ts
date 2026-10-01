@@ -20,7 +20,7 @@ const STUDENT_CREDENTIAL = credential("studente16", "seed_student");
 function normalizeLegacyRoles(store: LMSDataStore): void {
   store.users = store.users.map(user => {
     const legacyRole = user.role as string;
-    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin" || legacyRole === "manager" || legacyRole === "super_admin") {
+    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin" || legacyRole === "super_admin") {
       return { ...user, role: "admin" };
     }
     if (legacyRole === "advisor") {
@@ -545,7 +545,7 @@ export class AppStore {
 
     if (typeof sessionStorage !== "undefined") {
       const role = sessionStorage.getItem("mcna_lms_role") || sessionStorage.getItem("e16_lms_role");
-      if (role && !["manager", "admin"].includes(role)) {
+      if (role && role !== "admin") {
         // Skip calling /api/store/sync as this role does not have permission
         return Promise.resolve();
       }

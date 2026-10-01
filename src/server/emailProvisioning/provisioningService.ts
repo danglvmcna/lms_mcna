@@ -4,7 +4,7 @@ import { sendWelcomeEmail, sendLmsNotification } from "./emailWorker";
 import { notificationsRepository } from "../repositories/notifications";
 import { auditRepository } from "../repositories/audit";
 
-const LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || "http://localhost:3000";
+const LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms.mcna.vn";
 
 export const provisioningService = {
   /**

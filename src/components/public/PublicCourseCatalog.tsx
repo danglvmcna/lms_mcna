@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock, GraduationCap, Laptop, Link2, MapPin, MessageCircle, Search, UserRound } from "lucide-react";
 import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
-import { PublicCourseDetail, PublicCourseSummary } from "../../types";
+import { PublicCourseDetail, PublicCourseSummary, SalesMode } from "../../types";
+import { phoneDigits } from "../../appConfig";
 import LinkedText from "../LinkedText";
 import CourseCard from "../common/CourseCard";
 import { instructorName } from "../student/studentDisplay";
@@ -11,6 +12,9 @@ import { Badge, BrandLockup, Button, buttonClass, Callout, CourseCover, cx, Empt
 
 interface PublicCourseCatalogProps {
   initialCourseId?: string;
+  // direct: the catalogue is a showcase and enrollment goes through MCNA's advisers; self_service: visitors sign up here.
+  salesMode?: SalesMode;
+  supportPhone?: string;
   onLogin: () => void;
   onRegister: (intent?: EnrollIntent) => void;
 }
@@ -48,7 +52,9 @@ function PublicCard({ course, onOpen }: { course: PublicCourseSummary; onOpen: (
 }
 
 /** Landing page for visitors: published courses, their open classes and session schedule. */
-export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegister }: PublicCourseCatalogProps) {
+export default function PublicCourseCatalog({ initialCourseId, salesMode = "self_service", supportPhone = "", onLogin, onRegister }: PublicCourseCatalogProps) {
+  const isDirectSale = salesMode === "direct";
+  const adviserUrl = `https://zalo.me/${phoneDigits(supportPhone)}`;
   const [courses, setCourses] = useState<PublicCourseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -220,7 +226,11 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             <p className="mt-2 text-[15px] text-slate-500">Không cần kinh nghiệm. MCNA hỗ trợ bạn từ lúc chọn lớp đến buổi học đầu tiên.</p>
           </div>
           <ol className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {STEPS.map((step, index) => (
+            {(isDirectSale ? [
+              { title: "Chọn khóa phù hợp", text: "Nhắn MCNA để được tư vấn khóa học và lịch lớp phù hợp." },
+              { title: "Xác nhận đăng ký", text: "MCNA xác nhận thanh toán và gửi tài khoản qua email." },
+              { title: "Được xếp lớp", text: "Quản lý lớp gửi lịch học, nhóm Zalo và tài liệu cho bạn." }
+            ] : STEPS).map((step, index) => (
               <li key={step.title} className="rounded-[1.5rem] bg-canvas p-6">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 font-display text-base font-bold text-white">{index + 1}</span>
                 <h3 className="mt-5 text-lg font-bold text-slate-900">{step.title}</h3>
@@ -229,8 +239,8 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             ))}
           </ol>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button size="lg" onClick={() => onRegister()}>Tạo tài khoản miễn phí</Button>
-            <a href="https://zalo.me/0939866825" target="_blank" rel="noreferrer" className={buttonClass({ variant: "secondary", size: "lg" })}>
+            {!isDirectSale && <Button size="lg" onClick={() => onRegister()}>Tạo tài khoản miễn phí</Button>}
+            <a href={adviserUrl} target="_blank" rel="noreferrer" className={buttonClass({ variant: "secondary", size: "lg" })}>
               <MessageCircle className="h-5 w-5 text-blue-600" /> Nhắn tư vấn qua Zalo
             </a>
           </div>
@@ -328,14 +338,14 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                             {sectionSessions > 0 && <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" /> {sectionSessions} buổi</span>}
                           </p>
                         </div>
-                        <Button
+                        {isDirectSale ? <a href={adviserUrl} target="_blank" rel="noreferrer" className={buttonClass({variant:"secondary"})}>Liên hệ tư vấn</a> : <Button
                           disabled={isFull}
                           onClick={() => onRegister({ courseId: course.id, sectionId: section.id, courseTitle: course.title, sectionCode: section.sectionCode })}
                           iconRight={!isFull ? <ArrowRight className="h-4 w-4" /> : undefined}
                           className="w-full sm:w-auto"
                         >
                           {isFull ? "Lớp đã đầy" : "Đăng ký lớp này"}
-                        </Button>
+                        </Button>}
                       </div>
 
                       {scheduleList.length > 0 && (
@@ -400,10 +410,10 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                   <p className="font-display text-3xl font-bold tracking-tight text-slate-900">{formatPrice(course.price)}</p>
                 </div>
                 <Button block size="lg" onClick={scrollToClasses} disabled={sections.length === 0}>
-                  {sections.length === 0 ? "Chưa có lớp mở" : "Chọn lớp để đăng ký"}
+                  {sections.length === 0 ? "Chưa có lớp mở" : isDirectSale ? "Xem lịch lớp" : "Chọn lớp để đăng ký"}
                 </Button>
                 <p className="text-[13px] leading-relaxed text-slate-500">
-                  Sau khi đăng ký, MCNA sẽ xác nhận{course.price > 0 ? " học phí," : ""} xếp lớp và gửi thông báo khi bạn có thể vào học.
+                  {isDirectSale ? "Liên hệ MCNA để xác nhận đăng ký. Tài khoản, lịch và tài liệu được gửi sau khi xếp lớp." : `Sau khi đăng ký, MCNA sẽ xác nhận${course.price > 0 ? " học phí," : ""} xếp lớp và gửi thông báo khi bạn có thể vào học.`}
                 </p>
                 <button type="button" onClick={() => copyCourseLink(course.id)} className="flex w-full items-center justify-center gap-2 rounded-full py-2 text-sm font-semibold text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">
                   {copied ? <><Check className="h-4 w-4 text-emerald-600" /> Đã sao chép liên kết</> : <><Link2 className="h-4 w-4" /> Chia sẻ khóa học</>}
@@ -437,7 +447,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
           </button>
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" size="sm" onClick={onLogin}>Đăng nhập</Button>
-            <Button size="sm" onClick={() => onRegister()}>Tạo tài khoản</Button>
+            {!isDirectSale && <Button size="sm" onClick={() => onRegister()}>Tạo tài khoản</Button>}
           </div>
         </div>
       </header>

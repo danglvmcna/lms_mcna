@@ -30,6 +30,7 @@ import { AppStore } from "../store";
 import CourseBuilder from "./teacher/CourseBuilder";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
+import OperationsWorkspace from "./operations/OperationsWorkspace";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
@@ -44,9 +45,11 @@ interface TeacherPanelProps {
   /** Bumped when the teacher picks a tab in the app navigation, so the course view returns to its list. */
   navNonce: number;
   updateStore?: (updater: (draft: LMSDataStore) => void) => void;
+  // Embedded in the admin / class-manager panel: every course, content management only.
+  embedded?: boolean;
 }
 
-export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab, setActiveSubTab, navNonce, updateStore }: TeacherPanelProps) {
+export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab, setActiveSubTab, navNonce, updateStore, embedded = false }: TeacherPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
   const toast = useToast();
 
@@ -165,8 +168,9 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
 
   const triggerToast = (msg: string) => toast(msg);
 
-  // Get active teacher datasets
-  const myCourses = store.courses.filter(c => c.teacherId === currentUser.id);
+  // A teacher's store is already scoped to the courses they own and the classes assigned to them;
+  // staff opening this panel from the admin side work on every course.
+  const myCourses = embedded || currentUser.role === "teacher" ? store.courses : store.courses.filter(c => c.teacherId === currentUser.id);
   const myCourseIds = myCourses.map(c => c.id);
 
   useEffect(() => {
@@ -502,7 +506,8 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
       await api.gradeAssignment({
         submissionId: activeSubmissionId,
         score: Number(gradingScore),
-        feedback: gradingFeedback
+        feedback: gradingFeedback,
+        expectedSubmittedAt: store.submissions.find(submission => submission.id === activeSubmissionId)?.submittedAt
       });
 
       if (updateStore) {
@@ -558,15 +563,28 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
     store, currentUser, myCourses, myCourseIds, handleOpenCreateCourse, handleOpenEditCourse, handleSaveCourse,
     handleSubmitCourseForApproval, handleAddLessonSubmit, handleAddQuizSubmit, handleAddQuestionSubmit, handleAddAssignmentSubmit,
     handleGradeSubmission, activeCourse, lessons, courseQuizzes, courseAssignments, myAssignments, studentSubmissionsRaw, updateStore,
-    triggerToast, onRefreshData
+    triggerToast, onRefreshData, contentOnly: embedded
   };
+
+  if (embedded) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-slate-900">Nội dung lớp học</h3>
+          <p className="text-sm text-slate-500 mt-1">Chọn khóa học, rồi chọn lớp và buổi học để tải slide, file data và giao bài tập. Tài liệu mở đầu đặt ở cấp khóa học.</p>
+        </div>
+        <CourseBuilder {...teacherPanelProps} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       {isLoading && <Spinner label="Đang tải dữ liệu giảng dạy…" />}
       {isError && <Callout tone="danger" title="Không thể tải dữ liệu lớp học." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Thử lại</Button>} />}
 
-      <CourseBuilder {...teacherPanelProps} />
+      <CourseBuilder {...teacherPanelProps} contentOnly={embedded} />
+      {!embedded && activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />}
 
       {activeSubTab === "notifications" && (
         <NotificationInbox

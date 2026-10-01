@@ -1,6 +1,6 @@
 import { Enrollment, LMSDataStore, Transaction, User } from "../../types";
 
-export type StudentTab = "home" | "catalog" | "learning" | "orders" | "notifications";
+export type StudentTab = "home" | "catalog" | "learning" | "orders" | "notifications" | "extras";
 
 /** What every student screen receives from StudentPanel. */
 export interface StudentViewProps {

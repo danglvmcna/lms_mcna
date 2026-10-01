@@ -4,6 +4,10 @@ import { notificationsRepository } from "../repositories/notifications";
 import { notifyRole } from "../notify";
 import { generateId } from "../ids";
 import { confirmCoursePayment, placeEnrollment, isServiceError } from "./enrollmentService";
+import { sendPaymentConfirmationEmail } from "./email";
+import { sendClassPlacementNotice } from "./placementNotice";
+import { isDirectSale } from "../config";
+import { paymentMayPlace } from "../../operationRules";
 
 export interface SepayWebhookPayload {
   id: number | string;
@@ -382,7 +386,7 @@ export async function processSepayWebhook(
 
     // Auto-place into requested section if student selected one during registration
     const sectionId = matchedTx.requested_section_id;
-    if (sectionId && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
+    if (paymentMayPlace(isDirectSale(), sectionId) && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
       await client.query("SAVEPOINT sepay_placement");
       const placement = await placeEnrollment(client, matchedTx.enrollment_id, sectionId, "lms");
       if (isServiceError(placement)) {
@@ -410,20 +414,29 @@ export async function processSepayWebhook(
   // Trigger cache invalidation callback
   onSuccessfulPayment?.();
 
-  // Send notifications to the learner
+  // Send notifications to the learner. A formal payment-confirmation email is about to be sent
+  // below whenever the student has any email on file, so suppress the generic fallback
+  // notification email in that case to avoid a duplicate send.
+  const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+  const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
+    // Class details (timetable, Zalo group, teacher) go out by email; the in-app message is created below.
+    void sendClassPlacementNotice(pool, { studentId: matchedTx.student_id, sectionId: placedSectionId, notifyInApp: false })
+      .catch(err => console.error("[SePay] placement notice failed:", err));
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   }
 
@@ -432,6 +445,39 @@ export async function processSepayWebhook(
     relatedEntityType: "transaction",
     relatedEntityId: matchedTx.id
   }).catch(err => console.error("[notify] failed to notify admin on sepay payment:", err));
+
+  void (async () => {
+    try {
+      const student = (await pool.query("SELECT name, email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+      if (!student?.email) return;
+
+      let sectionCode: string | null = null;
+      let teacherName: string | null = null;
+      if (placedSectionId) {
+        const sec = (await pool.query(
+          `SELECT cs.section_code, u.name AS teacher_name
+           FROM course_sections cs
+           LEFT JOIN users u ON u.id = cs.teacher_id
+           WHERE cs.id = $1`,
+          [placedSectionId]
+        )).rows[0];
+        sectionCode = sec?.section_code || null;
+        teacherName = sec?.teacher_name || null;
+      }
+
+      await sendPaymentConfirmationEmail({
+        to: student.email,
+        name: student.name || "Học viên",
+        courseTitle: matchedTx.course_title,
+        amount: receivedAmount,
+        transactionId: matchedTx.id,
+        sectionCode,
+        teacherName
+      });
+    } catch (emailErr) {
+      console.error("[SePay] Failed to send payment confirmation email:", emailErr);
+    }
+  })();
 
   return {
     success: true,

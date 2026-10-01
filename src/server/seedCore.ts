@@ -234,7 +234,7 @@ export async function seedAuthUsers(db: Queryable) {
 
   // Learners created by an admin get a school mailbox; backfill the ones still missing it.
   const unprovisionedStudents = (await db.query(
-    "SELECT id, name FROM users WHERE role = 'student' AND (school_email IS NULL OR email_provisioned = false)"
+    "SELECT id, name FROM users WHERE role = 'student' AND COALESCE(signup_source, 'admin') = 'admin' AND (school_email IS NULL OR email_provisioned = false)"
   )).rows;
   if (unprovisionedStudents.length === 0) return;
 

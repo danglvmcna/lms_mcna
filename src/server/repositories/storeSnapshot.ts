@@ -1,6 +1,7 @@
 import { getInitialStore } from "../../store";
 import { Course, Enrollment, LessonProgress, User } from "../../types";
 import { Queryable } from "../db";
+import { isDirectSale } from "../config";
 import { assignmentFromRow, courseFromRow, courseSectionFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, sessionMaterialFromRow, submissionFromRow, toPublicUser } from "../mappers";
 
 // In-memory cache variables to optimize server performance
@@ -74,7 +75,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
     db.query("SELECT * FROM forum_replies"),
     db.query("SELECT * FROM forum_posts"),
     db.query("SELECT * FROM teacher_attendance"),
-    db.query("SELECT * FROM session_materials ORDER BY session_id, sort_order, created_at")
+    db.query("SELECT * FROM session_materials ORDER BY session_id NULLS FIRST, category, sort_order, created_at")
   ]);
 
   const users = usersRes.rows.map(toPublicUser);
@@ -117,7 +118,7 @@ export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = fals
   const transactions = transactionsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, courseId: row.course_id || "", amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || undefined, processedBy: row.processed_by || undefined, notes: row.notes || undefined }));
 
   const courseSections = courseSectionsRes.rows.map(courseSectionFromRow);
-  const courseRegistrations = courseRegistrationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
+  const courseRegistrations = courseRegistrationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake), placementEmailStatus: row.placement_email_status || undefined, placementEmailAt: row.placement_email_at || undefined }));
   const certificates = certificatesRes.rows.map(row => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
 
   const forumReplies = forumRepliesRes.rows.map(row => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
@@ -206,19 +207,44 @@ export function limitStoreForRole(store: any, user: User) {
     };
   }
 
+  // Class manager: everything needed to run courses, classes and placements, but no system
+  // accounts (other admins/managers) and no audit trail.
+  if (user.role === "manager") {
+    return {
+      ...store,
+      users: store.users
+        .filter((item: User) => item.id === user.id || item.role === "student" || item.role === "teacher")
+        .map(safeUser),
+      auditLogs: [],
+      systemEvents: [],
+      notifications: (store.notifications || []).filter((item: any) => item.userId === user.id)
+    };
+  }
+
   if (user.role === "teacher") {
-    const teacherCourseIds = new Set(store.courses.filter((course: Course) => course.teacherId === user.id).map((course: Course) => course.id));
-    const visibleEnrollments = store.enrollments.filter((item: Enrollment) => teacherCourseIds.has(item.courseId));
+    const directSale = isDirectSale();
+    // A teacher works on the courses they own and on the classes assigned to them. In a course they
+    // only teach a class of, they see that class: its sessions, its learners and their work.
+    const ownedCourseIds = new Set<string>(store.courses.filter((course: Course) => course.teacherId === user.id).map((course: Course) => course.id));
+    const mySectionList = (store.courseSections || []).filter((cs: any) => cs.teacherId === user.id);
+    const mySections = new Set<string>(mySectionList.map((cs: any) => cs.id));
+    const teacherCourseIds = new Set<string>([...ownedCourseIds, ...mySectionList.map((cs: any) => cs.courseId)]);
+    const sectionCourse = new Map<string, string>(mySectionList.map((cs: any) => [cs.id, cs.courseId]));
+    const classStudentKeys = new Set<string>((store.courseRegistrations || [])
+      .filter((registration: any) => mySections.has(registration.sectionId) && registration.status === 'registered')
+      .map((registration: any) => `${sectionCourse.get(registration.sectionId)}|${registration.studentId}`));
+    const visibleEnrollments = store.enrollments.filter((item: Enrollment) =>
+      (!directSale && ownedCourseIds.has(item.courseId)) || classStudentKeys.has(`${item.courseId}|${item.studentId}`));
+    const visibleEnrollmentIds = new Set(visibleEnrollments.map((item: Enrollment) => item.id));
     const visibleStudentIds = new Set(visibleEnrollments.map((item: Enrollment) => item.studentId));
-    const mySections = new Set((store.courseSections || [])
-      .filter((cs: any) => cs.teacherId === user.id)
-      .map((cs: any) => cs.id)
-    );
-    const visibleQuizIds = new Set(store.quizzes.filter((quiz: any) => teacherCourseIds.has(quiz.courseId)).map((quiz: any) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments.filter((assignment: any) => teacherCourseIds.has(assignment.courseId)).map((assignment: any) => assignment.id));
     const visibleSessionIds = new Set((store.attendanceSessions || [])
-      .filter((session: any) => teacherCourseIds.has(session.courseId) || mySections.has(session.sectionId))
+      .filter((session: any) => (!directSale && ownedCourseIds.has(session.courseId)) || mySections.has(session.sectionId))
       .map((session: any) => session.id));
+    const inScope = (item: any) => item.sessionId ? visibleSessionIds.has(item.sessionId) : ownedCourseIds.has(item.courseId);
+    const visibleQuizzes = store.quizzes.filter(inScope);
+    const visibleQuizIds = new Set(visibleQuizzes.map((quiz: any) => quiz.id));
+    const visibleAssignments = store.assignments.filter(inScope);
+    const visibleAssignmentIds = new Set(visibleAssignments.map((assignment: any) => assignment.id));
     const visibleUserIds = new Set<string>([user.id]);
     visibleStudentIds.forEach((studentId: any) => visibleUserIds.add(studentId));
     return {
@@ -227,53 +253,67 @@ export function limitStoreForRole(store: any, user: User) {
       courses: store.courses.filter((course: Course) => teacherCourseIds.has(course.id)),
       lessons: store.lessons.filter((lesson: any) => teacherCourseIds.has(lesson.courseId)),
       enrollments: visibleEnrollments,
-      lessonProgress: store.lessonProgress.filter((item: LessonProgress) => visibleEnrollments.some((enroll: Enrollment) => enroll.id === item.enrollmentId)),
-      quizzes: store.quizzes.filter((quiz: any) => teacherCourseIds.has(quiz.courseId)),
+      lessonProgress: store.lessonProgress.filter((item: LessonProgress) => visibleEnrollmentIds.has(item.enrollmentId)),
+      quizzes: visibleQuizzes,
       questions: store.questions.filter((question: any) => visibleQuizIds.has(question.quizId)),
       quizAttempts: store.quizAttempts.filter((attempt: any) => visibleStudentIds.has(attempt.studentId) && visibleQuizIds.has(attempt.quizId)),
-      assignments: store.assignments.filter((assignment: any) => teacherCourseIds.has(assignment.courseId)),
+      assignments: visibleAssignments,
       submissions: store.submissions.filter((submission: any) => visibleStudentIds.has(submission.studentId) && visibleAssignmentIds.has(submission.assignmentId)),
       attendanceSessions: (store.attendanceSessions || []).filter((session: any) => visibleSessionIds.has(session.id)),
-      sessionMaterials: (store.sessionMaterials || []).filter((material: any) => visibleSessionIds.has(material.sessionId)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material: any) =>
+        material.sessionId ? visibleSessionIds.has(material.sessionId) : teacherCourseIds.has(material.courseId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record: any) => visibleSessionIds.has(record.sessionId) && visibleStudentIds.has(record.studentId)),
       notifications: (store.notifications || []).filter((item: any) => item.userId === user.id),
-      courseSections: (store.courseSections || []).filter((section: any) => mySections.has(section.id)),
-      courseRegistrations: (store.courseRegistrations || []).filter((registration: any) => visibleStudentIds.has(registration.studentId) || mySections.has(registration.sectionId)),
+      courseSections: mySectionList,
+      courseRegistrations: (store.courseRegistrations || []).filter((registration: any) =>
+        mySections.has(registration.sectionId)
+        || (!directSale && visibleStudentIds.has(registration.studentId) && (store.courseSections || []).some((section: any) => section.id === registration.sectionId && ownedCourseIds.has(section.courseId)))),
       teacherAttendance: (store.teacherAttendance || []).filter((ta: any) => ta.teacherId === user.id),
-      certificates: (store.certificates || []).filter((cert: any) => teacherCourseIds.has(cert.courseId)),
-      forumPosts: (store.forumPosts || []).filter((post: any) => teacherCourseIds.has(post.courseId) && (!post.sectionId || mySections.has(post.sectionId)))
+      certificates: (store.certificates || []).filter((cert: any) => visibleEnrollmentIds.has(cert.enrollmentId)),
+      forumPosts: (store.forumPosts || []).filter((post: any) =>
+        post.sectionId ? mySections.has(post.sectionId) : ownedCourseIds.has(post.courseId))
     };
   }
 
   if (user.role === "student") {
+    // Direct sale: the account only ever shows what MCNA placed the learner in (no catalogue to self-enroll from).
+    const directSale = isDirectSale();
     const myEnrollments = store.enrollments.filter((item: Enrollment) => item.studentId === user.id);
     const myCourseIds = new Set(myEnrollments.map((item: Enrollment) => item.courseId));
     const activeCourseIds = new Set(myEnrollments
       .filter((item: Enrollment) => item.status === "active" || item.status === "completed")
       .map((item: Enrollment) => item.courseId));
-    const publicCourseIds = new Set(store.courses
+    const publicCourseIds = new Set(directSale ? [] : store.courses
       .filter((course: Course) => course.status === "published")
       .map((course: Course) => course.id));
     const visibleCourseIds = new Set([...publicCourseIds, ...myCourseIds]);
     const visibleQuizzes = store.quizzes.filter((quiz: any) => activeCourseIds.has(quiz.courseId));
     const visibleQuizIds = new Set(visibleQuizzes.map((quiz: any) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments
-      .filter((assignment: any) => activeCourseIds.has(assignment.courseId))
-      .map((assignment: any) => assignment.id));
     const myRegisteredSections = new Set((store.courseRegistrations || [])
       .filter((cr: any) => cr.studentId === user.id && cr.status === "registered")
       .map((cr: any) => cr.sectionId)
     );
+    // Courses where the learner holds a seat in a class: only these show their opening materials.
+    const placedCourseIds = new Set((store.courseSections || [])
+      .filter((section: any) => myRegisteredSections.has(section.id) && activeCourseIds.has(section.courseId))
+      .map((section: any) => section.courseId));
     const visibleSessionIds = new Set((store.attendanceSessions || [])
       .filter((session: any) => activeCourseIds.has(session.courseId) && (!session.sectionId || myRegisteredSections.has(session.sectionId)))
       .map((session: any) => session.id));
-    const visibleTeacherIds = new Set(store.courses
-      .filter((course: Course) => visibleCourseIds.has(course.id))
-      .map((course: Course) => course.teacherId));
+    // Homework set for another class's session is not this learner's homework.
+    const visibleAssignmentIds = new Set(store.assignments
+      .filter((assignment: any) => activeCourseIds.has(assignment.courseId) && (!assignment.sessionId || visibleSessionIds.has(assignment.sessionId)))
+      .map((assignment: any) => assignment.id));
+    const visibleTeacherIds = new Set([
+      ...store.courses.filter((course: Course) => visibleCourseIds.has(course.id)).map((course: Course) => course.teacherId),
+      ...(store.courseSections || []).filter((section: any) => myRegisteredSections.has(section.id)).map((section: any) => section.teacherId)
+    ]);
     return {
       ...baseScopedStore(),
       users: store.users.filter((item: User) => item.id === user.id || visibleTeacherIds.has(item.id)).map(safeUser),
-      courses: store.courses.filter((course: Course) => visibleCourseIds.has(course.id)),
+      courses: store.courses
+        .filter((course: Course) => visibleCourseIds.has(course.id))
+        .map((course: Course) => placedCourseIds.has(course.id) ? course : { ...course, welcomeLetter: undefined }),
       lessons: store.lessons
         .filter((lesson: any) => visibleCourseIds.has(lesson.courseId))
         .map((lesson: any) => activeCourseIds.has(lesson.courseId) ? lesson : sanitizeLessonPreview(lesson)),
@@ -285,13 +325,14 @@ export function limitStoreForRole(store: any, user: User) {
       submissions: store.submissions.filter((item: any) => item.studentId === user.id),
       assignments: store.assignments.filter((item: any) => visibleAssignmentIds.has(item.id)),
       attendanceSessions: (store.attendanceSessions || []).filter((session: any) => visibleSessionIds.has(session.id)).map(sanitizeAttendanceSession),
-      sessionMaterials: (store.sessionMaterials || []).filter((material: any) => visibleSessionIds.has(material.sessionId)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material: any) =>
+        material.sessionId ? visibleSessionIds.has(material.sessionId) : placedCourseIds.has(material.courseId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record: any) => record.studentId === user.id),
       notifications: store.notifications.filter((item: any) => item.userId === user.id),
       transactions: (store.transactions || []).filter((item: any) => item.studentId === user.id),
-      // Every open class is listed for registration, but meeting/group links only reach learners placed in that class.
+      // Self-service lists every open class for registration; meeting/group links only reach learners placed in that class.
       courseSections: (store.courseSections || [])
-        .filter((section: any) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id))
+        .filter((section: any) => myRegisteredSections.has(section.id) || (!directSale && visibleCourseIds.has(section.courseId)))
         .map((section: any) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: undefined, groupChatUrl: undefined }),
       courseRegistrations: (store.courseRegistrations || []).filter((item: any) => item.studentId === user.id),
       teacherAttendance: (store.teacherAttendance || []).filter((item: any) => activeCourseIds.has(item.courseId) && (!item.sectionId || myRegisteredSections.has(item.sectionId))),
