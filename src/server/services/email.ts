@@ -1,32 +1,23 @@
 import nodemailer from "nodemailer";
+import { getSupportPhone } from "../config";
 import { Queryable } from "../db";
 import fs from "fs";
 import path from "path";
 
 const getSmtpConfig = () => ({
-  host: process.env.SMTP_HOST || "",
+  host: (process.env.SMTP_HOST || "").trim(),
   port: Number(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || "",
-  pass: process.env.SMTP_PASS || "",
-  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <${process.env.SMTP_USER || "noreply@mcna.vn"}>`,
-  testReceiver: process.env.TEST_RECEIVER_EMAIL || "",
-  // Where the "open the LMS" button in notification emails points.
-  appUrl: (process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms-mcna.vercel.app").trim()
+  user: (process.env.SMTP_USER || "").trim(),
+  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
+  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
+  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
+  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
 });
-
-function escapeHtml(value: string): string {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 const BANK_ACCOUNT_NUMBER = "099162438104";
 const BANK_NAME = "MB Bank (Ngân hàng Quân Đội)";
 const ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
-const getAppUrl = () => getSmtpConfig().appUrl;
+const getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
 
 export const isPlaceholderSmtp = () => {
   const config = getSmtpConfig();
@@ -44,15 +35,26 @@ async function getTransporter(): Promise<nodemailer.Transporter | null> {
   const config = getSmtpConfig();
   if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
     if (!transporter) {
-      transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.port === 465,
-        auth: {
-          user: config.user,
-          pass: config.pass,
-        },
-      });
+      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
+      transporter = nodemailer.createTransport(
+        isGmail
+          ? {
+              service: "gmail",
+              auth: {
+                user: config.user,
+                pass: config.pass,
+              },
+            }
+          : {
+              host: config.host,
+              port: config.port,
+              secure: config.port === 465,
+              auth: {
+                user: config.user,
+                pass: config.pass,
+              },
+            }
+      );
     }
     return transporter;
   }
@@ -120,8 +122,8 @@ function renderBaseLayout(title: string, bodyContent: string): string {
       </div>
       <div class="footer">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">HỌC VIỆN CÔNG NGHỆ MCNA</p>
-        <p style="margin: 0 0 4px 0;">Hotline / Hỗ trợ học vụ: Ban Đào tạo MCNA · Website: <a href="${escapeHtml(getAppUrl())}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(getAppUrl().replace(/^https?:\/\//, ''))}</a></p>
-        <p style="margin: 0; color: #94a3b8;">© ${new Date().getFullYear()} MCNA Technology School. Mọi quyền được bảo lưu. Vui lòng không trả lời thư này, cần hỗ trợ hãy nhắn MCNA qua Zalo 0939 866 825.</p>
+        <p style="margin: 0 0 4px 0;">Hotline / Hỗ trợ học vụ: ${getSupportPhone()} · Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, '')}</a></p>
+        <p style="margin: 0; color: #94a3b8;">© ${new Date().getFullYear()} MCNA Technology School. Mọi quyền được bảo lưu.</p>
       </div>
     </div>
   </div>
@@ -129,7 +131,10 @@ function renderBaseLayout(title: string, bodyContent: string): string {
 </html>`;
 }
 
-async function dispatchEmail(to: string, name: string, subject: string, html: string, text: string) {
+/** sent: handed to SMTP; mock: SMTP is not configured, written to scratch/emails.log; failed: SMTP rejected it. */
+export type EmailDeliveryStatus = "sent" | "mock" | "failed";
+
+export async function dispatchEmail(to: string, name: string, subject: string, html: string, text: string): Promise<EmailDeliveryStatus> {
   const config = getSmtpConfig();
   let toEmail = to;
   if (config.testReceiver && !config.testReceiver.includes("your_real_email")) {
@@ -140,7 +145,7 @@ async function dispatchEmail(to: string, name: string, subject: string, html: st
   const activeTransporter = await getTransporter();
   if (!activeTransporter) {
     logEmailMock(toEmail, name, subject, html);
-    return;
+    return "mock";
   }
 
   try {
@@ -152,9 +157,188 @@ async function dispatchEmail(to: string, name: string, subject: string, html: st
       text,
     });
     console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
+    return "sent";
   } catch (err) {
     console.warn(`[Email Service] SMTP dispatch failed, fallback to mock log:`, err);
     logEmailMock(toEmail, name, subject, html);
+    return "failed";
+  }
+}
+
+const escapeHtml = (value: unknown) => String(value ?? "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#39;");
+
+const safeHttpUrl = (value?: string | null) => {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+};
+
+const infoRow = (label: string, value: string, valueStyle = "font-weight: 700; color: #0f172a;") => `
+          <tr>
+            <td style="color: #64748b; padding: 5px 0; vertical-align: top; width: 38%;">${label}</td>
+            <td style="${valueStyle} text-align: right; padding: 5px 0;">${value}</td>
+          </tr>`;
+
+export interface ClassPlacementEmailParams {
+  to: string;
+  name: string;
+  courseTitle: string;
+  sectionCode: string;
+  scheduleText?: string | null;
+  room?: string | null;
+  openingDate?: string | null;
+  numberOfSessions?: number | null;
+  teacherName?: string | null;
+  groupChatUrl?: string | null;
+  supportPhone: string;
+  // The account still has the default password: remind the learner about the first sign-in.
+  firstLoginPending?: boolean;
+}
+
+/**
+ * Tells a learner which class they were placed in: class name, timetable, Zalo group, teacher and support phone.
+ */
+export async function sendClassPlacementEmail(params: ClassPlacementEmailParams): Promise<EmailDeliveryStatus> {
+  try {
+    const subject = `[MCNA] Thông tin xếp lớp ${params.sectionCode} – ${params.courseTitle}`;
+    const zaloUrl = safeHttpUrl(params.groupChatUrl);
+    const schedule = String(params.scheduleText || "").trim() || "MCNA sẽ thông báo trong nhóm lớp";
+    const teacher = String(params.teacherName || "").trim() || "Đang cập nhật";
+    const appUrl = getAppUrl();
+
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Chào ${escapeHtml(params.name)},</p>
+      <p>MCNA đã xếp bạn vào lớp của khóa học <strong>${escapeHtml(params.courseTitle)}</strong>. Dưới đây là thông tin lớp của bạn:</p>
+
+      <div class="success-box">
+        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          THÔNG TIN LỚP HỌC
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("Tên lớp:", escapeHtml(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
+          ${params.openingDate ? infoRow("Ngày khai giảng:", escapeHtml(params.openingDate)) : ""}
+          ${infoRow("Lịch học:", escapeHtml(schedule))}
+          ${params.room ? infoRow("Hình thức / phòng học:", escapeHtml(params.room), "font-weight: 600; color: #334155;") : ""}
+          ${params.numberOfSessions ? infoRow("Số buổi:", `${Number(params.numberOfSessions)} buổi`, "font-weight: 600; color: #334155;") : ""}
+          ${infoRow("Giảng viên phụ trách:", escapeHtml(teacher))}
+          ${infoRow("Số điện thoại hỗ trợ:", escapeHtml(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <div class="bank-box">
+        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NHÓM ZALO CỦA LỚP</div>
+        ${zaloUrl ? `
+        <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">Mọi thông báo của lớp và trao đổi với giảng viên diễn ra trong nhóm Zalo. Bạn tham gia nhóm trước buổi khai giảng nhé.</p>
+        <div style="text-align: center;">
+          <a href="${escapeHtml(zaloUrl)}" class="btn" target="_blank" style="background-color: #0068ff;">Tham gia nhóm Zalo lớp</a>
+        </div>
+        <p style="font-size: 11px; color: #64748b; margin: 10px 0 0 0; word-break: break-all; text-align: center;">${escapeHtml(zaloUrl)}</p>
+        ` : `
+        <p style="font-size: 13px; color: #334155; margin: 0;">Link nhóm Zalo sẽ được MCNA gửi cho bạn trước buổi khai giảng. Nếu cần sớm hơn, bạn gọi số hỗ trợ ${escapeHtml(params.supportPhone)}.</p>
+        `}
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        Lớp học đã hiển thị trong tài khoản MCNA LMS của bạn (đăng nhập bằng email <strong>${escapeHtml(params.to)}</strong>). Tại đó có tài liệu mở đầu, slide, file data và bài tập về nhà của từng buổi.
+      </p>
+      ${params.firstLoginPending ? `
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        Lần đăng nhập đầu tiên, bạn dùng mật khẩu mặc định trong email "Tài khoản học viên" MCNA đã gửi, sau đó đặt mật khẩu của riêng bạn. Nếu không tìm thấy, bạn chọn "Quên mật khẩu" ở trang đăng nhập.
+      </p>` : ""}
+
+      <div class="btn-container">
+        <a href="${escapeHtml(appUrl)}" class="btn btn-green" target="_blank">Vào lớp học trên MCNA LMS</a>
+      </div>
+    `;
+
+    const plainText = [
+      `Chào ${params.name},`,
+      "",
+      `MCNA đã xếp bạn vào lớp của khóa học "${params.courseTitle}".`,
+      `Tên lớp: ${params.sectionCode}`,
+      params.openingDate ? `Ngày khai giảng: ${params.openingDate}` : "",
+      `Lịch học: ${schedule}`,
+      params.room ? `Hình thức / phòng học: ${params.room}` : "",
+      params.numberOfSessions ? `Số buổi: ${params.numberOfSessions}` : "",
+      `Giảng viên phụ trách: ${teacher}`,
+      zaloUrl ? `Nhóm Zalo của lớp: ${zaloUrl}` : "Link nhóm Zalo sẽ được MCNA gửi trước buổi khai giảng.",
+      `Số điện thoại hỗ trợ: ${params.supportPhone}`,
+      "",
+      `Đăng nhập MCNA LMS bằng email ${params.to} tại: ${appUrl}`
+    ].filter(line => line !== "").join("\n");
+
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendClassPlacementEmail error:", err);
+    return "failed";
+  }
+}
+
+export interface StudentAccountEmailParams {
+  to: string;
+  name: string;
+  password: string;
+  courseTitles: string[];
+  supportPhone: string;
+}
+
+/** Login details for an account created from the paid list: personal email plus the default password. */
+export async function sendStudentAccountEmail(params: StudentAccountEmailParams): Promise<EmailDeliveryStatus> {
+  try {
+    const subject = "[MCNA] Tài khoản học viên MCNA LMS của bạn";
+    const appUrl = getAppUrl();
+    const courses = params.courseTitles.filter(Boolean);
+    const courseText = courses.length ? ` khóa học <strong>${courses.map(escapeHtml).join(", ")}</strong>` : " khóa học";
+
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Chào ${escapeHtml(params.name)},</p>
+      <p>Cảm ơn bạn đã đăng ký${courseText} tại <strong>Học Viện Công Nghệ MCNA</strong>. Tài khoản học viên của bạn trên MCNA LMS đã sẵn sàng:</p>
+
+      <div class="info-box">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("Email đăng nhập:", escapeHtml(params.to))}
+          ${infoRow("Mật khẩu mặc định:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đặt mật khẩu của riêng bạn.
+      </p>
+      <p style="font-size: 14px; color: #334155;">
+        Lớp học sẽ xuất hiện trong tài khoản ngay khi MCNA xếp lớp xong. Khi đó bạn sẽ nhận thêm một email với tên lớp, lịch học, nhóm Zalo và giảng viên phụ trách.
+      </p>
+      <p style="font-size: 13px; color: #475569;">Cần hỗ trợ, bạn gọi <strong>${escapeHtml(params.supportPhone)}</strong>.</p>
+
+      <div class="btn-container">
+        <a href="${escapeHtml(appUrl)}" class="btn" target="_blank">Đăng nhập MCNA LMS</a>
+      </div>
+    `;
+
+    const plainText = [
+      `Chào ${params.name},`,
+      "",
+      `Tài khoản học viên MCNA LMS của bạn đã sẵn sàng${courses.length ? ` (khóa học: ${courses.join(", ")})` : ""}.`,
+      `Email đăng nhập: ${params.to}`,
+      `Mật khẩu mặc định: ${params.password}`,
+      "Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đặt mật khẩu của riêng bạn.",
+      "Lớp học sẽ xuất hiện trong tài khoản khi MCNA xếp lớp xong.",
+      `Số điện thoại hỗ trợ: ${params.supportPhone}`,
+      "",
+      `Đăng nhập tại: ${appUrl}`
+    ].join("\n");
+
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendStudentAccountEmail error:", err);
+    return "failed";
   }
 }
 
@@ -188,7 +372,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
       : `[MCNA] Xác nhận đăng ký thành công khóa học: ${params.courseTitle}`;
 
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(params.name)},</p>
       <p>Cảm ơn bạn đã đăng ký khóa học tại <strong>Học Viện Công Nghệ MCNA</strong>. Đơn đăng ký học tập của bạn đã được ghi nhận trên hệ thống.</p>
 
       <div class="info-box">
@@ -198,11 +382,11 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Khóa học:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${safeCourseTitle}</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${escapeHtml(params.courseTitle)}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Lớp học phần:</td>
-            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${safeSectionCode}</td>
+            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${escapeHtml(params.sectionCode || "Đang xếp lớp")}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Học phí:</td>
@@ -293,7 +477,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
     const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
 
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(params.name)},</p>
       <p>Học Viện Công Nghệ MCNA xin trân trọng thông báo: Khoản thanh toán học phí của bạn đã được <strong>xác nhận thành công</strong>! Khóa học của bạn đã được kích hoạt trên hệ thống.</p>
 
       <div class="success-box">
@@ -303,7 +487,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           <tr>
             <td style="color: #475569; padding: 5px 0;">Khóa học:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${safeCourseTitle}</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.courseTitle)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Số tiền đã thanh toán:</td>
@@ -311,7 +495,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Mã giao dịch:</td>
-            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${safeTransactionId}</td>
+            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${escapeHtml(params.transactionId || "TX-" + Date.now())}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Thời gian xác nhận:</td>
@@ -319,12 +503,12 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Lớp học phần:</td>
-            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${safeSectionCode}</td>
+            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml(params.sectionCode || "Đang xếp lớp")}</td>
           </tr>
           ${safeTeacherName ? `
           <tr>
             <td style="color: #475569; padding: 5px 0;">Giảng viên phụ trách:</td>
-            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${safeTeacherName}</td>
+            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.teacherName)}</td>
           </tr>` : ""}
           <tr>
             <td style="color: #475569; padding: 5px 0;">Trạng thái khóa học:</td>
@@ -359,10 +543,10 @@ export async function sendEmailDirect(recipientEmail: string, recipientName: str
     const safeName = escapeHtml(recipientName);
     const safeMessage = escapeHtml(message);
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(recipientName)},</p>
       <p>Hệ thống Học Viện Công Nghệ MCNA xin gửi đến bạn thông báo mới:</p>
       <div class="info-box" style="font-size: 14px; color: #1e293b; line-height: 1.6;">
-        ${safeMessage}
+        ${escapeHtml(message).replace(/\r?\n/g, "<br>")}
       </div>
       <p>Vui lòng đăng nhập vào hệ thống để xem chi tiết.</p>
       <div class="btn-container">

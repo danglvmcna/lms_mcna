@@ -47,6 +47,13 @@ import CourseSectionManager from "./CourseSectionManager";
 import SendNotificationModal from "./admin/SendNotificationModal";
 import SystemStatusCard from "./admin/SystemStatusCard";
 import { Avatar, Badge, Button, Callout, Card, cx, Dialog, EmptyState, PageHeader, SearchField, SectionTitle, Segmented, Spinner, StatTile, useToast } from "./ui";
+import ClassPlacementManager from "./admin/ClassPlacementManager";
+import OperationsWorkspace from "./operations/OperationsWorkspace";
+import SalesWorkspace from "./operations/SalesWorkspace";
+import { useAppConfig } from "../appConfig";
+const ClassContentManager = React.lazy(() => import("./TeacherPanel"));
+type StaffRole = "student" | "teacher" | "manager" | "admin";
+type AdminTab = "overview" | "placement" | "orders" | "course_section_mgmt" | "content" | "users" | "audit" | "notifications" | "operations" | "sales";
 
 interface AdminPanelProps {
   currentUser: User;
@@ -72,6 +79,14 @@ function generateClientTemporaryPassword() {
 export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, setActiveSubTab }: AdminPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
   const toast = useToast();
+  const isSystemAdmin = currentUser.role === "admin";
+  const isDirectSale = useAppConfig().salesMode === "direct";
+  const enrollmentTab = isDirectSale || !isSystemAdmin ? "placement" : "orders";
+  const [contentTab, setContentTab] = useState("courses");
+  useEffect(() => {
+    if ((!isSystemAdmin && ["users", "audit", "orders"].includes(activeSubTab)) || (isDirectSale && activeSubTab === "orders")) setActiveSubTab("placement");
+    if (activeSubTab === "sales" && !isSystemAdmin && !currentUser.canManageSales) setActiveSubTab("placement");
+  }, [activeSubTab, isSystemAdmin, isDirectSale, currentUser.canManageSales]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -87,11 +102,13 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
         text.includes("đăng ký khóa học") ||
         text.includes("thanh toán")
       ) {
-        setActiveSubTab("orders");
+        setActiveSubTab(enrollmentTab);
       } else if (
-        relatedEntityType === "user" ||
-        text.includes("tài khoản") ||
-        text.includes("học viên mới")
+        isSystemAdmin && (
+          relatedEntityType === "user" ||
+          text.includes("tài khoản") ||
+          text.includes("học viên mới")
+        )
       ) {
         setActiveSubTab("users");
       } else if (
@@ -101,7 +118,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
         text.includes("mở thêm lớp")
       ) {
         setActiveSubTab("course_section_mgmt");
-      } else if (relatedEntityType === "audit") {
+      } else if (relatedEntityType === "audit" && isSystemAdmin) {
         setActiveSubTab("audit");
       } else {
         setActiveSubTab("notifications");
@@ -109,7 +126,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, []);
+  }, [enrollmentTab, isSystemAdmin]);
 
   // Existing User modals states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -118,7 +135,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin">("student");
+  const [newUserRole, setNewUserRole] = useState<StaffRole>("student");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showSendNotifModal, setShowSendNotifModal] = useState(false);
 
@@ -128,7 +145,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
 
   // Search & Filter flags for users registry
   const [userSearch, setUserSearch] = useState("");
-  const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "admin">("student");
+  const [userDirTab, setUserDirTab] = useState<StaffRole>("student");
   const [auditSearch, setAuditSearch] = useState("");
   const [auditFilterAction, setAuditFilterAction] = useState("all");
   const [userPage, setUserPage] = useState(1);
@@ -182,20 +199,21 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
   };
 
   useEffect(() => {
-    if (activeSubTab === "audit") {
+    if (isSystemAdmin && activeSubTab === "audit") {
       loadCrmOutbox();
     }
-  }, [activeSubTab]);
+  }, [activeSubTab, isSystemAdmin]);
 
   const triggerToast = (msg: string) => toast(msg);
 
   useEffect(() => {
     let cancelled = false;
+    if (!isSystemAdmin) { setOperationsSummary(null); return; }
     api.getOperationsSummary()
       .then(summary => { if (!cancelled) setOperationsSummary(summary); })
       .catch(() => { if (!cancelled) setOperationsSummary(null); });
     return () => { cancelled = true; };
-  }, [store.enrollments.length, store.submissions.length, store.courses.length]);
+  }, [isSystemAdmin, store.enrollments.length, store.submissions.length, store.courses.length]);
 
   // Create User Action
   const handleCreateUserSubmit = async (e: React.FormEvent) => {
@@ -270,7 +288,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
     const usersToImport: Array<{
       name: string;
       email: string;
-      role: "student" | "teacher" | "admin";
+      role: StaffRole;
     }> = [];
     const seenEmails = new Set<string>();
     let localErrorCount = 0;
@@ -289,7 +307,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
       const [name, email, role] = columns;
       const cleanEmail = email.toLowerCase().trim();
       const cleanRole = role.toLowerCase().trim();
-      const roleValidated = ["student", "teacher", "admin"].includes(cleanRole);
+      const roleValidated = ["student", "teacher", "manager", "admin"].includes(cleanRole);
       const emailUnique = !seenEmails.has(cleanEmail) && !store.users.some(u => u.email.toLowerCase() === cleanEmail);
 
       if (!name.trim() || !cleanEmail.includes("@") || !roleValidated || !emailUnique) {
@@ -301,7 +319,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
       usersToImport.push({
         name: name.trim(),
         email: cleanEmail,
-        role: cleanRole as "student" | "teacher" | "admin"
+        role: cleanRole as StaffRole
       });
     });
 
@@ -379,7 +397,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
   };
 
   const handleUpdateUserRole = (userId: string, newRole: User["role"]) => {
-    const allowedRoles: User["role"][] = ["student", "teacher", "admin"];
+    const allowedRoles: User["role"][] = ["student", "teacher", "manager", "admin"];
     if (!allowedRoles.includes(newRole)) return;
     
     api.setUserRole(userId, newRole)
@@ -440,23 +458,35 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = filteredUsers.slice((userPage - 1) * itemsPerPage, userPage * itemsPerPage);
   const pendingEnrollmentsCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending_payment" || enrollment.status === "pending").length;
+  const waitingPlacementCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending").length;
   const filteredAuditLogs = (store.auditLogs || []).filter(log => {
     const query = auditSearch.toLowerCase();
     const matchesSearch = !query || [log.action, log.userId, log.target, log.detail].some(value => value.toLowerCase().includes(query));
     return matchesSearch && (auditFilterAction === "all" || log.action === auditFilterAction);
   });
-  const adminNavGroups = [
-    { label: "Vận hành", items: [
-      { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
-      { id: "orders", label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount },
-      { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
-    ] },
-    { label: "Hệ thống & tài khoản", items: [
-      { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
-      { id: "audit", label: "Nhật ký hệ thống", icon: Database, count: 0 },
-      { id: "notifications", label: "Thông báo hệ thống", icon: Bell, count: unreadAdminNotificationsCount }
-    ] }
-  ] as const;
+  type NavItem = { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }>; count: number };
+  const operationItems: NavItem[] = [
+    { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
+    { id: "placement", label: "Học viên & Xếp lớp", icon: Users, count: waitingPlacementCount },
+    // The QR self-registration queue only exists while the LMS runs in self-service mode.
+    ...(isSystemAdmin && !isDirectSale ? [{ id: "orders" as AdminTab, label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount }] : []),
+    { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
+    { id: "content", label: "Nội dung lớp học", icon: BookOpen, count: 0 },
+    { id: "operations", label: "Vận hành lớp học", icon: Users, count: 0 },
+    { id: "sales", label: "Tư vấn & Ưu đãi", icon: ShoppingBag, count: 0 }
+  ];
+  const adminNavGroups: Array<{ label: string; items: NavItem[] }> = isSystemAdmin
+    ? [
+        { label: "Vận hành", items: operationItems },
+        { label: "Hệ thống & tài khoản", items: [
+          { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
+          { id: "audit", label: "Nhật ký hệ thống", icon: Database, count: 0 },
+          { id: "notifications", label: "Thông báo hệ thống", icon: Bell, count: unreadAdminNotificationsCount }
+        ] }
+      ]
+    : [
+        { label: "Quản lý lớp", items: [...operationItems, { id: "notifications", label: "Thông báo", icon: Bell, count: unreadAdminNotificationsCount }] }
+      ];
 
   const sortIndicator = (field: string) => (sortField === field ? (sortOrder === "asc" ? "↑" : "↓") : "");
   const SortTh = ({ field, children, className }: { field: string; children: React.ReactNode; className?: string }) => (
@@ -479,7 +509,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
             <StatTile label="Người dùng" value={totalUsersCount} icon={<Users className="h-[18px] w-[18px]" />} />
             <StatTile label="Khóa học" value={totalCoursesCount} icon={<BookOpen className="h-[18px] w-[18px]" />} tone="violet" />
             <StatTile label="Lượt ghi danh" value={totalEnrollmentsCount} icon={<TrendingUp className="h-[18px] w-[18px]" />} tone="emerald" />
-            <StatTile label="Chờ xử lý" value={operationsSummary?.pendingEnrollments ?? pendingEnrollmentsCount} icon={<ClipboardList className="h-[18px] w-[18px]" />} tone="amber" hint="Ghi danh cần duyệt" />
+            <StatTile label="Chờ xử lý" value={operationsSummary?.pendingEnrollments ?? pendingEnrollmentsCount} icon={<ClipboardList className="h-[18px] w-[18px]" />} tone="amber" hint={isDirectSale ? "Học viên chờ xếp lớp" : "Ghi danh cần duyệt"} />
           </div>
 
           <section className="space-y-3">
@@ -488,7 +518,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
               action={<Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)}>Làm mới</Button>}
             />
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Card as="button" type="button" interactive onClick={() => setActiveSubTab("orders")} className="flex items-center gap-4 p-5 text-left">
+              <Card as="button" type="button" interactive onClick={() => setActiveSubTab(enrollmentTab)} className="flex items-center gap-4 p-5 text-left">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><ClipboardList className="h-6 w-6" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold text-slate-900">{(operationsSummary?.pendingEnrollments ?? pendingEnrollmentsCount) || "Không có"} ghi danh chờ xử lý</span>
@@ -496,22 +526,26 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 </span>
                 <ChevronRight className="h-5 w-5 text-slate-300" />
               </Card>
-              <Card as="button" type="button" interactive onClick={() => setActiveSubTab("audit")} className="flex items-center gap-4 p-5 text-left">
+              {isSystemAdmin && <Card as="button" type="button" interactive onClick={() => setActiveSubTab("audit")} className="flex items-center gap-4 p-5 text-left">
                 <span className={cx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", operationsSummary?.crmFailures ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}><Radio className="h-6 w-6" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold text-slate-900">{operationsSummary?.crmFailures ? `${operationsSummary.crmFailures} sự kiện CRM lỗi` : "Đồng bộ CRM ổn định"}</span>
                   <span className="block text-sm text-slate-500">Theo dõi hàng đợi gửi sang CRM</span>
                 </span>
                 <ChevronRight className="h-5 w-5 text-slate-300" />
-              </Card>
+              </Card>}
             </div>
           </section>
 
-          <SystemStatusCard />
+          {isSystemAdmin && <SystemStatusCard />}
         </div>
       )}
 
-      {activeSubTab === "orders" && (
+      {activeSubTab === "placement" && <ClassPlacementManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />}
+      {activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />}
+      {activeSubTab === "sales" && (isSystemAdmin || currentUser.canManageSales) && <SalesWorkspace store={store} onChanged={onRefreshData} />}
+      {activeSubTab === "content" && <React.Suspense fallback={<Spinner />}><ClassContentManager currentUser={currentUser} onLogout={() => {}} onRefreshData={onRefreshData} embedded activeSubTab={contentTab} setActiveSubTab={setContentTab} navNonce={0} /></React.Suspense>}
+      {activeSubTab === "orders" && isSystemAdmin && !isDirectSale && (
         <AdminOrdersManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />
       )}
 
@@ -555,7 +589,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
         </Dialog>
       )}
 
-      {activeSubTab === "users" && (
+      {activeSubTab === "users" && isSystemAdmin && (
         <div className="space-y-6">
           <PageHeader
             title="Người dùng"
@@ -564,12 +598,13 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
           />
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <Segmented<"student" | "teacher" | "admin">
+            <Segmented<StaffRole>
               value={userDirTab}
               onChange={value => { setUserDirTab(value); setUserPage(1); }}
               options={[
                 { value: "student", label: "Học viên" },
                 { value: "teacher", label: "Giảng viên" },
+                { value: "manager", label: "Quản lý lớp" },
                 { value: "admin", label: "Quản trị" }
               ]}
             />
@@ -664,7 +699,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
         </div>
       )}
 
-      {activeSubTab === "audit" && (
+      {isSystemAdmin && activeSubTab === "audit" && (
         <div className="space-y-8">
           <PageHeader
             title="Nhật ký & CRM"
@@ -830,6 +865,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                 >
                   <option value="student">Học Viên (Student)</option>
                   <option value="teacher">Giảng Viên (Teacher)</option>
+                  <option value="manager">Quản Lý Lớp (Class manager)</option>
                   <option value="admin">Quản Trị Viên (Admin)</option>
                 </select>
               </div>

@@ -1,7 +1,19 @@
+// "manager" is the class manager (Quản lý lớp): runs courses, classes and placements, but not system accounts.
 export type UserRole =
   | "admin"
+  | "manager"
   | "teacher"
   | "student";
+
+/** direct: accounts and enrollments come from the CRM paid list; self_service: learners sign up and pay by QR. */
+export type SalesMode = "direct" | "self_service";
+
+export interface AppConfig {
+  salesMode: SalesMode;
+  supportPhone: string;
+  // Homework attachments stay view-only for learners until MCNA decides otherwise.
+  allowHomeworkDownload: boolean;
+}
 
 export interface User {
   id: string;
@@ -20,6 +32,7 @@ export interface User {
   mustChangePassword?: boolean;
   signupSource?: "admin" | "self" | "crm";
   crmContactId?: string;
+  canManageSales?: boolean;
 }
 
 export interface Course {
@@ -38,6 +51,7 @@ export interface Course {
   createdAt: string;
   openingDate?: string;
   numberOfLessons?: number;
+  welcomeLetter?: string; // opening letter shown to learners placed in a class; empty means the default letter
 }
 
 export interface Lesson {
@@ -111,6 +125,7 @@ export interface Assignment {
   description: string;
   deadline: string;
   maxScore: number;
+  allowLate?: boolean;
   attachmentUrl?: string;
   lessonId?: string;
   type?: "lesson" | "chapter" | "midterm" | "final";
@@ -205,12 +220,17 @@ export interface AttendanceSession {
   expiresAt?: string;
 }
 
+export type SessionMaterialType = "slide" | "document" | "data" | "youtube" | "link";
+export type IntroMaterialCategory = "reference" | "practice";
+
 export interface SessionMaterial {
   id: string;
-  sessionId: string;
+  sessionId?: string; // absent for a course's opening materials
   sectionId?: string;
   courseId: string;
-  type: "slide" | "document" | "youtube" | "link";
+  // slide/document are view-only for learners; data files are the ones they may download.
+  type: SessionMaterialType;
+  category?: IntroMaterialCategory; // opening materials only
   title: string;
   url?: string; // YouTube or external link; uploaded files are fetched via /api/materials/:id/download
   fileName?: string;
@@ -318,6 +338,8 @@ export interface CourseRegistration {
   isRetake?: boolean;                // true if student previously failed this course
   examBan?: boolean;
   gradePostedAt?: string;
+  placementEmailStatus?: "sent" | "mock" | "failed";
+  placementEmailAt?: string;
 }
 
 

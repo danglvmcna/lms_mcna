@@ -2,11 +2,12 @@ import express from "express";
 import path from "path";
 import multer from "multer";
 import { ZipArchive } from "archiver";
+import ExcelJS from "exceljs";
 import fs from "fs";
 import os from "os";
 
 // Setup multer for file uploads
-let uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "public", "uploads");
+let uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "storage", "uploads");
 try {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -95,29 +96,33 @@ const MATERIAL_MIME_BY_EXT: Record<string, string> = {
   ".csv": "text/csv",
   ".pbix": "application/octet-stream",
   ".zip": "application/zip",
-  ".rar": "application/x-rar-compressed"
+  ".rar": "application/x-rar-compressed",
+  ".json": "application/json",
+  ".txt": "text/plain",
+  ".sql": "text/plain",
+  ".ipynb": "application/x-ipynb+json",
+  ".py": "text/x-python",
+  ".md": "text/markdown"
 };
 const materialUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
     if (MATERIAL_MIME_BY_EXT[ext]) return cb(null, true);
-    const err = new Error("Tài liệu buổi học chỉ nhận tệp .ppt, .pptx, .pdf, .doc, .docx, .xlsx, .xls, .csv, .pbix, .zip, .rar.");
+    const err = new Error("Tài liệu buổi học chỉ nhận slide/tài liệu (.pdf, .ppt, .pptx, .doc, .docx) và file data (.xlsx, .xls, .csv, .pbix, .zip, .rar, .json, .txt, .sql, .ipynb, .py, .md).");
     (err as any).status = 400;
     cb(err);
   },
   limits: { fileSize: MAX_UPLOAD_FILE_BYTES }
 });
-const MATERIAL_FILE_EXTENSIONS: Record<"slide" | "document", Set<string>> = {
-  slide: new Set([".ppt", ".pptx", ".pdf"]),
-  document: new Set([".doc", ".docx", ".pdf", ".xlsx", ".xls", ".csv", ".pbix", ".zip", ".rar"])
-};
+// The paid-customers table is read in memory and never stored.
+const paidTableUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
-import { LMSDataStore, SystemStatus, User } from "./src/types";
+import { IntroMaterialCategory, LMSDataStore, SessionMaterial, User, SystemStatus } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
@@ -169,10 +174,24 @@ import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
 import { getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
 import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src/server/services/email";
+import { getDefaultStudentPassword, getPublicAppConfig, getSupportPhone, isDirectSale } from "./src/server/config";
+import { notifyTeacherOfPlacements, sendClassPlacementNotice } from "./src/server/services/placementNotice";
+import { importPaidEnrollments } from "./src/server/services/paidEnrollmentImport";
+import { importMcnaCatalog, mcnaCatalog } from "./src/server/services/catalogImport";
+import { generateWelcomeLetterDraft } from "./src/server/services/welcomeLetterAi";
+import { FileMaterialType, isFileMaterialType, isPdfFile, learnerMaterialAccess, MATERIAL_EXTENSIONS, resolveUploadType } from "./src/materialAccess";
+import { parsePaidTable } from "./src/paidImport";
+import { paymentMayPlace } from "./src/operationRules";
+import { uploadAccess, validateAttachmentOwner } from "./src/server/services/uploadAccess";
+import { registerOperationsRoutes } from "./src/server/operationsRoutes";
+import { getCertificateEligibility, autoIssueCertificates } from "./src/server/services/certificateEligibility";
+import {runCertificateJob} from './src/server/services/certificateJob';
+import { sendTeacherAssignmentNotice } from "./src/server/services/teacherAssignmentNotice";
+import { removeUnreferencedMaterials } from "./src/server/services/materialReferences";
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
-import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail, hasSmtpConfig, getSmtpUser, getSmtpPass, getSmtpFrom, getTransporter } from "./src/server/emailProvisioning/emailWorker";
+import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail, hasSmtpConfig, getSmtpUser, getSmtpPass, getSmtpFrom, getTransporter, escapeHtml } from "./src/server/emailProvisioning/emailWorker";
 
 dotenv.config();
 
@@ -236,7 +255,9 @@ const UPLOAD_MIME_BY_EXT: Record<string, string> = {
 
 async function handleServeUpload(req: express.Request, res: express.Response) {
   const filename = path.basename(req.params.filename);
-  const localFile = path.join(uploadDir, filename);
+  const privateLocalFile = path.join(uploadDir, filename);
+  const legacyFile = path.join(process.cwd(), "public", "uploads", filename);
+  const localFile = fs.existsSync(privateLocalFile) ? privateLocalFile : legacyFile;
   if (fs.existsSync(localFile)) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     const ext = path.extname(filename).toLowerCase();
@@ -248,7 +269,11 @@ async function handleServeUpload(req: express.Request, res: express.Response) {
   try {
     const download = await materialStorage.getDownload(`uploads/${filename}`, filename, { inline: true });
     if (download.kind === "redirect") {
-      return res.redirect(302, download.url);
+      const remote = await fetch(download.url, { signal: AbortSignal.timeout(60_000) });
+      if (!remote.ok) return res.status(502).json({ error: "Không tải được tệp." });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.type(UPLOAD_MIME_BY_EXT[path.extname(filename).toLowerCase()] || "application/octet-stream").send(Buffer.from(await remote.arrayBuffer()));
     }
     if (download.kind === "buffer") {
       const ext = path.extname(filename).toLowerCase();
@@ -257,7 +282,7 @@ async function handleServeUpload(req: express.Request, res: express.Response) {
       res.setHeader("X-Content-Type-Options", "nosniff");
       const encodedName = encodeURIComponent(filename);
       const asciiName = filename.replace(/[^\x20-\x7E]/g, "_");
-      res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+      if (!res.hasHeader("Content-Disposition")) res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
       return res.send(download.buffer);
     }
     if (download.kind === "local" && fs.existsSync(download.absolutePath)) {
@@ -274,14 +299,29 @@ async function handleServeUpload(req: express.Request, res: express.Response) {
   return res.status(404).json({ error: "Tệp đính kèm không tồn tại hoặc đã bị xóa." });
 }
 
-app.use("/uploads", express.static(uploadDir, {
-  setHeaders: (res) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-  }
-}));
-
-app.get("/uploads/:filename", asyncHandler(handleServeUpload));
-app.get("/api/uploads/:filename", asyncHandler(handleServeUpload));
+// Never let express.static bypass authorization (including legacy files in public/uploads).
+const guardedUpload = asyncHandler(async (req, res, next) => {
+  const filename = path.basename(req.params.filename);
+  const isThumbnail = /\.(png|jpe?g|gif|webp|bmp)$/i.test(filename) && !isDevMockDb && Boolean((await pool.query(`SELECT 1 FROM courses WHERE thumbnail=$1
+    AND NOT EXISTS(SELECT 1 FROM assignments WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM submissions WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM submission_versions WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM session_solutions WHERE attachment_url=$1) LIMIT 1`, [`/uploads/${filename}`])).rowCount);
+  if (isThumbnail) return handleServeUpload(req, res);
+  return requireAuth(req, res, async (error?: any) => {
+    if (error) return next(error);
+    try {
+      const access = await uploadAccess(pool, req.user!, filename, req.get("X-LMS-Viewer") === "1");
+      if (!access.allowed) return res.status(403).json({ error: access.reason });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("Content-Disposition", access.viewOnly ? "inline" : "attachment");
+      return await handleServeUpload(req, res);
+    } catch (err) { next(err); }
+  });
+});
+app.get("/uploads/:filename", guardedUpload);
+app.get("/api/uploads/:filename", guardedUpload);
+app.use("/uploads", (_req, res) => res.status(404).json({ error: "Không tìm thấy tệp." }));
 
 app.post("/api/upload", requireCsrf, requireAuth, upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -295,6 +335,7 @@ app.post("/api/upload", requireCsrf, requireAuth, upload.single("file"), asyncHa
     console.warn("[upload] Persistent storage notice:", persistErr?.message || persistErr);
   }
 
+  if (!isDevMockDb) await pool.query("INSERT INTO private_uploads(filename,owner_id,mime_type) VALUES($1,$2,$3)", [req.file.filename, req.user!.id, req.file.mimetype]);
   res.json({ url: `/uploads/${req.file.filename}` });
 }));
 
@@ -343,7 +384,9 @@ async function createStudentWithTemporaryPassword(
   source: "self" | "crm",
   loginUrl: string
 ): Promise<{ user: User; temporaryPassword: string } | ServiceError> {
-  const temporaryPassword = generateTemporaryPassword();
+  const temporaryPassword = source === "crm" && isDirectSale()
+    ? getDefaultStudentPassword() || generateTemporaryPassword()
+    : generateTemporaryPassword();
   const client = await pool.connect();
   let user: User;
   try {
@@ -729,7 +772,7 @@ async function generateCertificateCode(db: Queryable) {
 }
 
 /** What the learner reads (in the LMS and by email) once MCNA confirms their fee or places them in a class. */
-async function placementNotice(db: Queryable, enrollmentId: string, sectionId: string | null | undefined, feeConfirmed: boolean) {
+async function learnerPlacementSummary(db: Queryable, enrollmentId: string, sectionId: string | null | undefined, feeConfirmed: boolean) {
   const row = (await db.query(
     `SELECT c.title, cs.section_code
        FROM enrollments e
@@ -923,6 +966,9 @@ const scheduleSlotTime = (slot: any, key: "start" | "end") => String(
 
 const scheduleSlotRoom = (slot: any) => String(slot?.room || "").trim();
 
+// "Online (Zoom)" is not a physical room: any number of online classes may run at the same time.
+const isOnlineRoom = (room: string) => /online|zoom|meet|teams|trực tuyến|truc tuyen/i.test(room);
+
 const scheduleSlotDayLabel = (slot: any) => String(slot?.dayOfWeek || slot?.day_of_week || slot?.specificDate || slot?.specific_date || "").trim();
 
 const timeToMinutes = (value: any) => {
@@ -969,14 +1015,14 @@ async function validateCourseSectionScheduleConflicts(db: Queryable, section: Se
     const start = timeToMinutes(scheduleSlotTime(slot, "start"));
     const end = timeToMinutes(scheduleSlotTime(slot, "end"));
     if (start === null || end === null || start >= end) {
-      errors.push(`Invalid class time for ${scheduleSlotDayLabel(slot) || "schedule slot"}: ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`);
+      errors.push(`Giờ học không hợp lệ (${scheduleSlotDayLabel(slot) || "ca học"}): ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}. Giờ bắt đầu phải trước giờ kết thúc, dạng HH:MM.`);
     }
   }
 
   for (let i = 0; i < schedule.length; i++) {
     for (let j = i + 1; j < schedule.length; j++) {
       if (slotsOverlap(schedule[i], schedule[j])) {
-        errors.push(`This class has overlapping schedule slots on ${scheduleSlotDayLabel(schedule[i]) || "the same day"}.`);
+        errors.push(`Lớp có hai ca học trùng giờ vào ${scheduleSlotDayLabel(schedule[i]) || "cùng một ngày"}.`);
       }
     }
   }
@@ -1002,15 +1048,15 @@ async function validateCourseSectionScheduleConflicts(db: Queryable, section: Se
 
         if (existing.teacher_id === section.teacherId) {
           errors.push(
-            `Teacher schedule conflict with class ${existing.section_code} (${existing.course_title || "course"}) on ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
+            `Giảng viên ${existing.teacher_name || ""} trùng lịch dạy với lớp ${existing.section_code} (${existing.course_title || "khóa học"}) vào ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`.replace("  ", " ")
           );
         }
 
         const room = scheduleSlotRoom(slot).toLowerCase();
         const existingRoom = scheduleSlotRoom(existingSlot).toLowerCase();
-        if (room && existingRoom && room === existingRoom) {
+        if (room && existingRoom && room === existingRoom && !isOnlineRoom(room)) {
           errors.push(
-            `Room schedule conflict with class ${existing.section_code} (${existing.course_title || "course"}) in room ${scheduleSlotRoom(slot)} on ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
+            `Phòng ${scheduleSlotRoom(slot)} trùng lịch với lớp ${existing.section_code} (${existing.course_title || "khóa học"}) vào ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
           );
         }
       }
@@ -1321,7 +1367,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
 function dashboardFromStore(store: any, user: User) {
   const scoped = limitStoreForRole(store, user);
-  if (user.role === "admin") {
+  if (user.role === "admin" || user.role === "manager") {
     return {
       ...scoped,
       dashboard: {
@@ -1417,7 +1463,8 @@ function requireInternalJobSecret(req: express.Request, res: express.Response, n
 
 for (const method of ["get", "post"] as const) {
   app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
-    res.json(await runCrmOutboxJob());
+    const delivery=await runCrmOutboxJob();
+    res.json({...delivery,certificates:await runCertificateJob()});
   }));
 }
 
@@ -1431,6 +1478,23 @@ const healthHandler = asyncHandler(async (_req: express.Request, res: express.Re
 
 app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
+
+// Deployment switches the client needs before sign-in (sales model, support phone). No secrets.
+app.get("/api/public/config", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(getPublicAppConfig());
+});
+
+const DIRECT_SALE_SIGNUP_MESSAGE = "LMS không mở tự đăng ký. Tài khoản học viên được MCNA cấp sau khi bạn đăng ký khóa học với bộ phận tư vấn.";
+const DIRECT_SALE_ENROLL_MESSAGE = "Việc đăng ký khóa học do bộ phận tư vấn MCNA thực hiện. Lớp học sẽ hiển thị trong tài khoản khi bạn được xếp lớp.";
+
+/** Blocks the self-service sign-up / self-enrollment routes while the LMS runs in direct-sale mode. */
+function requireSelfService(message: string, code: string) {
+  return (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (isDirectSale()) return res.status(403).json({ error: `${message} Hỗ trợ: ${getSupportPhone()}.`, code });
+    next();
+  };
+}
 
 app.use("/api", requireCsrf);
 
@@ -1535,7 +1599,7 @@ const ACCOUNT_REQUEST_MESSAGE = "Nếu email hợp lệ, thông tin đăng nhậ
 // Outside production the temporary password is returned too, so E2E tests and local QA can log in without a mailbox.
 const exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging" && !process.env.VERCEL;
 
-app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
+app.post("/api/auth/register", requireSelfService(DIRECT_SALE_SIGNUP_MESSAGE, "SELF_SIGNUP_DISABLED"), rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
   const existing = await usersRepository.findAuthByEmail(pool, req.body.email) as DbUserRow | null;
   if (existing) {
     // Same answer as a fresh sign-up so the form cannot be used to discover registered emails.
@@ -1641,7 +1705,10 @@ app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
     res.json(limited);
   } catch (err: any) {
     console.error("[/api/store error]", err);
-    res.status(500).json({ error: err.message || "Internal server error", stack: err.stack });
+    const canExposeDetails = exposeDevSecrets();
+    res.status(500).json(canExposeDetails
+      ? { error: err.message || "Internal server error", stack: err.stack }
+      : { error: "Không tải được dữ liệu. Vui lòng thử lại." });
   }
 }));
 
@@ -1651,7 +1718,8 @@ app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin"]), 
     return res.json({ ...dashboardFromStore(store, req.user!), auditLogs: [] });
   }
   const store = await storeSnapshotFromDb(pool);
-  res.json({ ...dashboardFromStore(store, req.user!), auditLogs: await auditRepository.listRecent(pool, 100) });
+  // The audit trail is for the system admin only.
+  res.json({ ...dashboardFromStore(store, req.user!), auditLogs: req.user!.role === "admin" ? await auditRepository.listRecent(pool, 100) : [] });
 }));
 app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => {
   const store = isDevMockDb ? (devMockStore || getInitialStore()) : (await storeSnapshotFromDb(pool));
@@ -2068,7 +2136,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       transactionId = payment.transactionId;
 
       const sectionId = req.body.sectionId || enrollmentRow.requested_section_id;
-      if (sectionId && !["active", "completed"].includes(enrollmentRow.status)) {
+      if (paymentMayPlace(isDirectSale(), sectionId) && !["active", "completed"].includes(enrollmentRow.status)) {
         // A failed placement (e.g. the class filled up) must not undo the recorded payment.
         await client.query("SAVEPOINT placement");
         const placement = await placeEnrollment(client, enrollmentRow.id, sectionId, "crm");
@@ -2087,20 +2155,9 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       client.release();
     }
 
-    // A formal payment-confirmation email is about to be sent below whenever the student has any
-    // email on file, so suppress the generic fallback notification email to avoid a duplicate send.
-    const crmConfirmStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
-    const willSendCrmPaymentConfirmationEmail = Boolean(crmConfirmStudentEmailRow?.email);
-
     if (placedSectionId) {
-      await notificationsRepository.create(pool, {
-        userId: enrollmentRow.student_id,
-        type: "success",
-        message: await placementNotice(pool, enrollmentRow.id, placedSectionId, true),
-        relatedEntityType: "enrollment",
-        relatedEntityId: enrollmentRow.id,
-        emailFallback: !willSendCrmPaymentConfirmationEmail
-      });
+      await sendClassPlacementNotice(pool, { studentId: enrollmentRow.student_id, sectionId: placedSectionId });
+      await notifyTeacherOfPlacements(pool, placedSectionId, 1);
     }
 
     void (async () => {
@@ -2146,7 +2203,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
 }));
 
 app.get("/api/courses", requireAuth, asyncHandler(async (_req, res) => res.json(await coursesRepository.list(pool))));
-app.post("/api/courses", requireAuth, requireRole(["admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.post("/api/courses", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const body = req.body;
   const course = await coursesRepository.create(pool, {
     title: body.title,
@@ -2168,7 +2225,7 @@ app.post("/api/courses", requireAuth, requireRole(["admin"]), validateBody(schem
   res.status(201).json(course);
 }));
 
-app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const existing = await coursesRepository.findById(pool, req.params.id);
   if (!existing) return res.status(404).json({ error: "Course not found." });
 
@@ -2221,7 +2278,7 @@ app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manage
 
   res.json(course);
 }));
-app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/publish", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const course = await coursesRepository.setStatus(pool, req.params.id, "published");
   if (!course) return res.status(404).json({ error: "Course not found." });
   invalidateStoreCache();
@@ -2248,7 +2305,8 @@ app.post("/api/courses/:id/reject", requireAuth, requireRole(["manager", "admin"
   res.json(course);
 }));
 
-app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+// Deleting a course removes its lessons, classes, grades and payments; kept with the system admin.
+app.delete("/api/courses/:id", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const courseId = req.params.id;
   // Kiểm tra sĩ số sinh viên hoạt động
   const enrollmentsCountRes = await pool.query("SELECT COUNT(*) AS count FROM enrollments WHERE course_id = $1 AND status = 'active'", [courseId]);
@@ -2262,6 +2320,13 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), a
     await client.query("BEGIN");
 
     // Xóa phản hồi diễn đàn liên quan
+    if (isDirectSale()) {
+      await client.query("SELECT id FROM courses WHERE id=$1 FOR UPDATE", [courseId]);
+      const used = await client.query(`SELECT 1 FROM enrollments WHERE course_id=$1
+        UNION ALL SELECT 1 FROM attendance_sessions WHERE course_id=$1 AND taught_at IS NOT NULL
+        UNION ALL SELECT 1 FROM upsell_orders WHERE course_id=$1 LIMIT 1`, [courseId]);
+      if (used.rowCount) throw Object.assign(new Error("Khóa đã có ghi danh, đơn hàng hoặc giờ dạy. Hãy ẩn khóa thay vì xóa lịch sử."), {status:409});
+    }
     await client.query(
       `DELETE FROM forum_replies
        WHERE post_id IN (SELECT id FROM forum_posts WHERE course_id = $1)`,
@@ -2332,7 +2397,7 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), a
   res.json({ ok: true });
 }));
 
-app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
+app.post("/api/lessons", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
   if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, req.body.courseId)) {
     return res.status(403).json({ error: "Permission denied." });
   }
@@ -2342,7 +2407,7 @@ app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin"]), validat
   res.status(201).json(lesson);
 }));
 
-app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
+app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
   const lessonRow = (await pool.query("SELECT course_id FROM lessons WHERE id = $1", [req.params.id])).rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
   if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, lessonRow.course_id)) {
@@ -2355,7 +2420,7 @@ app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), vali
   res.json(lesson);
 }));
 
-app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const lessonRes = await pool.query("SELECT * FROM lessons WHERE id = $1", [req.params.id]);
   const lessonRow = lessonRes.rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
@@ -2370,7 +2435,7 @@ app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), a
 }));
 
 app.get("/api/enrollments", requireAuth, asyncHandler(async (req, res) => res.json(await enrollmentsRepository.listForUser(pool, req.user!))));
-app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), validateBody(schemas.registerEnrollment), asyncHandler(async (req, res) => {
+app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), requireSelfService(DIRECT_SALE_ENROLL_MESSAGE, "SELF_ENROLL_DISABLED"), validateBody(schemas.registerEnrollment), asyncHandler(async (req, res) => {
   const result = await requestEnrollment({
     studentId: req.user!.id,
     courseId: req.body.courseId,
@@ -2402,7 +2467,7 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   res.status(201).json(result.enrollment);
 }));
 // One-click activation from the admin orders screen: record the payment, then place the learner.
-app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const enrollmentId = req.params.id;
   const chosenSectionId = typeof req.body?.sectionId === "string" && req.body.sectionId.trim() ? req.body.sectionId.trim() : undefined;
   const client = await pool.connect();
@@ -2442,30 +2507,25 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
   invalidateStoreCache();
   const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
   const sName = studentUser?.name || studentUser?.email || "Học viên";
-  // A formal payment-confirmation email is about to be sent below whenever the student has any
-  // email on file, so suppress the generic fallback notification email to avoid a duplicate send.
-  await notificationsRepository.create(pool, {
-    userId: studentId,
-    type: "success",
-    message: await placementNotice(pool, enrollmentId, targetSectionId, true),
-    relatedEntityType: "enrollment",
-    relatedEntityId: enrollmentId,
-    emailFallback: !studentUser?.email
-  });
   await notificationsRepository.create(pool, {
     userId: req.user!.id,
     type: "success",
     message: `Đã kích hoạt thành công đơn ghi danh cho học viên ${sName}.`
   });
-  if (targetSectionId) {
-    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
-    if (sec?.teacher_id) {
-      await notificationsRepository.create(pool, {
-        userId: sec.teacher_id,
-        type: "info",
-        message: `Học viên mới (${sName}) vừa được xếp vào lớp "${sec.section_code || targetSectionId}" của bạn.`
-      });
-    }
+  // Seated in a class: the placement notice (email + in-app) carries the class details.
+  let placementNotice: Awaited<ReturnType<typeof sendClassPlacementNotice>> | null = null;
+  if (targetSectionId && placement.placementChanged) {
+    placementNotice = await sendClassPlacementNotice(pool, { studentId, sectionId: targetSectionId, actorId: req.user!.id });
+    await notifyTeacherOfPlacements(pool, targetSectionId, 1);
+  } else if (!targetSectionId) {
+    await notificationsRepository.create(pool, {
+      userId: studentId,
+      type: "success",
+      message: await learnerPlacementSummary(pool, enrollmentId, targetSectionId, true),
+      relatedEntityType: "enrollment",
+      relatedEntityId: enrollmentId,
+      skipEmail: Boolean(studentUser?.email)
+    });
   }
 
   if (studentUser?.email) {
@@ -2501,7 +2561,7 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
   }
 
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
-  res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
+  res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration, placementEmail: placementNotice?.status || null });
 }));
 app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
   const sectionId = req.body.sectionId;
@@ -2525,14 +2585,6 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
 
   const { enrollment, registration } = placement;
   invalidateStoreCache();
-  await notificationsRepository.create(pool, {
-    userId: enrollment.student_id,
-    type: "success",
-    message: await placementNotice(pool, req.params.id, sectionId, false),
-    relatedEntityType: "enrollment",
-    relatedEntityId: req.params.id,
-    emailFallback: true
-  });
   const approveStudentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollment.student_id])).rows[0];
   const approveSName = approveStudentUser?.name || approveStudentUser?.email || "Học viên";
   await notificationsRepository.create(pool, {
@@ -2540,29 +2592,37 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     type: "success",
     message: `Đã duyệt ghi danh cho học viên ${approveSName}.`
   });
-  if (sectionId) {
-    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
-    if (sec?.teacher_id) {
-      await notificationsRepository.create(pool, {
-        userId: sec.teacher_id,
-        type: "info",
-        message: `Học viên mới (${approveSName}) vừa được xếp vào lớp "${sec.section_code || sectionId}" của bạn.`
-      });
-    }
+  let placementNotice: Awaited<ReturnType<typeof sendClassPlacementNotice>> | null = null;
+  if (sectionId && placement.placementChanged) {
+    placementNotice = await sendClassPlacementNotice(pool, { studentId: enrollment.student_id, sectionId, actorId: req.user!.id });
+    await notifyTeacherOfPlacements(pool, sectionId, 1);
+  } else if (!sectionId) {
+    await notificationsRepository.create(pool, {
+      userId: enrollment.student_id,
+      type: "success",
+      message: await learnerPlacementSummary(pool, req.params.id, sectionId, false),
+      relatedEntityType: "enrollment",
+      relatedEntityId: req.params.id,
+      emailFallback: true
+    });
   }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
-  res.json({ enrollment, registration });
+  res.json({ enrollment, registration, placementEmail: placementNotice?.status || null });
 }));
 
 app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const { placements } = req.body;
-  if (!Array.isArray(placements)) {
+  if (!Array.isArray(placements) || placements.length === 0) {
     return res.status(400).json({ error: "Mảng danh sách xếp lớp placements là bắt buộc." });
   }
+  if (placements.length > 500) return res.status(400).json({ error: "Mỗi lần xếp tối đa 500 học viên." });
+  // notify: false places silently (no email, no notification), e.g. when fixing a mistake.
+  const shouldNotify = req.body.notify !== false;
 
   const client = await pool.connect();
-  const results: any[] = [];
+  const results: Array<{ index: number; enrollmentId: string; sectionId: string; studentId: string; changed: boolean }> = [];
   const errors: any[] = [];
+  let committed = false;
 
   try {
     await client.query("BEGIN");
@@ -2574,8 +2634,8 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
 
       if (p.email) {
         const studentRow = (await client.query(
-          "SELECT id FROM users WHERE email = $1 LIMIT 1",
-          [p.email]
+          "SELECT id FROM users WHERE lower(email) = lower($1) LIMIT 1",
+          [String(p.email).trim()]
         )).rows[0];
         if (!studentRow) {
           errors.push({ index, error: `Không tìm thấy học viên với email: ${p.email}` });
@@ -2603,8 +2663,11 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         errors.push({ index, error: `Không tìm thấy lớp học phần ID ${sectionId}.` });
         continue;
       }
+      if (section.status === "cancelled") {
+        errors.push({ index, error: `Lớp ${section.section_code} đã hủy, không thể xếp học viên.` });
+        continue;
+      }
 
-      // Check capacity
       let currentCount = sectionCounts.get(sectionId);
       if (currentCount === undefined) {
         const countRes = await client.query(
@@ -2613,11 +2676,6 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         );
         currentCount = Number(countRes.rows[0].count);
         sectionCounts.set(sectionId, currentCount);
-      }
-
-      if (currentCount >= section.max_students) {
-        errors.push({ index, error: `Lớp học phần ${section.section_code} đã đạt sĩ số tối đa (${section.max_students}).` });
-        continue;
       }
 
       if (!enrollmentId) {
@@ -2634,7 +2692,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         } else {
           const courseForPlacement = (await client.query("SELECT price FROM courses WHERE id = $1", [section.course_id])).rows[0];
           if (Number(courseForPlacement?.price || 0) > 0) {
-            errors.push({ index, error: "Payment must be confirmed before class placement." });
+            errors.push({ index, error: "Học viên chưa được xác nhận thanh toán nên chưa xếp lớp được." });
             continue;
           }
           enrollmentId = generateId("enroll");
@@ -2647,15 +2705,15 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
 
       const enrollmentRow = (await client.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [enrollmentId])).rows[0];
       if (!enrollmentRow) {
-        errors.push({ index, error: "Enrollment not found for class placement." });
+        errors.push({ index, error: "Không tìm thấy lượt ghi danh để xếp lớp." });
         continue;
       }
       if (enrollmentRow.course_id !== section.course_id) {
-        errors.push({ index, error: "Enrollment does not belong to the target class course." });
+        errors.push({ index, error: "Lượt ghi danh này không thuộc khóa học của lớp được chọn." });
         continue;
       }
       if (!await hasConfirmedPaymentForCoursePlacement(client, enrollmentRow.student_id, enrollmentRow.course_id)) {
-        errors.push({ index, error: "Payment must be confirmed before class placement." });
+        errors.push({ index, error: "Học viên chưa được xác nhận thanh toán nên chưa xếp lớp được." });
         continue;
       }
 
@@ -2675,7 +2733,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       }
 
       const existingRegistration = (await client.query(
-        `SELECT cr.id
+        `SELECT cr.id, cr.section_id, cr.status
          FROM course_registrations cr
          JOIN course_sections cs ON cs.id = cr.section_id
          WHERE cr.student_id = $1
@@ -2683,6 +2741,12 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
            AND cr.status IN ('registered', 'waitlisted')`,
         [studentId, section.course_id]
       )).rows[0];
+      // Already seated in this class: nothing changes, no seat is taken and no email is sent again.
+      const alreadySeated = existingRegistration?.section_id === sectionId && existingRegistration?.status === "registered";
+      if (!alreadySeated && currentCount >= section.max_students) {
+        errors.push({ index, error: `Lớp học phần ${section.section_code} đã đạt sĩ số tối đa (${section.max_students}).` });
+        continue;
+      }
 
       if (!existingRegistration) {
         await client.query(
@@ -2697,8 +2761,15 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         );
       }
 
-      results.push({ index, enrollmentId, sectionId });
-      sectionCounts.set(sectionId, currentCount + 1);
+      results.push({ index, enrollmentId, sectionId, studentId, changed: !alreadySeated });
+      if (!alreadySeated) {
+        sectionCounts.set(sectionId, currentCount + 1);
+        // A learner moved from another class of the same course frees their old seat.
+        const previousSectionId = existingRegistration?.status === "registered" ? existingRegistration.section_id : null;
+        if (previousSectionId && sectionCounts.has(previousSectionId)) {
+          sectionCounts.set(previousSectionId, Math.max(0, sectionCounts.get(previousSectionId)! - 1));
+        }
+      }
     }
 
     if (errors.length > 0) {
@@ -2710,11 +2781,138 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       await enqueueEnrollmentEvent(client, "enrollment.status_changed", placed.enrollmentId);
     }
     await client.query("COMMIT");
+    committed = true;
     invalidateStoreCache();
-    res.json({ success: true, count: results.length });
+
+    // Placement emails go out after the commit, a few at a time so a full class does not flood the mail server.
+    const changed = results.filter(item => item.changed);
+    const notices: Awaited<ReturnType<typeof sendClassPlacementNotice>>[] = [];
+    if (shouldNotify) {
+      for (let offset = 0; offset < changed.length; offset += 3) {
+        notices.push(...await Promise.all(changed.slice(offset, offset + 3).map(item =>
+          sendClassPlacementNotice(pool, { studentId: item.studentId, sectionId: item.sectionId, actorId: req.user!.id })
+        )));
+      }
+      const perSection = new Map<string, number>();
+      for (const item of changed) perSection.set(item.sectionId, (perSection.get(item.sectionId) || 0) + 1);
+      for (const [sectionId, count] of perSection) await notifyTeacherOfPlacements(pool, sectionId, count);
+      invalidateStoreCache();
+    }
+    const emails = { sent: 0, mock: 0, failed: 0, skipped: 0 };
+    for (const notice of notices) emails[notice.status]++;
+    await audit(req, "bulk_place_enrollments", "enrollments", `Xếp lớp ${results.length} học viên (mới: ${changed.length}); email gửi: ${emails.sent}, lỗi: ${emails.failed}, chưa gửi do thiếu SMTP: ${emails.mock}.`);
+    res.json({
+      success: true,
+      count: results.length,
+      placed: changed.length,
+      unchanged: results.length - changed.length,
+      emails,
+      notices: notices.map(notice => ({ studentId: notice.studentId, sectionId: notice.sectionId, email: notice.email, status: notice.status, reason: notice.reason }))
+    });
   } catch (err: any) {
+    if (!committed) await client.query("ROLLBACK");
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: committed
+          ? `Đã xếp lớp xong nhưng gặp lỗi khi gửi thông báo: ${err.message || err}`
+          : err.message || "Không thể thực hiện xếp lớp hàng loạt."
+      });
+    }
+  } finally {
+    client.release();
+  }
+}));
+
+// ---- Direct sale: paid-customer intake, placement emails and the MCNA catalogue ----
+
+const rateLimitPaidImport = createIpRateLimiter("paid-import", 60, 15 * 60, "Bạn thao tác nhập danh sách quá nhanh. Vui lòng thử lại sau ít phút.");
+
+app.get("/api/admin/paid-enrollments/config", requireAuth, requireRole(["manager", "admin"]), (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone() });
+});
+
+async function xlsxFirstSheetToTsv(buffer: Buffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as any);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return "";
+  const lines: string[] = [];
+  sheet.eachRow({ includeEmpty: false }, row => {
+    const cells: string[] = [];
+    for (let column = 1; column <= sheet.columnCount; column++) {
+      cells.push(String(row.getCell(column).text ?? "").replace(/[\t\r\n]+/g, " ").trim());
+    }
+    lines.push(cells.join("\t"));
+  });
+  return lines.join("\n");
+}
+
+// Reads an uploaded paid list (.xlsx, .csv, .txt) into rows for the import preview. Nothing is stored.
+app.post("/api/admin/paid-enrollments/parse", requireAuth, requireRole(["manager", "admin"]), paidTableUpload.single("file"), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Vui lòng chọn tệp danh sách." });
+  const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+  const ext = path.extname(fileName).toLowerCase();
+  let text: string;
+  if (ext === ".xlsx") {
+    try {
+      text = await xlsxFirstSheetToTsv(req.file.buffer);
+    } catch {
+      return res.status(400).json({ error: "Không đọc được tệp Excel này. Hãy lưu lại dạng .xlsx hoặc dán trực tiếp các ô vào ô nhập." });
+    }
+  } else if (ext === ".csv" || ext === ".txt" || ext === ".tsv") {
+    text = req.file.buffer.toString("utf8");
+  } else {
+    return res.status(400).json({ error: "Chỉ nhận tệp .xlsx, .csv hoặc .txt. Với Google Sheets, hãy tải về dạng .xlsx hoặc dán trực tiếp các ô." });
+  }
+  res.json(parsePaidTable(text));
+}));
+
+// Creates learner accounts and paid enrollments from the list (dryRun: true only reports what would happen).
+app.post("/api/admin/paid-enrollments/import", requireAuth, requireRole(["manager", "admin"]), rateLimitPaidImport, validateBody(schemas.paidImport), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Nhập danh sách cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  const outcome = await importPaidEnrollments({
+    rows: req.body.rows,
+    defaultPassword: req.body.defaultPassword || getDefaultStudentPassword() || undefined,
+    sendAccountEmail: req.body.sendAccountEmail,
+    dryRun: req.body.dryRun,
+    actorId: req.user!.id,
+    actorName: req.user!.name || req.user!.email
+  });
+  if (!req.body.dryRun) invalidateStoreCache();
+  res.json(outcome);
+}));
+
+app.post("/api/admin/placements/resend-email", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.resendPlacementEmail), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Gửi email xếp lớp cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  const notices: Awaited<ReturnType<typeof sendClassPlacementNotice>>[] = [];
+  for (const item of req.body.items) {
+    notices.push(await sendClassPlacementNotice(pool, { studentId: item.studentId, sectionId: item.sectionId, actorId: req.user!.id, notifyInApp: false }));
+  }
+  invalidateStoreCache();
+  const emails = { sent: 0, mock: 0, failed: 0, skipped: 0 };
+  for (const notice of notices) emails[notice.status]++;
+  res.json({ emails, notices });
+}));
+
+// Loads the MCNA course catalogue (the mcna.vn snapshot bundled with the LMS): courses and their syllabus.
+// Classes are left to the class manager. Safe to run again; admin-set prices, classes and learners are kept.
+app.post("/api/admin/catalog/import-mcna", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Nạp danh mục cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const summary = await importMcnaCatalog(client, { skipClasses: true });
+    await client.query("COMMIT");
+    invalidateStoreCache();
+    await audit(req, "import_mcna_catalog", "courses", `Tạo mới ${summary.coursesCreated}, cập nhật ${summary.coursesUpdated} khóa học.`);
+    res.json({ ...summary, source: mcnaCatalog.source || "mcna.vn", scrapedAt: mcnaCatalog.scrapedAt || null });
+  } catch (error: any) {
     await client.query("ROLLBACK");
-    res.status(500).json({ error: err.message || "Không thể thực hiện xếp lớp hàng loạt." });
+    if (String(error?.message || "").startsWith("No teacher account found")) {
+      return res.status(400).json({ error: "Chưa có tài khoản giảng viên nào. Hãy tạo ít nhất một giảng viên trước khi nạp danh mục khóa học." });
+    }
+    throw error;
   } finally {
     client.release();
   }
@@ -2890,7 +3088,7 @@ app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "
   return res.status(204).send();
 }));
 
-app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
+app.post("/api/certificates/issue", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
   const client = await pool.connect();
   let committed = false;
   try {
@@ -2906,6 +3104,16 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       return res.status(400).json({ error: "Enrollment is not eligible for certificate issuance." });
     }
 
+    const eligibility = isDirectSale() ? await getCertificateEligibility(client, enrollment.id) : null;
+    if (eligibility && !eligibility.eligible && !req.body.overrideReason) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: eligibility.reasons.join(" "), reasons: eligibility.reasons });
+    }
+    if (isDirectSale() && !eligibility?.sectionId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Phải xếp lớp trước khi cấp chứng chỉ." });
+    }
+
     const existingCertificate = (await client.query(
       "SELECT * FROM certificates WHERE enrollment_id = $1 OR (student_id = $2 AND course_id = $3) LIMIT 1",
       [enrollment.id, enrollment.student_id, enrollment.course_id]
@@ -2919,10 +3127,10 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
     const issuedAt = new Date().toISOString();
     const certificateCode = await generateCertificateCode(client);
     const certificate = (await client.query(
-      `INSERT INTO certificates (id, enrollment_id, student_id, course_id, issued_at, certificate_code)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO certificates (id, enrollment_id, student_id, course_id, issued_at, certificate_code, section_id, override_reason, issued_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [generateId("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode]
+      [generateId("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode, eligibility?.sectionId || null, req.body.overrideReason || null, req.user!.id]
     )).rows[0];
 
     await client.query(
@@ -2943,7 +3151,7 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       type: "success",
       message: `Chứng chỉ khóa học của bạn đã được cấp chính thức. Mã kiểm định: ${certificateCode}.`
     });
-    await audit(req, "issue_certificate", certificate.id, certificateCode);
+    await audit(req, "issue_certificate", certificate.id, `${certificateCode}; ${req.body.overrideReason || "Đạt điều kiện"}`);
     res.status(201).json(certificateFromRow(certificate));
   } catch (error) {
     if (!committed) await client.query("ROLLBACK");
@@ -3090,8 +3298,22 @@ app.post("/api/quizzes/submit", requireAuth, requireRole(["student"]), validateB
   res.status(201).json(result.row);
 }));
 
-app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
-  if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, req.body.courseId)) return res.status(403).json({ error: "Permission denied." });
+/** A teacher manages homework in courses they own and in sessions of the classes they teach. */
+async function teacherCanManageAssignment(teacherId: string, courseId: string, sessionId?: string | null) {
+  if (!sessionId) return coursesRepository.teacherOwnsCourse(pool, teacherId, courseId);
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM attendance_sessions s
+     JOIN course_sections cs ON cs.id = s.section_id
+     WHERE s.id = $1 AND s.course_id = $2 AND cs.teacher_id = $3`,
+    [sessionId, courseId, teacherId]
+  )).rowCount);
+}
+
+app.post("/api/assignments", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
+  if (isDirectSale() && !req.body.sessionId) return res.status(400).json({ error: "Bài tập phải thuộc một buổi học của lớp." });
+  await validateAttachmentOwner(pool, req.user!, req.body.attachmentUrl);
+  if (req.user!.role === "teacher" && !await teacherCanManageAssignment(req.user!.id, req.body.courseId, req.body.sessionId)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, req.body.courseId])).rows[0];
     if (!session) return res.status(400).json({ error: "Assignment must be assigned to a valid lesson/session in this course." });
@@ -3105,10 +3327,18 @@ app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin"]), val
   res.status(201).json(assignment);
 }));
 
-app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
+app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
+  if (isDirectSale() && req.body.sessionId === null) return res.status(400).json({ error: "Không thể bỏ liên kết buổi học của bài tập." });
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
-  if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
+  if (req.body.attachmentUrl && req.body.attachmentUrl !== assignment.attachment_url) await validateAttachmentOwner(pool, req.user!, req.body.attachmentUrl);
+  if (req.user!.role === "teacher") {
+    const targetSessionId = req.body.sessionId || assignment.session_id;
+    if (!await teacherCanManageAssignment(req.user!.id, assignment.course_id, assignment.session_id)
+      || !await teacherCanManageAssignment(req.user!.id, assignment.course_id, targetSessionId)) {
+      return res.status(403).json({ error: "Permission denied." });
+    }
+  }
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, assignment.course_id])).rows[0];
     if (!session) return res.status(400).json({ error: "Assignment must be assigned to a valid lesson/session in this course." });
@@ -3122,10 +3352,10 @@ app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), 
   res.json(updated);
 }));
 
-app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
-  if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
+  if (req.user!.role === "teacher" && !await teacherCanManageAssignment(req.user!.id, assignment.course_id, assignment.session_id)) return res.status(403).json({ error: "Permission denied." });
   await assignmentsRepository.delete(pool, req.params.id);
   invalidateStoreCache();
   await audit(req, "delete_assignment", req.params.id, assignment.title);
@@ -3154,14 +3384,17 @@ app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), valid
     }
     return res.status(201).json(sub);
   }
+  await validateAttachmentOwner(pool, req.user!, req.body.attachmentUrl);
   const result = await assignmentsRepository.submit(pool, req.user!.id, req.body.assignmentId, req.body.content, req.body.attachmentUrl);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
   await audit(req, "submit_assignment", result.row.id, result.row.assignmentId);
+  const assignmentSession = (await pool.query("SELECT s.section_id FROM assignments a JOIN attendance_sessions s ON s.id=a.session_id WHERE a.id=$1", [req.body.assignmentId])).rows[0];
+  if (assignmentSession?.section_id && isDirectSale()) await autoIssueCertificates(pool, assignmentSession.section_id);
   res.status(201).json(result.row);
 }));
 
-app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
+app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const sub = store.submissions.find(s => s.id === req.body.submissionId);
@@ -3173,19 +3406,21 @@ app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin"]
   }
   const submission = await assignmentsRepository.findSubmissionForGrading(pool, req.body.submissionId);
   if (!submission) return res.status(404).json({ error: "Submission not found." });
-  if (req.user!.role === "teacher" && submission.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  if (req.user!.role === "teacher" && !await teacherCanManageAssignment(req.user!.id, submission.course_id, submission.session_id)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.score > Number(submission.max_score)) return res.status(400).json({ error: "Invalid score." });
-  const result = await assignmentsRepository.grade(pool, req.body.submissionId, req.body.score, req.body.feedback);
-  if (submission) {
+  if (isDirectSale() && !req.body.expectedSubmittedAt) return res.status(400).json({ error: "Cần phiên bản bài nộp đang chấm. Tải lại danh sách bài nộp." });
+  const result = await assignmentsRepository.grade(pool, req.body.submissionId, req.body.score, req.body.feedback, req.body.expectedSubmittedAt);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  if (submission && !isDirectSale()) {
     await maybePostGradeEntry(pool, submission.student_id, "assignment", req.body.submissionId, req.body.score, Number(submission.max_score) || 100);
   }
-  await maybePostFinalCourseGradeForSubmission(pool, req.body.submissionId);
+  if (!isDirectSale()) await maybePostFinalCourseGradeForSubmission(pool, req.body.submissionId);
   invalidateStoreCache();
-  await audit(req, "grade_assignment", req.body.submissionId, `Score ${req.body.score}.`);
+  await audit(req, "grade_assignment", req.body.submissionId, JSON.stringify({ score: req.body.score, feedback: req.body.feedback, version: req.body.expectedSubmittedAt }));
   res.json(result);
 }));
 
-app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "teacher", "admin"]), validateBody(schemas.createForumPost), asyncHandler(async (req, res) => {
+app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "teacher", "manager", "admin"]), validateBody(schemas.createForumPost), asyncHandler(async (req, res) => {
   const { courseId, sectionId, title, content } = req.body;
   if (courseId !== req.params.courseId) {
     return res.status(400).json({ error: "Course ID mismatch." });
@@ -3227,7 +3462,7 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         return res.status(403).json({ error: "You can only post on the forum of courses you teach." });
       }
     }
-  } else if (role !== "admin") {
+  } else if (role !== "admin" && role !== "manager") {
     return res.status(403).json({ error: "Permission denied." });
   }
 
@@ -3274,7 +3509,7 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
   res.status(201).json(post);
 }));
 
-app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student", "teacher", "admin"]), validateBody(schemas.createForumReply), asyncHandler(async (req, res) => {
+app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student", "teacher", "manager", "admin"]), validateBody(schemas.createForumReply), asyncHandler(async (req, res) => {
   const { content } = req.body;
   const { postId } = req.params;
   const userId = req.user!.id;
@@ -3323,7 +3558,7 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         return res.status(403).json({ error: "You can only reply on the forum of courses you teach." });
       }
     }
-  } else if (role !== "admin") {
+  } else if (role !== "admin" && role !== "manager") {
     return res.status(403).json({ error: "Permission denied." });
   }
 
@@ -3466,9 +3701,17 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["admin"]), rateLimit
   });
 }));
 
+const MANAGER_ACCOUNT_SCOPE_MESSAGE = "Quản lý lớp chỉ thao tác được với tài khoản học viên và giảng viên.";
+
+/** The system admin manages every account; a class manager only learners and teachers. */
+function canManageAccount(actor: User, target: { role: User["role"] }) {
+  return actor.role === "admin" || target.role === "student" || target.role === "teacher";
+}
+
 app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manager", "admin"]), rateLimitResetPassword, asyncHandler(async (req, res) => {
   const user = await usersRepository.findById(pool, req.params.id);
   if (!user) return res.status(404).json({ error: "User not found." });
+  if (!canManageAccount(req.user!, user)) return res.status(403).json({ error: MANAGER_ACCOUNT_SCOPE_MESSAGE });
   const { resetToken, expiresAt } = await issuePasswordResetToken(user.id, req.user!.id);
   const resetUrl = passwordResetUrl(req, resetToken);
 
@@ -3525,9 +3768,76 @@ app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["ma
   }
 }));
 
+app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  const targetEmail = (req.body?.targetEmail || req.user?.email || "").trim();
+  if (!targetEmail || !targetEmail.includes("@")) {
+    return res.status(400).json({ error: "Địa chỉ email nhận thử nghiệm không hợp lệ." });
+  }
+
+  const configured = hasSmtpConfig();
+  if (!configured) {
+    return res.status(400).json({
+      error: "Hệ thống chưa được cấu hình biến môi trường SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      details: {
+        configured: false,
+        smtpHost: process.env.SMTP_HOST || "Chưa cấu hình",
+        smtpUser: process.env.SMTP_USER || "Chưa cấu hình",
+        smtpPort: process.env.SMTP_PORT || "465",
+        appUrl: lmsBaseUrl(req)
+      }
+    });
+  }
+
+  try {
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
+      from: getSmtpFrom(),
+      to: targetEmail,
+      subject: `[MCNA LMS] Thử nghiệm gửi email hệ thống`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+          <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">HỌC VIỆN CÔNG NGHỆ MCNA</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Kiểm tra kết nối gửi email hệ thống</p>
+          </div>
+          <p style="font-size: 14px; color: #1e293b;">Xin chào <strong>${escapeHtml(req.user?.name || "Quản trị viên")}</strong>,</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+            Email này được gửi thử nghiệm từ hệ thống LMS MCNA tại domain: <a href="${lmsBaseUrl(req)}" style="color: #4f46e5; font-weight: 600;">${lmsBaseUrl(req)}</a>.
+          </p>
+          <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 6px 0;"><strong>Thời gian gửi:</strong> ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Tài khoản gửi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0;"><strong>Địa chỉ nhận:</strong> ${escapeHtml(targetEmail)}</p>
+          </div>
+          <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
+            ✓ Máy chủ SMTP hoạt động bình thường và sẵn sàng gửi email tới học viên.
+          </p>
+        </div>
+      `,
+      text: `MCNA LMS: Email thử nghiệm gửi thành công từ ${lmsBaseUrl(req)} tới ${targetEmail} lúc ${new Date().toISOString()}`
+    });
+
+    res.json({
+      ok: true,
+      message: `Đã gửi thành công email thử nghiệm tới ${targetEmail}!`,
+      messageId: info.messageId,
+      sender: getSmtpFrom(),
+      targetEmail
+    });
+  } catch (err: any) {
+    console.error("[admin/email/test] SMTP send error:", err);
+    res.status(500).json({
+      ok: false,
+      error: `Gửi mail thất bại: ${err.message || String(err)}`,
+      code: err.code || "SMTP_ERROR",
+      tip: "Vui lòng kiểm tra lại SMTP_USER và SMTP_PASS (App Password), hoặc cấu hình bảo mật 2FA của tài khoản gửi."
+    });
+  }
+}));
+
 app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const { role } = req.body;
-  const allowedRoles = ["student", "teacher", "admin"];
+  const allowedRoles = ["student", "teacher", "manager", "admin"];
   if (!allowedRoles.includes(role)) {
     return res.status(400).json({ error: "Invalid role value." });
   }
@@ -3550,6 +3860,9 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyn
 }));
 
 app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.setUserActive), asyncHandler(async (req, res) => {
+  const target = await usersRepository.findById(pool, req.params.id);
+  if (!target) return res.status(404).json({ error: "User not found." });
+  if (!canManageAccount(req.user!, target)) return res.status(403).json({ error: MANAGER_ACCOUNT_SCOPE_MESSAGE });
   const user = await usersRepository.setActive(pool, req.params.id, req.body.isActive);
   if (!user) return res.status(404).json({ error: "User not found." });
 
@@ -3776,7 +4089,7 @@ app.post("/api/admin/crm/outbox/sync", requireAuth, requireRole(["admin"]), asyn
   });
 }));
 
-app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.post("/api/course-sections", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user!.role === "teacher") {
@@ -3790,17 +4103,24 @@ app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]),
     openingDate: req.body.openingDate || course.openingDate
   };
   if (!payload.teacherId) return res.status(400).json({ error: "teacherId is required." });
+  if (!(await pool.query("SELECT 1 FROM users WHERE id=$1 AND role='teacher' AND is_active=true", [payload.teacherId])).rowCount) return res.status(400).json({error:"Chọn giảng viên đang hoạt động."});
+  const teacherSubjects = (await pool.query("SELECT course_id FROM teacher_subjects WHERE teacher_id=$1", [payload.teacherId])).rows;
+  if (teacherSubjects.length && !teacherSubjects.some(item => item.course_id === payload.courseId)) return res.status(400).json({ error: "Giảng viên chưa được đăng ký dạy môn này." });
   const scheduleConflicts = await validateCourseSectionScheduleConflicts(pool, payload);
   if (scheduleConflicts.length > 0) {
     return res.status(409).json({ error: scheduleConflicts[0], conflicts: scheduleConflicts });
   }
-  const row = await upsertCourseSection(pool, payload);
+  const client = await pool.connect();
+  let row;
+  try {await client.query("BEGIN"); row = await upsertCourseSection(client, payload); await client.query("COMMIT");}
+  catch(error) {await client.query("ROLLBACK"); throw error;} finally {client.release();}
   invalidateStoreCache();
   await audit(req, "create_course_section", row.id, row.sectionCode);
+  await sendTeacherAssignmentNotice(row.id);
   res.status(201).json(row);
 }));
 
-app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   const course = await coursesRepository.findById(pool, req.body.courseId);
@@ -3819,6 +4139,10 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
     openingDate: req.body.openingDate || existing.opening_date || course.openingDate
   };
   if (!payload.teacherId) return res.status(400).json({ error: "teacherId is required." });
+  if (existing.course_id !== payload.courseId) return res.status(409).json({error:"Không chuyển môn của lớp hiện có. Hãy tạo lớp mới để giữ đúng lịch sử và quyền truy cập."});
+  if (!(await pool.query("SELECT 1 FROM users WHERE id=$1 AND role='teacher' AND is_active=true", [payload.teacherId])).rowCount) return res.status(400).json({error:"Chọn giảng viên đang hoạt động."});
+  const teacherSubjects = (await pool.query("SELECT course_id FROM teacher_subjects WHERE teacher_id=$1", [payload.teacherId])).rows;
+  if (teacherSubjects.length && !teacherSubjects.some(item => item.course_id === payload.courseId)) return res.status(400).json({ error: "Giảng viên chưa được đăng ký dạy môn này." });
   // Shrinking a class deletes its trailing generated sessions (and their materials by cascade).
   const sessionsWithMaterials = await generatedSessionsWithMaterialsBeyond(pool, req.params.id, Number(payload.numberOfSessions));
   if (sessionsWithMaterials.length > 0) {
@@ -3830,13 +4154,21 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
   if (scheduleConflicts.length > 0) {
     return res.status(409).json({ error: scheduleConflicts[0], conflicts: scheduleConflicts });
   }
-  const row = await upsertCourseSection(pool, payload);
+  const client = await pool.connect();
+  let row;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT id FROM course_sections WHERE id=$1 FOR UPDATE", [req.params.id]);
+    row = await upsertCourseSection(client, payload);
+    await client.query("COMMIT");
+  } catch(error) {await client.query("ROLLBACK"); throw error;} finally {client.release();}
   invalidateStoreCache();
   await audit(req, "update_course_section", row.id, row.sectionCode);
+  await sendTeacherAssignmentNotice(row.id);
   res.json(row);
 }));
 
-app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   if (req.user!.role === "teacher" && existing.teacher_id !== req.user!.id) {
@@ -3847,6 +4179,13 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT id FROM course_sections WHERE id=$1 FOR UPDATE", [req.params.id]);
+    await client.query("SELECT id FROM attendance_sessions WHERE section_id=$1 ORDER BY id FOR UPDATE", [req.params.id]);
+    const protectedClass = await client.query(`SELECT 1 FROM course_registrations WHERE section_id=$1 AND status='registered'
+      UNION ALL SELECT 1 FROM attendance_sessions s WHERE s.section_id=$1 AND (s.taught_at IS NOT NULL
+        OR EXISTS(SELECT 1 FROM attendance_records r WHERE r.session_id=s.id)
+        OR EXISTS(SELECT 1 FROM assignments a WHERE a.session_id=s.id)) LIMIT 1`, [req.params.id]);
+    if (protectedClass.rowCount) throw Object.assign(new Error("Lớp đã có học viên, bài tập hoặc buổi dạy. Hãy chuyển trạng thái lớp thay vì xóa lịch sử."), {status:409});
     await client.query("DELETE FROM course_registrations WHERE section_id = $1", [req.params.id]);
     await client.query("DELETE FROM section_schedules WHERE section_id = $1", [req.params.id]);
     await client.query("DELETE FROM course_sections WHERE id = $1", [req.params.id]);
@@ -3857,7 +4196,7 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   } finally {
     client.release();
   }
-  await materialStorage.remove(materialStoragePaths).catch(err => {
+  await removeUnreferencedMaterials(materialStoragePaths).catch(err => {
     console.error("[session-materials] failed to remove files of deleted section:", err);
   });
   invalidateStoreCache();
@@ -3865,7 +4204,7 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   res.status(204).send();
 }));
 
-app.post("/api/course-registrations", requireAuth, requireRole(["student"]), validateBody(schemas.courseRegistration), asyncHandler(async (req, res) => {
+app.post("/api/course-registrations", requireAuth, requireRole(["student"]), requireSelfService(DIRECT_SALE_ENROLL_MESSAGE, "SELF_ENROLL_DISABLED"), validateBody(schemas.courseRegistration), asyncHandler(async (req, res) => {
   const result = await courseRegistrationsRepository.register(pool, req.user!.id, req.body.sectionId);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
@@ -4199,7 +4538,7 @@ async function findSessionWithOwners(sessionId: string): Promise<SessionOwnershi
 }
 
 function canManageSessionMaterials(user: User, session: SessionOwnership) {
-  if (user.role === "admin") return true;
+  if (user.role === "admin" || user.role === "manager") return true;
   if (user.role === "teacher") {
     if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
   }
@@ -4267,13 +4606,81 @@ app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (r
   res.json(await sessionMaterialsRepository.listBySession(pool, session.id));
 }));
 
-app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+const MATERIAL_TYPE_ERROR: Record<FileMaterialType, string> = {
+  slide: "Slide phải là tệp .pdf, .ppt hoặc .pptx.",
+  document: "Tài liệu phải là tệp .pdf, .doc hoặc .docx. File dữ liệu (Excel, CSV, ZIP...) hãy tải ở mục File data.",
+  data: "File data phải là tệp .xlsx, .xls, .csv, .pbix, .zip, .rar, .json, .txt, .sql, .ipynb, .py hoặc .md."
+};
+
+const NON_PDF_WARNING = "Học viên chỉ xem được slide và tài liệu dạng PDF trên LMS (không được tải về). Hãy tải thêm bản PDF của tệp này.";
+
+/** Checks an uploaded material against its type and puts it in private storage. */
+async function storeMaterialFile(file: Express.Multer.File, requestedType: FileMaterialType, storageDir: string, materialId: string) {
+  // multer decodes multipart filenames as latin1; restore UTF-8 so Vietnamese names survive.
+  const fileName = Buffer.from(file.originalname, "latin1").toString("utf8");
+  const ext = path.extname(fileName).toLowerCase();
+  const type = resolveUploadType(requestedType, fileName);
+  if (!MATERIAL_EXTENSIONS[type].includes(ext)) return { error: MATERIAL_TYPE_ERROR[type] };
+  const storagePath = `${storageDir}/${materialId}${ext}`;
+  await materialStorage.put(storagePath, file.buffer, MATERIAL_MIME_BY_EXT[ext]);
+  return {
+    type,
+    storagePath,
+    fileName,
+    mimeType: MATERIAL_MIME_BY_EXT[ext],
+    sizeBytes: file.size,
+    defaultTitle: path.basename(fileName, path.extname(fileName)),
+    warning: type !== "data" && ext !== ".pdf" ? NON_PDF_WARNING : undefined
+  };
+}
+
+/** Staff who may edit a course's welcome letter and opening materials. */
+async function canManageCourseContent(user: User, courseId: string) {
+  if (user.role === "admin" || user.role === "manager") return true;
+  if (user.role !== "teacher") return false;
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM courses c
+     WHERE c.id = $1
+       AND (c.teacher_id = $2 OR EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = c.id AND cs.teacher_id = $2))`,
+    [courseId, user.id]
+  )).rowCount);
+}
+
+/** Learners see a course's opening materials once they hold a seat in one of its classes. */
+async function canViewCourseIntro(user: User, courseId: string) {
+  if (await canManageCourseContent(user, courseId)) return true;
+  if (user.role !== "student") return false;
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM enrollments e
+     JOIN course_registrations cr ON cr.student_id = e.student_id AND cr.status = 'registered'
+     JOIN course_sections cs ON cs.id = cr.section_id AND cs.course_id = e.course_id
+     WHERE e.student_id = $1 AND e.course_id = $2 AND e.status IN ('active', 'completed')
+     LIMIT 1`,
+    [user.id, courseId]
+  )).rowCount);
+}
+
+/** Access to one material row, whether it belongs to a session or to a course's opening materials. */
+async function materialRowAccess(user: User, row: any): Promise<{ canView: boolean; canManage: boolean }> {
+  if (!row.session_id) {
+    const canManage = await canManageCourseContent(user, row.course_id);
+    return { canManage, canView: canManage || await canViewCourseIntro(user, row.course_id) };
+  }
+  const session = await findSessionWithOwners(row.session_id);
+  if (!session) return { canManage: false, canView: false };
+  const canManage = canManageSessionMaterials(user, session);
+  return { canManage, canView: canManage || await canViewSessionMaterials(user, session) };
+}
+
+app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (!store.sessionMaterials) store.sessionMaterials = [];
-    const type = req.body.type as "slide" | "document" | "youtube" | "link";
     const fileName = req.file ? Buffer.from(req.file.originalname, "latin1").toString("utf8") : undefined;
     const ext = fileName ? path.extname(fileName).toLowerCase() : "";
+    const type = (fileName && isFileMaterialType(req.body.type) ? resolveUploadType(req.body.type, fileName) : req.body.type) as SessionMaterial["type"];
     const newMat = {
       id: "mat_" + Date.now(),
       sessionId: req.params.sessionId,
@@ -4293,61 +4700,54 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
   if (!session) return res.status(404).json({ error: "Không tìm thấy buổi học." });
   if (!canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
 
-  const type = req.body.type as "slide" | "document" | "youtube" | "link";
+  const requestedType = req.body.type as SessionMaterial["type"];
   const base = {
     id: sessionMaterialsRepository.newId(),
     sessionId: session.id,
     sectionId: session.section_id,
     courseId: session.course_id,
-    type,
     createdBy: req.user!.id
   };
 
   let material;
-  if (type === "youtube" || type === "link") {
+  let warning: string | undefined;
+  if (requestedType === "youtube" || requestedType === "link") {
     if (req.file) return res.status(400).json({ error: "Tài liệu dạng liên kết không kèm tệp." });
-    const url = resolveMaterialUrl(type, req.body.url);
-    if (!url) return res.status(400).json({ error: materialUrlError(type) });
+    const url = resolveMaterialUrl(requestedType, req.body.url);
+    if (!url) return res.status(400).json({ error: materialUrlError(requestedType) });
     material = await sessionMaterialsRepository.create(pool, {
       ...base,
-      title: req.body.title || (type === "youtube" ? "Video bài giảng" : url),
+      type: requestedType,
+      title: req.body.title || (requestedType === "youtube" ? "Video bài giảng" : url),
       url
     });
   } else {
     if (!req.file) return res.status(400).json({ error: "Vui lòng chọn tệp tài liệu." });
-    // multer decodes multipart filenames as latin1; restore UTF-8 so Vietnamese names survive.
-    const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
-    const ext = path.extname(fileName).toLowerCase();
-    if (!MATERIAL_FILE_EXTENSIONS[type].has(ext)) {
-      return res.status(400).json({
-        error: type === "slide"
-          ? "Slide phải là tệp .ppt, .pptx hoặc .pdf."
-          : "Tài liệu/dữ liệu thực hành phải là tệp .doc, .docx, .pdf, .xlsx, .xls, .csv, .pbix, .zip, .rar."
-      });
-    }
-    const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;
-    await materialStorage.put(storagePath, req.file.buffer, MATERIAL_MIME_BY_EXT[ext]);
+    const stored = await storeMaterialFile(req.file, requestedType, `${session.course_id}/${session.section_id || "course"}/${session.id}`, base.id);
+    if ("error" in stored) return res.status(400).json({ error: stored.error });
+    warning = stored.warning;
     try {
       material = await sessionMaterialsRepository.create(pool, {
         ...base,
-        title: req.body.title || path.basename(fileName, path.extname(fileName)),
-        storagePath,
-        fileName,
-        mimeType: MATERIAL_MIME_BY_EXT[ext],
-        sizeBytes: req.file.size
+        type: stored.type,
+        title: req.body.title || stored.defaultTitle,
+        storagePath: stored.storagePath,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes
       });
     } catch (error) {
-      await materialStorage.remove([storagePath]).catch(() => undefined);
+      await materialStorage.remove([stored.storagePath]).catch(() => undefined);
       throw error;
     }
   }
 
   invalidateStoreCache();
-  await audit(req, "create_session_material", material.id, `${type}: ${material.title}`);
-  res.status(201).json(material);
+  await audit(req, "create_session_material", material.id, `${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
 }));
 
-app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const ids: string[] = req.body.materialIds || [];
@@ -4371,7 +4771,105 @@ app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["t
   res.json(materials);
 }));
 
-app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+// ---- Course opening materials: welcome letter, reference reading and practice exercises ----
+
+app.put("/api/courses/:id/welcome-letter", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.welcomeLetter), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Thư chúc mừng cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  if (!await canManageCourseContent(req.user!, req.params.id)) return res.status(403).json({ error: "Permission denied." });
+  const letter = req.body.welcomeLetter.trim();
+  const row = (await pool.query(
+    "UPDATE courses SET welcome_letter = $1 WHERE id = $2 RETURNING id, welcome_letter",
+    [letter || null, req.params.id]
+  )).rows[0];
+  if (!row) return res.status(404).json({ error: "Course not found." });
+  invalidateStoreCache();
+  await audit(req, "update_welcome_letter", req.params.id, letter ? `${letter.length} ký tự` : "Dùng thư mặc định");
+  res.json({ courseId: row.id, welcomeLetter: row.welcome_letter || "" });
+}));
+
+app.post("/api/courses/:id/welcome-letter/draft", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Soạn thư bằng AI cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  if (!await canManageCourseContent(req.user!, req.params.id)) return res.status(403).json({ error: "Permission denied." });
+  const course = await coursesRepository.findById(pool, req.params.id);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  const lessons = (await pool.query("SELECT title FROM lessons WHERE course_id = $1 ORDER BY lesson_order", [course.id])).rows;
+  const draft = await generateWelcomeLetterDraft({
+    title: course.title,
+    description: course.description,
+    level: course.level,
+    sessionTitles: lessons.map(row => String(row.title || "")).filter(Boolean)
+  });
+  await audit(req, "draft_welcome_letter", course.id, draft.source);
+  res.json(draft);
+}));
+
+app.get("/api/courses/:courseId/intro-materials", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json([]);
+  if (!await canViewCourseIntro(req.user!, req.params.courseId)) return res.status(403).json({ error: "Permission denied." });
+  res.json(await sessionMaterialsRepository.listIntroByCourse(pool, req.params.courseId));
+}));
+
+app.post("/api/courses/:courseId/intro-materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createIntroMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Tài liệu mở đầu cần cơ sở dữ liệu PostgreSQL (không hỗ trợ ở chế độ mock)." });
+  const course = await coursesRepository.findById(pool, req.params.courseId);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  if (!await canManageCourseContent(req.user!, course.id)) return res.status(403).json({ error: "Permission denied." });
+
+  const requestedType = req.body.type as "document" | "data" | "youtube" | "link";
+  const base = {
+    id: sessionMaterialsRepository.newId(),
+    courseId: course.id,
+    category: req.body.category as IntroMaterialCategory,
+    createdBy: req.user!.id
+  };
+
+  let material;
+  let warning: string | undefined;
+  if (requestedType === "youtube" || requestedType === "link") {
+    if (req.file) return res.status(400).json({ error: "Tài liệu dạng liên kết không kèm tệp." });
+    const url = resolveMaterialUrl(requestedType, req.body.url);
+    if (!url) return res.status(400).json({ error: materialUrlError(requestedType) });
+    material = await sessionMaterialsRepository.create(pool, {
+      ...base,
+      type: requestedType,
+      title: req.body.title || (requestedType === "youtube" ? "Video giới thiệu" : url),
+      url
+    });
+  } else {
+    if (!req.file) return res.status(400).json({ error: "Vui lòng chọn tệp tài liệu." });
+    const stored = await storeMaterialFile(req.file, requestedType, `${course.id}/intro`, base.id);
+    if ("error" in stored) return res.status(400).json({ error: stored.error });
+    warning = stored.warning;
+    try {
+      material = await sessionMaterialsRepository.create(pool, {
+        ...base,
+        type: stored.type,
+        title: req.body.title || stored.defaultTitle,
+        storagePath: stored.storagePath,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes
+      });
+    } catch (error) {
+      await materialStorage.remove([stored.storagePath]).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  invalidateStoreCache();
+  await audit(req, "create_intro_material", material.id, `${material.category}/${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
+}));
+
+app.put("/api/courses/:courseId/intro-materials/order", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.reorderIntroMaterials), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json([]);
+  if (!await canManageCourseContent(req.user!, req.params.courseId)) return res.status(403).json({ error: "Permission denied." });
+  const materials = await sessionMaterialsRepository.reorderIntro(pool, req.params.courseId, req.body.category, req.body.materialIds);
+  invalidateStoreCache();
+  res.json(materials);
+}));
+
+app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const mat = (store.sessionMaterials || []).find((m: any) => m.id === req.params.id);
@@ -4383,8 +4881,7 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), 
 
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+  if (!(await materialRowAccess(req.user!, row)).canManage) return res.status(403).json({ error: "Permission denied for this material." });
 
   let url: string | undefined;
   if (req.body.url !== undefined) {
@@ -4398,7 +4895,7 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), 
   res.json(material);
 }));
 
-app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (store.sessionMaterials) {
@@ -4409,12 +4906,11 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]),
 
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Không tìm thấy tài liệu." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !canManageSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+  if (!(await materialRowAccess(req.user!, row)).canManage) return res.status(403).json({ error: "Permission denied for this material." });
 
   await sessionMaterialsRepository.remove(pool, row.id);
   if (row.storage_path) {
-    await materialStorage.remove([row.storage_path]).catch(err => {
+    await removeUnreferencedMaterials([row.storage_path]).catch(err => {
       console.error("[session-materials] failed to remove file:", row.storage_path, err);
     });
   }
@@ -4423,32 +4919,65 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]),
   res.status(204).send();
 }));
 
+const contentDisposition = (disposition: "inline" | "attachment", fileName: string) =>
+  `${disposition}; filename="${fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+
+/**
+ * Sends a PDF for the in-app viewer. The bytes always pass through this server (no storage link is
+ * handed out) and are not cached, so a learner never receives a downloadable address.
+ */
+async function sendMaterialForViewing(res: express.Response, row: any, fileName: string) {
+  const download = await materialStorage.getDownload(row.storage_path, fileName, { inline: true });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", contentDisposition("inline", fileName));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (download.kind === "redirect") {
+    const upstream = await fetch(download.url, { signal: AbortSignal.timeout(60_000) });
+    if (!upstream.ok) return res.status(502).json({ error: "Không tải được tài liệu từ kho lưu trữ. Vui lòng thử lại." });
+    return res.send(Buffer.from(await upstream.arrayBuffer()));
+  }
+  if (download.kind === "buffer") return res.send(download.buffer);
+  if (!fs.existsSync(download.absolutePath)) return res.status(404).json({ error: "Tệp tài liệu không còn trên máy chủ. Giảng viên vui lòng tải lại." });
+  return res.sendFile(download.absolutePath);
+}
+
+// Learners may download "data" files only. Slides and documents are read online: a PDF is streamed to
+// the in-app viewer (requested by script with the X-LMS-Viewer header, so the address cannot simply be
+// opened or saved from the browser bar); other formats are not served to learners at all.
 app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res) => {
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row || !row.storage_path) return res.status(404).json({ error: "Không tìm thấy tệp tài liệu." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
+  const access = await materialRowAccess(req.user!, row);
+  if (!access.canView) return res.status(403).json({ error: "Permission denied." });
 
-  const isPdf = row.mime_type === "application/pdf" || (row.file_name && row.file_name.toLowerCase().endsWith(".pdf"));
+  const fileName = row.file_name || path.basename(row.storage_path);
+  const isPdf = isPdfFile(row.mime_type, row.file_name);
   const wantsInline = req.query.inline === "true" && isPdf;
 
-  const download = await materialStorage.getDownload(
-    row.storage_path, 
-    row.file_name || path.basename(row.storage_path),
-    { inline: wantsInline }
-  );
+  if (!access.canManage) {
+    const learnerAccess = learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name });
+    if (learnerAccess === "unavailable") {
+      return res.status(403).json({ error: "Tài liệu này chỉ xem trực tuyến và chưa có bản PDF để hiển thị. Vui lòng liên hệ giảng viên.", code: "VIEW_ONLY_NO_PREVIEW" });
+    }
+    if (learnerAccess === "view") {
+      if (!wantsInline || req.get("X-LMS-Viewer") !== "1") {
+        return res.status(403).json({ error: "Slide và tài liệu chỉ xem trực tuyến trên LMS, không hỗ trợ tải về.", code: "VIEW_ONLY" });
+      }
+      return sendMaterialForViewing(res, row, fileName);
+    }
+  }
+
+  const download = await materialStorage.getDownload(row.storage_path, fileName, { inline: wantsInline });
   if (download.kind === "redirect") return res.redirect(302, download.url);
 
   res.setHeader("X-Content-Type-Options", "nosniff");
-  const fileName = row.file_name || path.basename(row.storage_path);
-  const encodedName = encodeURIComponent(fileName);
-  const asciiName = fileName.replace(/[^\x20-\x7E]/g, "_");
   const disposition = wantsInline ? "inline" : "attachment";
 
   if (download.kind === "buffer") {
     const mime = row.mime_type || download.mimeType || (isPdf ? "application/pdf" : "application/octet-stream");
     res.setHeader("Content-Type", mime);
-    res.setHeader("Content-Disposition", `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    res.setHeader("Content-Disposition", contentDisposition(disposition, fileName));
     return res.send(download.buffer);
   }
 
@@ -4460,7 +4989,7 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
 
   if (wantsInline) {
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    res.setHeader("Content-Disposition", contentDisposition("inline", fileName));
     return res.sendFile(download.absolutePath);
   }
   res.download(download.absolutePath, fileName);
@@ -4472,10 +5001,14 @@ app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHan
   if (!await canViewSessionMaterials(req.user!, session)) return res.status(403).json({ error: "Permission denied." });
   if (isDevMockDb) return res.status(501).json({ error: "Tải gói tài liệu chưa khả dụng trong mock mode." });
 
+  // Learners get the session's data files only; staff get everything.
+  const isStaff = canManageSessionMaterials(req.user!, session);
   const materials = await sessionMaterialsRepository.listRowsBySession(pool, session.id);
-  const fileMaterials = materials.filter((material: any) => material.storage_path);
-  const links = materials.filter((material: any) => !material.storage_path && material.url);
-  if (fileMaterials.length === 0 && links.length === 0) return res.status(404).json({ error: "Buổi học chưa có tài liệu để tải." });
+  const fileMaterials = materials.filter((material: any) => material.storage_path && (isStaff || material.type === "data"));
+  const links = isStaff ? materials.filter((material: any) => !material.storage_path && material.url) : [];
+  if (fileMaterials.length === 0 && links.length === 0) {
+    return res.status(404).json({ error: isStaff ? "Buổi học chưa có tài liệu để tải." : "Buổi học chưa có file data để tải." });
+  }
 
   const maxBundleBytes = 250 * 1024 * 1024;
   const estimatedBytes = fileMaterials.reduce((sum: number, material: any) => sum + Number(material.size_bytes || 0), 0);
@@ -4500,7 +5033,7 @@ app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHan
     else res.destroy(error);
   });
   res.setHeader("Content-Type", "application/zip");
-  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-materials.zip"`);
+  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-${isStaff ? "materials" : "data"}.zip"`);
   res.setHeader("X-Content-Type-Options", "nosniff");
   archive.pipe(res);
 
@@ -4528,17 +5061,18 @@ app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHan
   await audit(req, "download_session_material_bundle", session.id, `files=${fileMaterials.length};links=${links.length}`);
 }));
 
-app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
-  if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  // A teacher adds sessions to a course they own, or to a class assigned to them (checked just below).
+  if (req.user!.role === "teacher" && course.teacherId !== req.user!.id && !req.body.sectionId) return res.status(403).json({ error: "Permission denied." });
   const sectionValidation = await validateAttendanceSectionAccess(req.body.courseId, req.body.sectionId, req.user!);
   if (sectionValidation.error) return res.status(sectionValidation.status!).json({ error: sectionValidation.error });
   const session = {
     id: generateId("ats"),
     courseId: req.body.courseId,
     sectionId: req.body.sectionId,
-    teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
+    teacherId: req.user!.role === "teacher" ? req.user!.id : sectionValidation.section?.teacher_id || course.teacherId,
     date: req.body.date,
     topic: req.body.topic,
     content: req.body.content || undefined,
@@ -4559,7 +5093,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
   res.status(201).json({ session, records });
 }));
 
-app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
+app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.params.id])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
@@ -4573,7 +5107,8 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
 
 
 
-app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
+// Legacy whole-store sync. Admin only: a class manager's scoped snapshot must never be written back.
+app.post("/api/store/sync", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     devMockStore = { ...(devMockStore || getInitialStore()), ...(req.body || {}) };
     return res.json({ ok: true, mode: "dev-mock-synchronized" });
@@ -4609,6 +5144,16 @@ export async function ensureDatabaseReady() {
   return initDbPromise;
 }
 
+registerOperationsRoutes(app, { pool, requireAuth, invalidateStoreCache, audit, createUserAccount });
+app.use("/api", (_req,res) => res.status(404).json({ error: "Không tìm thấy API." }));
+app.use((req,res,next) => {
+  try {
+    const normalized = path.posix.normalize(decodeURIComponent(req.path)).toLowerCase();
+    if (normalized.startsWith('/uploads/') || normalized === '/uploads') return res.status(404).json({error:'Không tìm thấy tệp.'});
+    next();
+  } catch { res.status(400).json({error:'Đường dẫn không hợp lệ.'}); }
+});
+
 // Express error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[ErrorHandler]", err);
@@ -4621,8 +5166,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     res.status(400).json({ error: `Lỗi tải tệp: ${err.message}` });
     return;
   }
-  const status = typeof err.status === "number" ? err.status : (typeof err.statusCode === "number" ? err.statusCode : 500);
-  const errorMessage = err.message || (status >= 500 ? "Lỗi máy chủ nội bộ. Vui lòng thử lại sau." : "Yêu cầu không hợp lệ.");
+  const status = err.code === '23505' ? 409 : err.code === '23503' ? 400 : typeof err.status === "number" ? err.status : (typeof err.statusCode === "number" ? err.statusCode : 500);
+  const errorMessage = err.code === '23505' ? 'Dữ liệu đã tồn tại. Vui lòng tải lại.' : err.code === '23503' ? 'Dữ liệu liên quan không còn tồn tại hoặc đang được sử dụng.' : status >= 500 && !exposeDevSecrets() ? "Lỗi máy chủ nội bộ. Vui lòng thử lại sau." : err.message || "Yêu cầu không hợp lệ.";
   res.status(status).json({ error: errorMessage });
 });
 

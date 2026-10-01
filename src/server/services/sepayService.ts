@@ -5,6 +5,9 @@ import { notifyRole } from "../notify";
 import { generateId } from "../ids";
 import { confirmCoursePayment, placeEnrollment, isServiceError } from "./enrollmentService";
 import { sendPaymentConfirmationEmail } from "./email";
+import { sendClassPlacementNotice } from "./placementNotice";
+import { isDirectSale } from "../config";
+import { paymentMayPlace } from "../../operationRules";
 
 export interface SepayWebhookPayload {
   id: number | string;
@@ -383,7 +386,7 @@ export async function processSepayWebhook(
 
     // Auto-place into requested section if student selected one during registration
     const sectionId = matchedTx.requested_section_id;
-    if (sectionId && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
+    if (paymentMayPlace(isDirectSale(), sectionId) && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
       await client.query("SAVEPOINT sepay_placement");
       const placement = await placeEnrollment(client, matchedTx.enrollment_id, sectionId, "lms");
       if (isServiceError(placement)) {
@@ -417,18 +420,23 @@ export async function processSepayWebhook(
   const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
   const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
+    // Class details (timetable, Zalo group, teacher) go out by email; the in-app message is created below.
+    void sendClassPlacementNotice(pool, { studentId: matchedTx.student_id, sectionId: placedSectionId, notifyInApp: false })
+      .catch(err => console.error("[SePay] placement notice failed:", err));
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`,
-      emailFallback: !willSendSepayPaymentConfirmationEmail
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`,
-      emailFallback: !willSendSepayPaymentConfirmationEmail
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   }
 

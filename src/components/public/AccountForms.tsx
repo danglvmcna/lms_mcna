@@ -44,7 +44,7 @@ export function LoginScreen({ initialEmail = "", intent, onClearIntent, onLogged
   intent: EnrollIntent | null;
   onClearIntent: () => void;
   onLoggedIn: (data: { user: User; csrfToken?: string }) => Promise<void> | void;
-  onRegister: () => void;
+  onRegister?: () => void;
   onForgot: () => void;
   onBackToCourses: () => void;
 }) {
@@ -111,12 +111,12 @@ export function LoginScreen({ initialEmail = "", intent, onClearIntent, onLogged
         </div>
         <Button type="submit" block size="lg" loading={submitting}>Đăng nhập</Button>
       </form>
-      <div className="mt-8 rounded-2xl bg-white p-4 text-center shadow-card ring-1 ring-slate-200/70">
+      {onRegister ? <div className="mt-8 rounded-2xl bg-white p-4 text-center shadow-card ring-1 ring-slate-200/70">
         <p className="text-sm text-slate-600">Lần đầu đến với MCNA?</p>
         <button type="button" onClick={onRegister} className="mt-1 inline-flex items-center gap-1 text-[15px] font-semibold text-indigo-600 hover:text-indigo-700">
           Tạo tài khoản miễn phí <ArrowRight className="h-4 w-4" />
         </button>
-      </div>
+      </div> : <p className="mt-6 text-center text-sm text-slate-600">Tài khoản được MCNA cấp sau khi xác nhận đăng ký. Lớp học hiện khi bạn được xếp lớp.</p>}
     </AuthLayout>
   );
 }

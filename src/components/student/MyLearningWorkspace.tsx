@@ -25,7 +25,12 @@ import {
 import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
+import SessionHomeworkList from "./SessionHomeworkList";
 import LinkedText from "../LinkedText";
+import { useAppConfig } from "../../appConfig";
+import { formatDateVi, formatScheduleSummary } from "../../scheduleText";
+import { DEFAULT_WELCOME_LETTER, renderWelcomeLetter } from "../../welcomeLetter";
+import LearnerSolution from "../operations/LearnerSolution";
 import { ZoomLogo } from "../icons/BrandLogos";
 import { instructorName } from "./studentDisplay";
 import VideoStage from "./VideoStage";
@@ -46,7 +51,7 @@ import {
 } from "./learning";
 import { formatDate, formatDayLong, formatTimeIfSet, relativeDay } from "../../lib/format";
 import { Avatar, Badge, Button, buttonClass, Card, CourseCover, cx, Dialog, EmptyState, PageHeader, ProgressBar, ProgressRing, Segmented } from "../ui";
-import { Course, CourseSection, Enrollment, Lesson } from "../../types";
+import { Course, CourseSection, Enrollment, Lesson, LMSDataStore, User, SessionMaterial } from "../../types";
 
 const lessonTitle = (lesson?: Lesson) => (lesson ? lesson.title.replace(/^\d+\.\s*/, "") : "");
 
@@ -66,13 +71,14 @@ export default function MyLearningWorkspace(props: WorkspaceProps) {
 /* ====================================================================== Class list */
 
 function ClassList({ store, currentUser, myEnrollments, setLearningCourseId, openPayment, go }: WorkspaceProps) {
+  const isDirectSale = useAppConfig().salesMode === "direct";
   const items = myEnrollments
     .map(enrollment => {
       const course = store.courses.find(c => c.id === enrollment.courseId);
       if (!course) return null;
       const section = enrollmentSection(store, currentUser.id, course.id);
       const ready = hasClassroomAccess(store, currentUser.id, enrollment, section);
-      return { enrollment, course, section, ready };
+      return isDirectSale && !ready ? null : { enrollment, course, section, ready };
     })
     .filter(Boolean) as Array<{ enrollment: Enrollment; course: Course; section?: CourseSection; ready: boolean }>;
 
@@ -88,8 +94,8 @@ function ClassList({ store, currentUser, myEnrollments, setLearningCourseId, ope
             illustration="study"
             icon={<GraduationCap className="h-6 w-6" />}
             title="Bạn chưa có lớp học nào"
-            description="Đăng ký một khóa học, lớp của bạn sẽ xuất hiện ở đây cùng lịch học và tài liệu."
-            action={<Button onClick={() => go("catalog")} iconRight={<ArrowRight className="h-4 w-4" />}>Khám phá khóa học</Button>}
+            description={isDirectSale ? "Lớp học, lịch và tài liệu sẽ hiện khi MCNA xếp lớp cho bạn." : "Đăng ký một khóa học, lớp của bạn sẽ xuất hiện ở đây cùng lịch học và tài liệu."}
+            action={!isDirectSale ? <Button onClick={() => go("catalog")} iconRight={<ArrowRight className="h-4 w-4" />}>Khám phá khóa học</Button> : undefined}
           />
         </Card>
       </div>
@@ -239,7 +245,6 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
       </button>
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <CourseCover src={course.thumbnail} title={course.title} category={course.category} className="hidden h-16 w-16 shrink-0 rounded-2xl sm:block" iconSize="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-indigo-600">{[course.category, activeSection?.sectionCode].filter(Boolean).join(" · ")}</p>
             <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 md:text-[30px]">{course.title}</h1>
@@ -248,7 +253,7 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
         <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-card ring-1 ring-slate-200/70 md:shrink-0">
           <ProgressRing value={progress.percent} size={44} stroke={5} />
           <div className="text-sm">
-            <p className="font-semibold text-slate-900">{progress.completed}/{progress.total} bài học</p>
+            <p className="font-semibold text-slate-900">{progress.completed}/{progress.total} bài đã đánh dấu</p>
             <p className="text-slate-500">{progress.percent === 100 ? "Tuyệt vời, bạn đã học hết!" : "Tiến độ của bạn"}</p>
           </div>
         </div>
@@ -299,6 +304,9 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
         <SessionView
           session={activeSession}
           sessions={sessions}
+          store={store}
+          currentUser={currentUser}
+          onRefreshData={onRefreshData}
           courseTitle={course.title}
           meetingUrl={activeSection?.meetingUrl}
           enrollmentId={enrollment!.id}
@@ -308,7 +316,8 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
           onOpenLesson={setLessonId}
           onBack={() => setSessionNumber(null)}
         />
-      ) : (
+      ) : (<>
+        <CourseOpening course={course} studentName={currentUser.name} section={activeSection} teacherName={instructorName(store.users.find(u=>u.id===activeSection?.teacherId))} materials={(store.sessionMaterials || []).filter(m => !m.sessionId && m.courseId === courseId)} />
         <SessionPath
           sessions={sessions}
           nextNumber={nextSession?.number}
@@ -316,7 +325,7 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
           isSessionDone={s => s.lessons.length > 0 && s.lessons.every(l => isLessonCompleted(store, enrollment!.id, l.id))}
           onOpen={openSession}
         />
-      )}
+      </>)}
 
       {showInfo && activeSection && <ClassInfoDialog store={store} section={activeSection} course={course} onClose={() => setShowInfo(false)} />}
     </div>
@@ -324,6 +333,16 @@ function Classroom({ store, currentUser, myEnrollments, courseId, setLearningCou
 }
 
 /* ---------------------------------------------------------------------- Session path */
+
+function CourseOpening({course,studentName,materials,section,teacherName}:{course:Course;studentName:string;materials:SessionMaterial[];section?:CourseSection;teacherName:string}) {
+  const {supportPhone}=useAppConfig();
+  const categories=[['reference','Sách & Tài liệu tham khảo'],['practice','Bài luyện tập']] as const;
+  return <section className="space-y-5 border-b border-slate-200 pb-6">
+    <h2 className="text-lg font-bold text-slate-900">Tài liệu mở đầu</h2>
+    <div className="rounded-2xl bg-white p-5 text-slate-700 whitespace-pre-line"><LinkedText text={renderWelcomeLetter(course.welcomeLetter || DEFAULT_WELCOME_LETTER,{studentName,courseTitle:course.title,sectionCode:section?.sectionCode,teacherName,openingDate:formatDateVi(section?.openingDate),schedule:formatScheduleSummary(section?.schedule || []),supportPhone})}/></div>
+    {categories.map(([category,title])=>{const items=materials.filter(m=>m.category===category);return items.length?<div key={category} className="space-y-3"><h3 className="font-semibold text-slate-900">{title}</h3><SessionMaterialsList materials={items}/></div>:null;})}
+  </section>;
+}
 
 function SessionPath({ sessions, nextNumber, meetingUrl, isSessionDone, onOpen }: {
   sessions: ClassSession[];
@@ -416,9 +435,12 @@ function LessonRow({ lesson, index, completed, onToggle, onOpen }: { lesson: Les
   );
 }
 
-function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, onToggle, onOpenSession, onOpenLesson, onBack }: {
+function SessionView({ session, sessions, store, currentUser, onRefreshData, courseTitle, meetingUrl, isCompleted, onToggle, onOpenSession, onOpenLesson, onBack }: {
   session: ClassSession;
   sessions: ClassSession[];
+  store: LMSDataStore;
+  currentUser: User;
+  onRefreshData: () => Promise<void> | void;
   courseTitle: string;
   meetingUrl?: string;
   enrollmentId: string;
@@ -428,6 +450,7 @@ function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, 
   onOpenLesson: (lessonId: string) => void;
   onBack: () => void;
 }) {
+  const allowDownload = useAppConfig().allowHomeworkDownload;
   const timing = sessionTiming(session.date);
   const time = formatTimeIfSet(session.date);
   const topic = cleanTopic(session.topic) || lessonTitle(session.lessons[0]);
@@ -521,6 +544,11 @@ function SessionView({ session, sessions, courseTitle, meetingUrl, isCompleted, 
           )}
         </section>
 
+        {session.sessionId && <section className="space-y-3">
+          <h2 className="text-lg font-bold text-slate-900">Bài tập về nhà</h2>
+          <SessionHomeworkList assignments={store.assignments.filter(a => a.sessionId === session.sessionId)} submissions={store.submissions.filter(s => s.studentId === currentUser.id)} allowDownload={allowDownload} onChanged={() => { void onRefreshData(); }} />
+          <LearnerSolution sessionId={session.sessionId} allowDownload={allowDownload} />
+        </section>}
         <nav className="grid grid-cols-2 gap-3 border-t border-slate-200/70 pt-6" aria-label="Chuyển buổi học">
           {prev ? (
             <button type="button" onClick={() => onOpenSession(prev.number)} className="group flex min-w-0 items-center gap-2 rounded-2xl p-3 text-left hover:bg-white hover:shadow-card">

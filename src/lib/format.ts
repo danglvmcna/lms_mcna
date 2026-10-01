@@ -96,4 +96,4 @@ export const scheduleSummary = (schedule?: Array<{ dayOfWeek: string; startTime:
   (schedule || []).map(slot => `${slot.dayOfWeek} ${slot.startTime}–${slot.endTime}`).join(" · ");
 
 export const roleLabel = (role?: string) =>
-  role === "admin" ? "Quản trị viên" : role === "teacher" ? "Giảng viên" : role === "student" ? "Học viên" : role || "";
+  role === "admin" ? "Quản trị viên" : role === "manager" ? "Quản lý lớp" : role === "teacher" ? "Giảng viên" : role === "student" ? "Học viên" : role || "";

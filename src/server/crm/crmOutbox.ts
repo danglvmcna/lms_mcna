@@ -13,7 +13,10 @@ export type CrmEventType =
   | "attendance.risk_detected"
   | "attendance.recovered"
   | "course.completed"
-  | "certificate.issued";
+  | "certificate.issued"
+  | "consultation.requested"
+  | "upsell.requested"
+  | "upsell.payment_confirmed";
 export type CrmOrigin = "lms" | "crm";
 
 const MAX_ATTEMPTS = 10;

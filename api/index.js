@@ -1,11 +1,12 @@
 // server.ts
 import express from "express";
-import path5 from "path";
+import path6 from "path";
 import multer from "multer";
 import { ZipArchive } from "archiver";
+import ExcelJS2 from "exceljs";
 import fs5 from "fs";
 import os3 from "os";
-import crypto4 from "crypto";
+import crypto6 from "crypto";
 import dotenv2 from "dotenv";
 
 // src/utils.ts
@@ -24,18 +25,18 @@ function extractYoutubeVideoId(input) {
     return null;
   }
   const host = url.hostname.toLowerCase().replace(/^(www|m)\./, "");
-  let id = null;
+  let id2 = null;
   if (host === "youtu.be") {
-    id = url.pathname.split("/")[1] || null;
+    id2 = url.pathname.split("/")[1] || null;
   } else if (host === "youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
     if (url.pathname === "/watch") {
-      id = url.searchParams.get("v");
+      id2 = url.searchParams.get("v");
     } else {
       const match = url.pathname.match(/^\/(?:embed|shorts|live|v)\/([^/?#]+)/);
-      id = match ? match[1] : null;
+      id2 = match ? match[1] : null;
     }
   }
-  return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
+  return id2 && YOUTUBE_VIDEO_ID.test(id2) ? id2 : null;
 }
 var youtubeWatchUrl = (videoId) => `https://www.youtube.com/watch?v=${videoId}`;
 
@@ -194,7 +195,7 @@ var STUDENT_CREDENTIAL = credential("studente16", "seed_student");
 function normalizeLegacyRoles(store) {
   store.users = store.users.map((user) => {
     const legacyRole = user.role;
-    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin" || legacyRole === "manager" || legacyRole === "super_admin") {
+    if (legacyRole === "ke_toan" || legacyRole === "finance" || legacyRole === "le_tan" || legacyRole === "sale" || legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic" || legacyRole === "academic_admin" || legacyRole === "super_admin") {
       return { ...user, role: "admin" };
     }
     if (legacyRole === "advisor") {
@@ -699,7 +700,7 @@ var AppStore = class {
     if (skipSync) return Promise.resolve();
     if (typeof sessionStorage !== "undefined") {
       const role = sessionStorage.getItem("mcna_lms_role") || sessionStorage.getItem("e16_lms_role");
-      if (role && !["manager", "admin"].includes(role)) {
+      if (role && role !== "admin") {
         return Promise.resolve();
       }
     }
@@ -897,6 +898,7 @@ function generateId2(prefix) {
 function normalizeRole(role) {
   if (role === "teacher" || role === "advisor") return "teacher";
   if (role === "student" || role === "parent") return "student";
+  if (role === "manager") return "manager";
   return "admin";
 }
 function denormalizeRole(role) {
@@ -918,7 +920,8 @@ function toPublicUser(row) {
     emailProvisionedAt: row.email_provisioned_at || void 0,
     mustChangePassword: Boolean(row.must_change_password),
     signupSource: row.signup_source || "admin",
-    crmContactId: row.crm_contact_id || void 0
+    crmContactId: row.crm_contact_id || void 0,
+    canManageSales: Boolean(row.can_manage_sales)
   };
 }
 function courseFromRow(row) {
@@ -937,7 +940,8 @@ function courseFromRow(row) {
     rejectionReason: row.rejection_reason || void 0,
     createdAt: row.created_at,
     openingDate: row.opening_date || void 0,
-    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === void 0 ? void 0 : Number(row.number_of_lessons)
+    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === void 0 ? void 0 : Number(row.number_of_lessons),
+    welcomeLetter: row.welcome_letter || void 0
   };
 }
 function publicCourseFromRow(row) {
@@ -992,10 +996,11 @@ function enrollmentFromRow(row) {
 function sessionMaterialFromRow(row) {
   return {
     id: row.id,
-    sessionId: row.session_id,
+    sessionId: row.session_id || void 0,
     sectionId: row.section_id || void 0,
     courseId: row.course_id,
     type: row.type,
+    category: row.category || void 0,
     title: row.title,
     url: row.url || void 0,
     fileName: row.file_name || void 0,
@@ -1061,6 +1066,7 @@ function assignmentFromRow(row) {
     description: row.description,
     deadline: row.deadline,
     maxScore: Number(row.max_score),
+    allowLate: Boolean(row.allow_late),
     attachmentUrl: row.attachment_url || void 0,
     lessonId: row.lesson_id || void 0,
     type: row.type || void 0
@@ -1140,14 +1146,14 @@ var schemas = {
     email: z.email().trim().toLowerCase(),
     password: z.string().min(8),
     name: z.string().trim().min(1),
-    role: z.enum(["admin", "teacher", "student"]),
+    role: z.enum(["admin", "manager", "teacher", "student"]),
     phone: z.string().trim().optional()
   }),
   bulkCreateUsers: z.object({
     users: z.array(z.object({
       email: z.email().trim().toLowerCase(),
       name: z.string().trim().min(1),
-      role: z.enum(["admin", "teacher", "student"]),
+      role: z.enum(["admin", "manager", "teacher", "student"]),
       phone: z.string().trim().optional()
     })).min(1).max(5e3),
     defaultPassword: z.string().min(8).optional()
@@ -1159,7 +1165,7 @@ var schemas = {
     idempotencyKey: z.uuid(),
     message: z.string().trim().min(1).max(2e3),
     type: z.enum(["info", "success", "warning", "danger"]).default("info"),
-    role: z.enum(["all", "student", "teacher", "admin"]).optional(),
+    role: z.enum(["all", "student", "teacher", "manager", "admin"]).optional(),
     userIds: z.array(z.string().trim().min(1)).min(1).max(100).optional()
   }).refine((value) => Boolean(value.role) !== Boolean(value.userIds), {
     message: "Provide exactly one audience: role or userIds."
@@ -1236,7 +1242,8 @@ var schemas = {
     sectionId: z.string().trim().min(1).optional()
   }),
   issueCertificate: z.object({
-    enrollmentId: z.string().trim().min(1)
+    enrollmentId: z.string().trim().min(1),
+    overrideReason: z.string().trim().min(10).max(2e3).optional()
   }),
   toggleProgress: z.object({
     enrollmentId: z.string().trim().min(1),
@@ -1252,7 +1259,8 @@ var schemas = {
     sessionId: z.string().trim().optional(),
     title: z.string().trim().min(1),
     description: z.string().trim().min(1),
-    deadline: z.string().trim().min(1),
+    deadline: z.string().trim().refine((value) => Number.isFinite(Date.parse(value)), "H\u1EA1n n\u1ED9p kh\xF4ng h\u1EE3p l\u1EC7."),
+    allowLate: z.boolean().default(false),
     maxScore: z.coerce.number().min(1),
     attachmentUrl: z.string().trim().optional(),
     lessonId: z.string().trim().optional(),
@@ -1261,7 +1269,8 @@ var schemas = {
   updateAssignment: z.object({
     title: z.string().trim().min(1).optional(),
     description: z.string().trim().min(1).optional(),
-    deadline: z.string().trim().min(1).optional(),
+    deadline: z.string().trim().refine((value) => Number.isFinite(Date.parse(value)), "H\u1EA1n n\u1ED9p kh\xF4ng h\u1EE3p l\u1EC7.").optional(),
+    allowLate: z.boolean().optional(),
     maxScore: z.coerce.number().min(1).optional(),
     attachmentUrl: z.string().trim().optional().nullable(),
     lessonId: z.string().trim().optional().nullable(),
@@ -1270,13 +1279,14 @@ var schemas = {
   }),
   submitAssignment: z.object({
     assignmentId: z.string().trim().min(1),
-    content: z.string().trim().min(1),
+    content: z.string().trim().min(1).max(2e4),
     attachmentUrl: z.string().trim().optional()
   }),
   gradeAssignment: z.object({
     submissionId: z.string().trim().min(1),
     score: z.coerce.number().min(0),
-    feedback: z.string().trim().default("")
+    feedback: z.string().trim().max(2e4).default(""),
+    expectedSubmittedAt: z.string().refine((v) => Number.isFinite(Date.parse(v))).optional()
   }),
   reviewTransaction: z.object({
     status: z.enum(["approved", "rejected"]),
@@ -1354,11 +1364,46 @@ var schemas = {
     recordingUrl: z.string().trim().optional().nullable(),
     content: z.string().trim().optional().nullable()
   }),
-  // Multipart for slide/document (fields arrive as strings), JSON for youtube/link.
+  // Multipart for slide/document/data (fields arrive as strings), JSON for youtube/link.
   createSessionMaterial: z.object({
-    type: z.enum(["slide", "document", "youtube", "link"]),
+    type: z.enum(["slide", "document", "data", "youtube", "link"]),
     title: z.string().trim().max(200).optional().transform((value) => value || void 0),
     url: z.string().trim().max(2e3).optional()
+  }),
+  // A course's opening materials: reference reading or practice exercises.
+  createIntroMaterial: z.object({
+    category: z.enum(["reference", "practice"]),
+    type: z.enum(["document", "data", "youtube", "link"]),
+    title: z.string().trim().max(200).optional().transform((value) => value || void 0),
+    url: z.string().trim().max(2e3).optional()
+  }),
+  reorderIntroMaterials: z.object({
+    category: z.enum(["reference", "practice"]),
+    materialIds: z.array(z.string().trim().min(1)).min(1).max(200)
+  }),
+  welcomeLetter: z.object({
+    welcomeLetter: z.string().max(8e3)
+  }),
+  // Rows are checked one by one in the import service, so a bad email does not reject the whole table.
+  paidImport: z.object({
+    rows: z.array(z.object({
+      name: z.string().trim().max(160),
+      email: z.string().trim().toLowerCase().max(200),
+      phone: z.string().trim().max(40).optional(),
+      course: z.string().trim().max(300),
+      amount: z.coerce.number().nonnegative().optional(),
+      sectionCode: z.string().trim().max(120).optional(),
+      note: z.string().trim().max(300).optional()
+    })).min(1).max(500),
+    defaultPassword: z.string().min(8).max(100).optional(),
+    sendAccountEmail: z.boolean().default(true),
+    dryRun: z.boolean().default(false)
+  }),
+  resendPlacementEmail: z.object({
+    items: z.array(z.object({
+      studentId: z.string().trim().min(1),
+      sectionId: z.string().trim().min(1)
+    })).min(1).max(200)
   }),
   updateSessionMaterial: z.object({
     title: z.string().trim().min(1).max(200).optional(),
@@ -1695,10 +1740,10 @@ function backfillMegaDemoData(storeInput) {
       { id: `sess_${section.id}_1`, date: "2026-09-15T08:00:00Z", topic: "Bu\u1ED5i 1: Gi\u1EDBi thi\u1EC7u \u0111\u1EC1 c\u01B0\u01A1ng v\xE0 l\u1ED9 tr\xECnh h\u1ECDc" },
       { id: `sess_${section.id}_2`, date: "2026-09-22T08:00:00Z", topic: "Bu\u1ED5i 2: Ki\u1EBFn th\u1EE9c n\u1EC1n t\u1EA3ng v\xE0 b\xE0i th\u1EF1c h\xE0nh" }
     ];
-    sessions.forEach(({ id, date, topic }) => {
-      if (store.attendanceSessions.some((s) => s.id === id)) return;
+    sessions.forEach(({ id: id2, date, topic }) => {
+      if (store.attendanceSessions.some((s) => s.id === id2)) return;
       store.attendanceSessions.push({
-        id,
+        id: id2,
         courseId: section.courseId,
         sectionId: section.id,
         teacherId: section.teacherId,
@@ -1709,8 +1754,8 @@ function backfillMegaDemoData(storeInput) {
       store.courseRegistrations.filter((r) => r.sectionId === section.id).forEach((registration) => {
         const status = statuses[Math.floor(Math.random() * statuses.length)];
         store.attendanceRecords.push({
-          id: `att_${id}_${registration.studentId}`,
-          sessionId: id,
+          id: `att_${id2}_${registration.studentId}`,
+          sessionId: id2,
           studentId: registration.studentId,
           status,
           note: status === "late" ? "\u0110i mu\u1ED9n 10 ph\xFAt" : status === "absent" ? "Ngh\u1EC9 kh\xF4ng ph\xE9p" : ""
@@ -1802,8 +1847,8 @@ var usersRepository = {
     }
     return null;
   },
-  async findById(db, id) {
-    const row = (await db.query("SELECT * FROM users WHERE id = $1", [id])).rows[0];
+  async findById(db, id2) {
+    const row = (await db.query("SELECT * FROM users WHERE id = $1", [id2])).rows[0];
     return row ? toPublicUser(row) : null;
   },
   async list(db) {
@@ -1827,8 +1872,8 @@ var usersRepository = {
       );
     }
   },
-  async setActive(db, id, isActive) {
-    const row = (await db.query("UPDATE users SET is_active = $1 WHERE id = $2 RETURNING *", [isActive, id])).rows[0];
+  async setActive(db, id2, isActive) {
+    const row = (await db.query("UPDATE users SET is_active = $1 WHERE id = $2 RETURNING *", [isActive, id2])).rows[0];
     return row ? toPublicUser(row) : null;
   }
 };
@@ -2306,8 +2351,8 @@ var dayOfWeekIndex = (value) => {
   return DAY_INDEX_BY_NAME[text] ?? null;
 };
 var addDaysIso = (dateOnly, days) => {
-  const [year, month, day] = dateOnly.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  const [year, month2, day] = dateOnly.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month2 - 1, day));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 };
@@ -2320,8 +2365,8 @@ var nextDateForSlot = (fromDate, slot, cycle) => {
   if (slot.specificDate) return addDaysIso(normalizeDateOnly(slot.specificDate, fromDate), cycle * 7);
   const targetDay = dayOfWeekIndex(slot.dayOfWeek);
   if (targetDay === null) return addDaysIso(fromDate, cycle * 7);
-  const [year, month, day] = fromDate.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, day));
+  const [year, month2, day] = fromDate.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month2 - 1, day));
   const currentDay = start.getUTCDay();
   const delta = (targetDay - currentDay + 7) % 7;
   return addDaysIso(fromDate, delta + cycle * 7);
@@ -2411,6 +2456,7 @@ async function ensureSectionAttendanceSessionsForSchedule(db, section, schedule 
     const current = generatedMatch || fallbackMatch;
     if (current) {
       usedIds.add(current.id);
+      if (current.taught_at) continue;
       const sets = ["teacher_id = $1"];
       const values2 = [section.teacher_id];
       let paramIndex = values2.length + 1;
@@ -2467,6 +2513,14 @@ async function ensureSectionAttendanceSessionsForSchedule(db, section, schedule 
     return order !== null && (order > targetCount || !usedIds.has(row.id));
   }).map((row) => row.id);
   if (excessGeneratedIds.length > 0) {
+    await db.query("SELECT id FROM attendance_sessions WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE", [excessGeneratedIds]);
+    const protectedRows = await db.query(`SELECT s.id FROM attendance_sessions s WHERE s.id=ANY($1::text[])
+      AND (${columns.includes("taught_at") ? "s.taught_at IS NOT NULL OR" : ""}
+        EXISTS(SELECT 1 FROM attendance_records r WHERE r.session_id=s.id) OR
+        EXISTS(SELECT 1 FROM assignments a WHERE a.session_id=s.id) OR
+        EXISTS(SELECT 1 FROM session_materials m WHERE m.session_id=s.id)
+        ${columns.includes("taught_at") ? "OR EXISTS(SELECT 1 FROM session_solutions sol WHERE sol.session_id=s.id)" : ""})`, [excessGeneratedIds]);
+    if (protectedRows.rowCount) throw Object.assign(new Error("Kh\xF4ng th\u1EC3 gi\u1EA3m s\u1ED1 bu\u1ED5i \u0111\xE3 c\xF3 \u0111i\u1EC3m danh, b\xE0i t\u1EADp, t\xE0i li\u1EC7u ho\u1EB7c l\u1ECBch s\u1EED gi\u1EA3ng d\u1EA1y."), { status: 409 });
     await db.query("DELETE FROM attendance_sessions WHERE id = ANY($1)", [excessGeneratedIds]);
   }
 }
@@ -2477,11 +2531,11 @@ async function getCourseSectionColumnSet(db) {
   return new Set(rows.map((row) => row.column_name));
 }
 async function upsertCourseSection(db, section) {
-  const id = section.id || generateId2("section");
+  const id2 = section.id || generateId2("section");
   const scheduleJson = JSON.stringify(section.schedule || []);
   const columns = await getCourseSectionColumnSet(db);
   const insertColumns = ["id", "course_id", "teacher_id", "section_code", "max_students", "status"];
-  const values = [id, section.courseId, section.teacherId, section.sectionCode, Number(section.maxStudents), section.status];
+  const values = [id2, section.courseId, section.teacherId, section.sectionCode, Number(section.maxStudents), section.status];
   const placeholders = values.map((_, index) => `$${index + 1}`);
   const updates = [
     "course_id = EXCLUDED.course_id",
@@ -2514,13 +2568,13 @@ async function upsertCourseSection(db, section) {
     placeholders.push(`$${values.length}`);
     updates.push("number_of_sessions = EXCLUDED.number_of_sessions");
   }
-  if (columns.has("meeting_url")) {
+  if (columns.has("meeting_url") && section.meetingUrl !== void 0) {
     insertColumns.push("meeting_url");
     values.push(section.meetingUrl || null);
     placeholders.push(`$${values.length}`);
     updates.push("meeting_url = EXCLUDED.meeting_url");
   }
-  if (columns.has("group_chat_url")) {
+  if (columns.has("group_chat_url") && section.groupChatUrl !== void 0) {
     insertColumns.push("group_chat_url");
     values.push(section.groupChatUrl || null);
     placeholders.push(`$${values.length}`);
@@ -2572,11 +2626,11 @@ async function ensureScheduledSessionsForAllSections(db) {
 
 // src/server/services/catalogImport.ts
 var mcnaCatalog = mcnaCatalog_default;
-var courseId = (key) => `course_mcna_${key}`;
-var lessonId = (key, order) => `lesson_mcna_${key}_${order}`;
+var courseId = (key2) => `course_mcna_${key2}`;
+var lessonId = (key2, order) => `lesson_mcna_${key2}_${order}`;
 function slotsInOpeningOrder(cls) {
-  const [year, month, day] = cls.openingDate.split("-").map(Number);
-  const openingDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const [year, month2, day] = cls.openingDate.split("-").map(Number);
+  const openingDay = new Date(Date.UTC(year, month2 - 1, day)).getUTCDay();
   return cls.days.map((name) => {
     const index = dayOfWeekIndex(name);
     if (index === null) throw new Error(`Unknown weekday "${name}" in class ${cls.course} ${cls.openingDate}.`);
@@ -2649,9 +2703,9 @@ async function importMcnaCatalog(db, options = {}) {
       summary.lessons++;
     }
   }
-  for (const cls of mcnaCatalog.classes) {
+  for (const cls of options.skipClasses ? [] : mcnaCatalog.classes) {
     const course = courseByKey.get(cls.course);
-    const [, month, day] = cls.openingDate.split("-");
+    const [, month2, day] = cls.openingDate.split("-");
     const sectionId = `section_mcna_${cls.course}_${cls.openingDate.replace(/-/g, "")}`;
     if ((await db.query("SELECT 1 FROM course_sections WHERE id = $1", [sectionId])).rowCount) {
       summary.classesSkipped++;
@@ -2661,7 +2715,7 @@ async function importMcnaCatalog(db, options = {}) {
       id: sectionId,
       courseId: courseId(course.key),
       teacherId: teacher.id,
-      sectionCode: `${course.code}-${day}${month}`,
+      sectionCode: `${course.code}-${day}${month2}`,
       maxStudents: mcnaCatalog.defaultMaxStudents,
       schedule: slotsInOpeningOrder(cls),
       status: "open",
@@ -2681,7 +2735,7 @@ async function importMcnaCatalog(db, options = {}) {
       );
     }
     const lastDate = sessions.length ? String(sessions[sessions.length - 1].date).slice(0, 10) : cls.openingDate;
-    log(`  + ${course.code}-${day}${month}: ${cls.days.join(" & ")} ${cls.startTime}-${cls.endTime}, ${sessions.length} bu\u1ED5i, ${cls.openingDate} \u2192 ${lastDate}`);
+    log(`  + ${course.code}-${day}${month2}: ${cls.days.join(" & ")} ${cls.startTime}-${cls.endTime}, ${sessions.length} bu\u1ED5i, ${cls.openingDate} \u2192 ${lastDate}`);
     summary.classesCreated++;
   }
   if (options.hideOtherCourses) {
@@ -2893,7 +2947,7 @@ async function seedAuthUsers(db) {
     }
   }
   const unprovisionedStudents = (await db.query(
-    "SELECT id, name FROM users WHERE role = 'student' AND (school_email IS NULL OR email_provisioned = false)"
+    "SELECT id, name FROM users WHERE role = 'student' AND COALESCE(signup_source, 'admin') = 'admin' AND (school_email IS NULL OR email_provisioned = false)"
   )).rows;
   if (unprovisionedStudents.length === 0) return;
   console.log("[Seeding] Backfilling school emails for seeded students...");
@@ -2930,8 +2984,8 @@ var coursesRepository = {
   async listByTeacher(db, teacherId) {
     return (await db.query("SELECT * FROM courses WHERE teacher_id = $1 ORDER BY created_at DESC", [teacherId])).rows.map(courseFromRow);
   },
-  async findById(db, id) {
-    const row = (await db.query("SELECT * FROM courses WHERE id = $1", [id])).rows[0];
+  async findById(db, id2) {
+    const row = (await db.query("SELECT * FROM courses WHERE id = $1", [id2])).rows[0];
     return row ? courseFromRow(row) : null;
   },
   async create(db, input) {
@@ -2958,7 +3012,7 @@ var coursesRepository = {
     );
     return course;
   },
-  async updateDetails(db, id, input) {
+  async updateDetails(db, id2, input) {
     const row = (await db.query(
       `UPDATE courses
        SET title = $1,
@@ -2984,13 +3038,13 @@ var coursesRepository = {
         input.openingDate || null,
         input.numberOfLessons || null,
         input.originalPrice ?? null,
-        id
+        id2
       ]
     )).rows[0];
     return row ? courseFromRow(row) : null;
   },
-  async setStatus(db, id, status, rejectionReason) {
-    const row = (await db.query("UPDATE courses SET status = $1, rejection_reason = $2 WHERE id = $3 RETURNING *", [status, rejectionReason || null, id])).rows[0];
+  async setStatus(db, id2, status, rejectionReason) {
+    const row = (await db.query("UPDATE courses SET status = $1, rejection_reason = $2 WHERE id = $3 RETURNING *", [status, rejectionReason || null, id2])).rows[0];
     return row ? courseFromRow(row) : null;
   },
   async addLesson(db, input) {
@@ -3001,7 +3055,7 @@ var coursesRepository = {
     );
     return lesson;
   },
-  async updateLesson(db, id, input) {
+  async updateLesson(db, id2, input) {
     const row = (await db.query(
       "UPDATE lessons SET title = COALESCE($1, title), content = COALESCE($2, content), video_url = $3, lesson_order = COALESCE($4, lesson_order), duration = COALESCE($5, duration) WHERE id = $6 RETURNING *",
       [
@@ -3010,7 +3064,7 @@ var coursesRepository = {
         input.videoUrl || null,
         input.order !== void 0 ? input.order : null,
         input.duration || null,
-        id
+        id2
       ]
     )).rows[0];
     return row ? {
@@ -3023,8 +3077,8 @@ var coursesRepository = {
       duration: row.duration
     } : null;
   },
-  async deleteLesson(db, id) {
-    await db.query("DELETE FROM lessons WHERE id = $1", [id]);
+  async deleteLesson(db, id2) {
+    await db.query("DELETE FROM lessons WHERE id = $1", [id2]);
   },
   async teacherOwnsCourse(db, teacherId, courseId2) {
     return Boolean((await db.query("SELECT id FROM courses WHERE id = $1 AND teacher_id = $2", [courseId2, teacherId])).rows[0]);
@@ -3034,7 +3088,7 @@ var coursesRepository = {
 // src/server/repositories/enrollments.ts
 var enrollmentsRepository = {
   async listForUser(db, user) {
-    const result = user.role === "admin" ? await db.query("SELECT * FROM enrollments") : await db.query("SELECT * FROM enrollments WHERE student_id = $1", [user.id]);
+    const result = user.role === "admin" || user.role === "manager" ? await db.query("SELECT * FROM enrollments") : await db.query("SELECT * FROM enrollments WHERE student_id = $1", [user.id]);
     return result.rows.map(enrollmentFromRow);
   },
   async register(db, studentId, courseId2, isPaidCourse, extra = {}) {
@@ -3082,33 +3136,51 @@ var enrollmentsRepository = {
     await db.query("INSERT INTO lesson_progress (id,enrollment_id,lesson_id,completed,completed_at) VALUES ($1,$2,$3,$4,$5)", [progress.id, enrollmentId, lessonId2, true, progress.completedAt]);
     return { row: progress };
   },
-  async activateEnrollment(db, id) {
-    const row = (await db.query("UPDATE enrollments SET status = 'active' WHERE id = $1 RETURNING *", [id])).rows[0];
+  async activateEnrollment(db, id2) {
+    const row = (await db.query("UPDATE enrollments SET status = 'active' WHERE id = $1 RETURNING *", [id2])).rows[0];
     return row ? enrollmentFromRow(row) : null;
   }
 };
 
 // src/server/services/email.ts
 import nodemailer from "nodemailer";
+
+// src/server/config.ts
+var DEFAULT_SUPPORT_PHONE = "0939.866.825";
+function getSalesMode() {
+  return (process.env.SALES_MODE || "").trim().toLowerCase() === "self_service" ? "self_service" : "direct";
+}
+var isDirectSale = () => getSalesMode() === "direct";
+var getSupportPhone = () => (process.env.SUPPORT_PHONE || "").trim() || DEFAULT_SUPPORT_PHONE;
+function getDefaultStudentPassword() {
+  const value = (process.env.DEFAULT_STUDENT_PASSWORD || "").trim();
+  return value.length >= 8 ? value : "";
+}
+var allowHomeworkDownload = () => (process.env.ALLOW_HOMEWORK_DOWNLOAD || "").trim().toLowerCase() === "true";
+function getPublicAppConfig() {
+  return {
+    salesMode: getSalesMode(),
+    supportPhone: getSupportPhone(),
+    allowHomeworkDownload: allowHomeworkDownload()
+  };
+}
+
+// src/server/services/email.ts
 import fs2 from "fs";
 import path2 from "path";
 var getSmtpConfig = () => ({
-  host: process.env.SMTP_HOST || "",
+  host: (process.env.SMTP_HOST || "").trim(),
   port: Number(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || "",
-  pass: process.env.SMTP_PASS || "",
-  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${process.env.SMTP_USER || "noreply@mcna.vn"}>`,
-  testReceiver: process.env.TEST_RECEIVER_EMAIL || "",
-  // Where the "open the LMS" button in notification emails points.
-  appUrl: (process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms-mcna.vercel.app").trim()
+  user: (process.env.SMTP_USER || "").trim(),
+  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
+  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
+  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
+  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
 });
-function escapeHtml(value) {
-  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
 var BANK_ACCOUNT_NUMBER = "099162438104";
 var BANK_NAME = "MB Bank (Ng\xE2n h\xE0ng Qu\xE2n \u0110\u1ED9i)";
 var ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
-var getAppUrl = () => getSmtpConfig().appUrl;
+var getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
 var isPlaceholderSmtp = () => {
   const config = getSmtpConfig();
   return !config.user || config.user.includes("your_email") || config.user.includes("example.com") || config.pass.includes("your_app_password");
@@ -3118,15 +3190,24 @@ async function getTransporter() {
   const config = getSmtpConfig();
   if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
     if (!transporter) {
-      transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.port === 465,
-        auth: {
-          user: config.user,
-          pass: config.pass
+      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
+      transporter = nodemailer.createTransport(
+        isGmail ? {
+          service: "gmail",
+          auth: {
+            user: config.user,
+            pass: config.pass
+          }
+        } : {
+          host: config.host,
+          port: config.port,
+          secure: config.port === 465,
+          auth: {
+            user: config.user,
+            pass: config.pass
+          }
         }
-      });
+      );
     }
     return transporter;
   }
@@ -3196,8 +3277,8 @@ function renderBaseLayout(title, bodyContent) {
       </div>
       <div class="footer">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</p>
-        <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: Ban \u0110\xE0o t\u1EA1o MCNA \xB7 Website: <a href="${escapeHtml(getAppUrl())}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(getAppUrl().replace(/^https?:\/\//, ""))}</a></p>
-        <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u. Vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y, c\u1EA7n h\u1ED7 tr\u1EE3 h\xE3y nh\u1EAFn MCNA qua Zalo 0939 866 825.</p>
+        <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: ${getSupportPhone()} \xB7 Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, "")}</a></p>
+        <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
       </div>
     </div>
   </div>
@@ -3214,7 +3295,7 @@ async function dispatchEmail(to, name, subject, html, text) {
   const activeTransporter2 = await getTransporter();
   if (!activeTransporter2) {
     logEmailMock(toEmail, name, subject, html);
-    return;
+    return "mock";
   }
   try {
     await activeTransporter2.sendMail({
@@ -3225,9 +3306,144 @@ async function dispatchEmail(to, name, subject, html, text) {
       text
     });
     console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
+    return "sent";
   } catch (err) {
     console.warn(`[Email Service] SMTP dispatch failed, fallback to mock log:`, err);
     logEmailMock(toEmail, name, subject, html);
+    return "failed";
+  }
+}
+var escapeHtml = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+var safeHttpUrl = (value) => {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+};
+var infoRow = (label, value, valueStyle = "font-weight: 700; color: #0f172a;") => `
+          <tr>
+            <td style="color: #64748b; padding: 5px 0; vertical-align: top; width: 38%;">${label}</td>
+            <td style="${valueStyle} text-align: right; padding: 5px 0;">${value}</td>
+          </tr>`;
+async function sendClassPlacementEmail(params) {
+  try {
+    const subject = `[MCNA] Th\xF4ng tin x\u1EBFp l\u1EDBp ${params.sectionCode} \u2013 ${params.courseTitle}`;
+    const zaloUrl = safeHttpUrl(params.groupChatUrl);
+    const schedule = String(params.scheduleText || "").trim() || "MCNA s\u1EBD th\xF4ng b\xE1o trong nh\xF3m l\u1EDBp";
+    const teacher = String(params.teacherName || "").trim() || "\u0110ang c\u1EADp nh\u1EADt";
+    const appUrl = getAppUrl();
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml(params.name)},</p>
+      <p>MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc <strong>${escapeHtml(params.courseTitle)}</strong>. D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin l\u1EDBp c\u1EE7a b\u1EA1n:</p>
+
+      <div class="success-box">
+        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          TH\xD4NG TIN L\u1EDAP H\u1ECCC
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("T\xEAn l\u1EDBp:", escapeHtml(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
+          ${params.openingDate ? infoRow("Ng\xE0y khai gi\u1EA3ng:", escapeHtml(params.openingDate)) : ""}
+          ${infoRow("L\u1ECBch h\u1ECDc:", escapeHtml(schedule))}
+          ${params.room ? infoRow("H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc:", escapeHtml(params.room), "font-weight: 600; color: #334155;") : ""}
+          ${params.numberOfSessions ? infoRow("S\u1ED1 bu\u1ED5i:", `${Number(params.numberOfSessions)} bu\u1ED5i`, "font-weight: 600; color: #334155;") : ""}
+          ${infoRow("Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:", escapeHtml(teacher))}
+          ${infoRow("S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3:", escapeHtml(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <div class="bank-box">
+        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
+        ${zaloUrl ? `
+        <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">M\u1ECDi th\xF4ng b\xE1o c\u1EE7a l\u1EDBp v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn di\u1EC5n ra trong nh\xF3m Zalo. B\u1EA1n tham gia nh\xF3m tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng nh\xE9.</p>
+        <div style="text-align: center;">
+          <a href="${escapeHtml(zaloUrl)}" class="btn" target="_blank" style="background-color: #0068ff;">Tham gia nh\xF3m Zalo l\u1EDBp</a>
+        </div>
+        <p style="font-size: 11px; color: #64748b; margin: 10px 0 0 0; word-break: break-all; text-align: center;">${escapeHtml(zaloUrl)}</p>
+        ` : `
+        <p style="font-size: 13px; color: #334155; margin: 0;">Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi cho b\u1EA1n tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng. N\u1EBFu c\u1EA7n s\u1EDBm h\u01A1n, b\u1EA1n g\u1ECDi s\u1ED1 h\u1ED7 tr\u1EE3 ${escapeHtml(params.supportPhone)}.</p>
+        `}
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        L\u1EDBp h\u1ECDc \u0111\xE3 hi\u1EC3n th\u1ECB trong t\xE0i kho\u1EA3n MCNA LMS c\u1EE7a b\u1EA1n (\u0111\u0103ng nh\u1EADp b\u1EB1ng email <strong>${escapeHtml(params.to)}</strong>). T\u1EA1i \u0111\xF3 c\xF3 t\xE0i li\u1EC7u m\u1EDF \u0111\u1EA7u, slide, file data v\xE0 b\xE0i t\u1EADp v\u1EC1 nh\xE0 c\u1EE7a t\u1EEBng bu\u1ED5i.
+      </p>
+      ${params.firstLoginPending ? `
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        L\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, b\u1EA1n d\xF9ng m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh trong email "T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn" MCNA \u0111\xE3 g\u1EEDi, sau \u0111\xF3 \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n. N\u1EBFu kh\xF4ng t\xECm th\u1EA5y, b\u1EA1n ch\u1ECDn "Qu\xEAn m\u1EADt kh\u1EA9u" \u1EDF trang \u0111\u0103ng nh\u1EADp.
+      </p>` : ""}
+
+      <div class="btn-container">
+        <a href="${escapeHtml(appUrl)}" class="btn btn-green" target="_blank">V\xE0o l\u1EDBp h\u1ECDc tr\xEAn MCNA LMS</a>
+      </div>
+    `;
+    const plainText = [
+      `Ch\xE0o ${params.name},`,
+      "",
+      `MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc "${params.courseTitle}".`,
+      `T\xEAn l\u1EDBp: ${params.sectionCode}`,
+      params.openingDate ? `Ng\xE0y khai gi\u1EA3ng: ${params.openingDate}` : "",
+      `L\u1ECBch h\u1ECDc: ${schedule}`,
+      params.room ? `H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc: ${params.room}` : "",
+      params.numberOfSessions ? `S\u1ED1 bu\u1ED5i: ${params.numberOfSessions}` : "",
+      `Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch: ${teacher}`,
+      zaloUrl ? `Nh\xF3m Zalo c\u1EE7a l\u1EDBp: ${zaloUrl}` : "Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng.",
+      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
+      "",
+      `\u0110\u0103ng nh\u1EADp MCNA LMS b\u1EB1ng email ${params.to} t\u1EA1i: ${appUrl}`
+    ].filter((line) => line !== "").join("\n");
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendClassPlacementEmail error:", err);
+    return "failed";
+  }
+}
+async function sendStudentAccountEmail(params) {
+  try {
+    const subject = "[MCNA] T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n";
+    const appUrl = getAppUrl();
+    const courses = params.courseTitles.filter(Boolean);
+    const courseText = courses.length ? ` kh\xF3a h\u1ECDc <strong>${courses.map(escapeHtml).join(", ")}</strong>` : " kh\xF3a h\u1ECDc";
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml(params.name)},</p>
+      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD${courseText} t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn c\u1EE7a b\u1EA1n tr\xEAn MCNA LMS \u0111\xE3 s\u1EB5n s\xE0ng:</p>
+
+      <div class="info-box">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("Email \u0111\u0103ng nh\u1EADp:", escapeHtml(params.to))}
+          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        \u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.
+      </p>
+      <p style="font-size: 14px; color: #334155;">
+        L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n ngay khi MCNA x\u1EBFp l\u1EDBp xong. Khi \u0111\xF3 b\u1EA1n s\u1EBD nh\u1EADn th\xEAm m\u1ED9t email v\u1EDBi t\xEAn l\u1EDBp, l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch.
+      </p>
+      <p style="font-size: 13px; color: #475569;">C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n g\u1ECDi <strong>${escapeHtml(params.supportPhone)}</strong>.</p>
+
+      <div class="btn-container">
+        <a href="${escapeHtml(appUrl)}" class="btn" target="_blank">\u0110\u0103ng nh\u1EADp MCNA LMS</a>
+      </div>
+    `;
+    const plainText = [
+      `Ch\xE0o ${params.name},`,
+      "",
+      `T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n \u0111\xE3 s\u1EB5n s\xE0ng${courses.length ? ` (kh\xF3a h\u1ECDc: ${courses.join(", ")})` : ""}.`,
+      `Email \u0111\u0103ng nh\u1EADp: ${params.to}`,
+      `M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh: ${params.password}`,
+      "\u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.",
+      "L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n khi MCNA x\u1EBFp l\u1EDBp xong.",
+      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
+      "",
+      `\u0110\u0103ng nh\u1EADp t\u1EA1i: ${appUrl}`
+    ].join("\n");
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendStudentAccountEmail error:", err);
+    return "failed";
   }
 }
 async function sendCourseRegistrationEmail(params) {
@@ -3242,7 +3458,7 @@ async function sendCourseRegistrationEmail(params) {
     const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
     const subject = isPaid ? `[MCNA] H\u01B0\u1EDBng d\u1EABn thanh to\xE1n & X\xE1c nh\u1EADn \u0111\u0103ng k\xFD: ${params.courseTitle}` : `[MCNA] X\xE1c nh\u1EADn \u0111\u0103ng k\xFD th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
       <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. \u0110\u01A1n \u0111\u0103ng k\xFD h\u1ECDc t\u1EADp c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\xEAn h\u1EC7 th\u1ED1ng.</p>
 
       <div class="info-box">
@@ -3252,11 +3468,11 @@ async function sendCourseRegistrationEmail(params) {
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${safeCourseTitle}</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${escapeHtml(params.courseTitle)}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
-            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${safeSectionCode}</td>
+            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">H\u1ECDc ph\xED:</td>
@@ -3341,7 +3557,7 @@ async function sendPaymentConfirmationEmail(params) {
     const safeTeacherName = params.teacherName ? escapeHtml(params.teacherName) : "";
     const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
       <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
 
       <div class="success-box">
@@ -3351,7 +3567,7 @@ async function sendPaymentConfirmationEmail(params) {
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           <tr>
             <td style="color: #475569; padding: 5px 0;">Kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${safeCourseTitle}</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.courseTitle)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n \u0111\xE3 thanh to\xE1n:</td>
@@ -3359,7 +3575,7 @@ async function sendPaymentConfirmationEmail(params) {
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">M\xE3 giao d\u1ECBch:</td>
-            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${safeTransactionId}</td>
+            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${escapeHtml(params.transactionId || "TX-" + Date.now())}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Th\u1EDDi gian x\xE1c nh\u1EADn:</td>
@@ -3367,12 +3583,12 @@ async function sendPaymentConfirmationEmail(params) {
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
-            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${safeSectionCode}</td>
+            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
           </tr>
           ${safeTeacherName ? `
           <tr>
             <td style="color: #475569; padding: 5px 0;">Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:</td>
-            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${safeTeacherName}</td>
+            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.teacherName)}</td>
           </tr>` : ""}
           <tr>
             <td style="color: #475569; padding: 5px 0;">Tr\u1EA1ng th\xE1i kh\xF3a h\u1ECDc:</td>
@@ -3407,10 +3623,10 @@ async function sendEmailDirect(recipientEmail, recipientName, message) {
     const safeName = escapeHtml(recipientName);
     const safeMessage = escapeHtml(message);
     const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${safeName},</p>
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(recipientName)},</p>
       <p>H\u1EC7 th\u1ED1ng H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin g\u1EEDi \u0111\u1EBFn b\u1EA1n th\xF4ng b\xE1o m\u1EDBi:</p>
       <div class="info-box" style="font-size: 14px; color: #1e293b; line-height: 1.6;">
-        ${safeMessage}
+        ${escapeHtml(message).replace(/\r?\n/g, "<br>")}
       </div>
       <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp v\xE0o h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\u1EBFt.</p>
       <div class="btn-container">
@@ -3940,7 +4156,7 @@ Email n\xE0y \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS. H\xE3y \u0111\u0103ng nh\u1
 }
 
 // src/server/emailProvisioning/provisioningService.ts
-var LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || "http://localhost:3000";
+var LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms.mcna.vn";
 var provisioningService = {
   /**
    * Provision a Google Workspace email account for a student user
@@ -4088,7 +4304,8 @@ var notificationsRepository = {
         input.relatedEntityId || null
       ]
     );
-    if (userRole === "student") {
+    if (input.skipEmail) {
+    } else if (userRole === "student") {
       if (emailProvisioned) {
         provisioningService.sendNotificationEmail(db, notification.userId, {
           subject: "C\u1EADp nh\u1EADt th\xF4ng b\xE1o t\u1EEB LMS",
@@ -4225,7 +4442,7 @@ var quizzesRepository = {
     let correctCount = 0;
     for (const question of questions) {
       const studentAnswer = answers[question.id] || "";
-      if (question.type === "text" && question.correctAnswer.toLowerCase().split(",").map((key) => key.trim()).some((key) => studentAnswer.toLowerCase().includes(key))) {
+      if (question.type === "text" && question.correctAnswer.toLowerCase().split(",").map((key2) => key2.trim()).some((key2) => studentAnswer.toLowerCase().includes(key2))) {
         correctCount++;
       } else if (question.type === "multiple") {
         const sortedStudent = studentAnswer.split(",").map((x) => x.trim()).filter(Boolean).sort().join(",");
@@ -4250,7 +4467,7 @@ var quizzesRepository = {
     );
     return { row: { ...attempt, correctAnswers: correctCount, total: questions.length } };
   },
-  async update(db, id, input) {
+  async update(db, id2, input) {
     const row = (await db.query(
       "UPDATE quizzes SET title = COALESCE($1, title), lesson_id = COALESCE($2, lesson_id), session_id = COALESCE($3, session_id), passing_score = COALESCE($4, passing_score), time_limit = COALESCE($5, time_limit), max_attempts = COALESCE($6, max_attempts), deadline = COALESCE($7, deadline) WHERE id = $8 RETURNING *",
       [
@@ -4261,207 +4478,95 @@ var quizzesRepository = {
         input.timeLimit !== void 0 ? input.timeLimit : null,
         input.maxAttempts !== void 0 ? input.maxAttempts : null,
         input.deadline !== void 0 ? input.deadline : null,
-        id
+        id2
       ]
     )).rows[0];
     return row ? quizFromRow(row) : null;
   },
-  async delete(db, id) {
-    await db.query("DELETE FROM questions WHERE quiz_id = $1", [id]);
-    await db.query("DELETE FROM quizzes WHERE id = $1", [id]);
-    return { id };
+  async delete(db, id2) {
+    await db.query("DELETE FROM questions WHERE quiz_id = $1", [id2]);
+    await db.query("DELETE FROM quizzes WHERE id = $1", [id2]);
+    return { id: id2 };
   }
 };
 
 // src/server/repositories/assignments.ts
-var hasEnsuredColumns = false;
-async function ensureAssignmentSchema(db) {
-  if (hasEnsuredColumns) return;
-  try {
-    await db.query(`
-      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
-      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
-      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
-      ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
-      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
-      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS attachment_url TEXT;
-      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS session_id TEXT;
-    `);
-    hasEnsuredColumns = true;
-  } catch (err) {
-  }
-}
 var assignmentsRepository = {
   async create(db, input) {
-    await ensureAssignmentSchema(db);
-    const assignment = { ...input, id: generateId2("assign") };
-    try {
-      await db.query(
-        "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-        [
-          assignment.id,
-          assignment.courseId,
-          assignment.title,
-          assignment.description,
-          assignment.deadline,
-          assignment.maxScore,
-          assignment.attachmentUrl || null,
-          assignment.lessonId || null,
-          assignment.type || null,
-          assignment.sessionId || null
-        ]
-      );
-    } catch (err) {
-      if (err?.code === "42703" || err?.message?.includes("does not exist") || err?.message?.includes("attachment_url")) {
-        hasEnsuredColumns = false;
-        await db.query(`
-          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
-          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS session_id TEXT;
-          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS lesson_id TEXT;
-          ALTER TABLE assignments ADD COLUMN IF NOT EXISTS type TEXT;
-        `);
-        hasEnsuredColumns = true;
-        await db.query(
-          "INSERT INTO assignments (id, course_id, title, description, deadline, max_score, attachment_url, lesson_id, type, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-          [
-            assignment.id,
-            assignment.courseId,
-            assignment.title,
-            assignment.description,
-            assignment.deadline,
-            assignment.maxScore,
-            assignment.attachmentUrl || null,
-            assignment.lessonId || null,
-            assignment.type || null,
-            assignment.sessionId || null
-          ]
-        );
-      } else {
-        throw err;
-      }
-    }
-    return assignment;
+    const row = (await db.query(
+      `INSERT INTO assignments(id,course_id,title,description,deadline,max_score,attachment_url,lesson_id,type,session_id,allow_late)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [generateId2("assign"), input.courseId, input.title, input.description, input.deadline, input.maxScore, input.attachmentUrl || null, input.lessonId || null, input.type || "lesson", input.sessionId || null, input.allowLate || false]
+    )).rows[0];
+    return assignmentFromRow(row);
   },
-  async submit(db, studentId, assignmentId, content, attachmentUrl) {
-    await ensureAssignmentSchema(db);
-    const assignment = (await db.query("SELECT course_id, deadline FROM assignments WHERE id = $1", [assignmentId])).rows[0];
-    if (!assignment) return { error: "Assignment not found.", status: 404 };
-    if (assignment.deadline) {
-      const deadlineDate = new Date(assignment.deadline);
-      if (/* @__PURE__ */ new Date() > deadlineDate) {
-        return { error: "Kh\xF4ng th\u1EC3 n\u1ED9p ho\u1EB7c ch\u1EC9nh s\u1EEDa b\xE0i t\u1EADp t\u1EF1 lu\u1EADn do \u0111\xE3 qu\xE1 h\u1EA1n n\u1ED9p b\xE0i (deadline).", status: 400 };
-      }
-    }
-    const enrollment = (await db.query(
-      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
-      [studentId, assignment.course_id]
-    )).rows[0];
-    if (!enrollment) return { error: "Active enrollment required to submit this assignment.", status: 403 };
-    const existing = (await db.query(
-      "SELECT id FROM submissions WHERE student_id = $1 AND assignment_id = $2",
-      [studentId, assignmentId]
-    )).rows[0];
+  async submit(_db, studentId, assignmentId, content, attachmentUrl) {
+    const client2 = await pool.connect();
     try {
-      if (existing) {
-        const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
-        const updated = (await db.query(
-          "UPDATE submissions SET content = $1, submitted_at = $2, attachment_url = COALESCE($4, attachment_url) WHERE id = $3 RETURNING attachment_url",
-          [content, submittedAt, existing.id, attachmentUrl || null]
-        )).rows[0];
-        return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
-      } else {
-        const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
-        await db.query(
-          "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
-          [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
-        );
-        return { row: submission };
-      }
-    } catch (err) {
-      if (err?.code === "42703" || err?.message?.includes("attachment_url")) {
-        await db.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS attachment_url TEXT;");
-        if (existing) {
-          const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
-          const updated = (await db.query(
-            "UPDATE submissions SET content = $1, submitted_at = $2, attachment_url = COALESCE($4, attachment_url) WHERE id = $3 RETURNING attachment_url",
-            [content, submittedAt, existing.id, attachmentUrl || null]
-          )).rows[0];
-          return { row: { id: existing.id, assignmentId, studentId, content, submittedAt, attachmentUrl: updated?.attachment_url || void 0 } };
-        } else {
-          const submission = { id: generateId2("sub"), assignmentId, studentId, content, submittedAt: (/* @__PURE__ */ new Date()).toISOString(), attachmentUrl };
-          await db.query(
-            "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at, attachment_url) VALUES ($1,$2,$3,$4,$5,$6)",
-            [submission.id, assignmentId, studentId, content, submission.submittedAt, attachmentUrl || null]
-          );
-          return { row: submission };
-        }
-      }
-      throw err;
+      await client2.query("BEGIN");
+      const assignment = (await client2.query("SELECT * FROM assignments WHERE id=$1 FOR UPDATE", [assignmentId])).rows[0];
+      const fail2 = async (error, status) => {
+        await client2.query("ROLLBACK");
+        return { error, status };
+      };
+      if (!assignment) return await fail2("Kh\xF4ng t\xECm th\u1EA5y b\xE0i t\u1EADp.", 404);
+      if (!assignment.allow_late && Date.now() > new Date(assignment.deadline).getTime()) return await fail2("\u0110\xE3 qu\xE1 h\u1EA1n n\u1ED9p b\xE0i.", 400);
+      const access = (await client2.query(`SELECT 1 FROM enrollments e WHERE e.student_id=$1 AND e.course_id=$2 AND e.status IN ('active','completed')
+        AND EXISTS(SELECT 1 FROM course_registrations cr JOIN course_sections cs ON cs.id=cr.section_id
+          WHERE cr.student_id=e.student_id AND cs.course_id=e.course_id AND cr.status='registered'
+          AND ($3::text IS NULL OR cr.section_id=(SELECT section_id FROM attendance_sessions WHERE id=$3)))`, [studentId, assignment.course_id, assignment.session_id])).rowCount;
+      if (!access) return await fail2("B\u1EA1n ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp c\u1EE7a b\xE0i t\u1EADp n\xE0y.", 403);
+      const existing = (await client2.query("SELECT * FROM submissions WHERE student_id=$1 AND assignment_id=$2 ORDER BY submitted_at DESC LIMIT 1 FOR UPDATE", [studentId, assignmentId])).rows[0];
+      const id2 = existing?.id || generateId2("sub");
+      if (existing) await client2.query(`INSERT INTO submission_versions(id,submission_id,content,attachment_url,submitted_at) VALUES($1,$2,$3,$4,$5)`, [generateId2("rev"), id2, existing.content, existing.attachment_url, existing.submitted_at]);
+      const row = existing ? (await client2.query(`UPDATE submissions SET content=$1,attachment_url=COALESCE($2,attachment_url),submitted_at=GREATEST(clock_timestamp(),submitted_at::timestamptz + interval '1 millisecond'),score=NULL,feedback=NULL,graded_at=NULL WHERE id=$3 RETURNING *`, [content, attachmentUrl || null, id2])).rows[0] : (await client2.query(`INSERT INTO submissions(id,assignment_id,student_id,content,attachment_url,submitted_at) VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP) RETURNING *`, [id2, assignmentId, studentId, content, attachmentUrl || null])).rows[0];
+      await client2.query("COMMIT");
+      return { row: submissionFromRow(row) };
+    } catch (error) {
+      await client2.query("ROLLBACK");
+      throw error;
+    } finally {
+      client2.release();
     }
   },
   async findSubmissionForGrading(db, submissionId) {
-    return (await db.query("SELECT s.*, a.max_score, c.teacher_id FROM submissions s JOIN assignments a ON a.id = s.assignment_id JOIN courses c ON c.id = a.course_id WHERE s.id = $1", [submissionId])).rows[0] || null;
+    return (await db.query(`SELECT s.*,a.max_score,a.course_id,a.session_id,c.teacher_id FROM submissions s JOIN assignments a ON a.id=s.assignment_id JOIN courses c ON c.id=a.course_id WHERE s.id=$1`, [submissionId])).rows[0] || null;
   },
-  async grade(db, submissionId, score, feedback) {
-    await db.query("UPDATE submissions SET score = $1, feedback = $2, graded_at = $3 WHERE id = $4", [score, feedback, (/* @__PURE__ */ new Date()).toISOString(), submissionId]);
-    const submission = (await db.query(
-      `SELECT s.student_id, a.title, a.max_score
-       FROM submissions s
-       JOIN assignments a ON a.id = s.assignment_id
-       WHERE s.id = $1`,
-      [submissionId]
-    )).rows[0];
-    if (submission) {
-      const feedbackText = feedback?.trim() ? ` Nh\u1EADn x\xE9t: ${feedback.trim()}` : "";
-      await notifyStudent(
-        db,
-        submission.student_id,
-        `B\xE0i t\u1EF1 lu\u1EADn "${submission.title}" \u0111\xE3 \u0111\u01B0\u1EE3c ch\u1EA5m: ${score}/${submission.max_score}.${feedbackText}`,
-        { relatedEntityType: "submission", relatedEntityId: submissionId }
-      );
+  async grade(db, submissionId, score, feedback, expectedSubmittedAt) {
+    const client2 = await pool.connect();
+    try {
+      await client2.query("BEGIN");
+      const current = (await client2.query("SELECT sub.*,a.max_score FROM submissions sub JOIN assignments a ON a.id=sub.assignment_id WHERE sub.id=$1 FOR UPDATE OF sub", [submissionId])).rows[0];
+      if (!current || expectedSubmittedAt && new Date(current.submitted_at).getTime() !== Date.parse(expectedSubmittedAt)) {
+        await client2.query("ROLLBACK");
+        return { error: "B\xE0i n\u1ED9p \u0111\xE3 thay \u0111\u1ED5i. T\u1EA3i l\u1EA1i tr\u01B0\u1EDBc khi ch\u1EA5m.", status: 409 };
+      }
+      if (score < 0 || score > Number(current.max_score)) {
+        await client2.query("ROLLBACK");
+        return { error: "\u0110i\u1EC3m v\u01B0\u1EE3t thang \u0111i\u1EC3m.", status: 400 };
+      }
+      await client2.query("UPDATE submissions SET score=$1,feedback=$2,graded_at=CURRENT_TIMESTAMP WHERE id=$3", [score, feedback, submissionId]);
+      await client2.query("COMMIT");
+    } catch (error) {
+      await client2.query("ROLLBACK");
+      throw error;
+    } finally {
+      client2.release();
     }
+    const sub = (await db.query("SELECT s.student_id,a.title,a.max_score FROM submissions s JOIN assignments a ON a.id=s.assignment_id WHERE s.id=$1", [submissionId])).rows[0];
+    if (sub) await notifyStudent(db, sub.student_id, `B\xE0i t\u1EADp "${sub.title}" \u0111\xE3 \u0111\u01B0\u1EE3c ch\u1EA5m: ${score}/${sub.max_score}. ${feedback}`, { relatedEntityType: "submission", relatedEntityId: submissionId });
     return { id: submissionId, score, feedback };
   },
-  async update(db, id, input) {
-    const sets = [];
-    const values = [];
-    let paramIndex = 1;
-    for (const [key, val] of Object.entries(input)) {
-      let dbCol = "";
-      if (key === "title") dbCol = "title";
-      else if (key === "description") dbCol = "description";
-      else if (key === "deadline") dbCol = "deadline";
-      else if (key === "maxScore") dbCol = "max_score";
-      else if (key === "attachmentUrl") dbCol = "attachment_url";
-      else if (key === "lessonId") dbCol = "lesson_id";
-      else if (key === "sessionId") dbCol = "session_id";
-      else if (key === "type") dbCol = "type";
-      if (dbCol) {
-        sets.push(`${dbCol} = $${paramIndex++}`);
-        values.push(val === void 0 ? null : val);
-      }
-    }
-    if (sets.length > 0) {
-      values.push(id);
-      await db.query(`UPDATE assignments SET ${sets.join(", ")} WHERE id = $${paramIndex}`, values);
-    }
-    const row = (await db.query("SELECT * FROM assignments WHERE id = $1", [id])).rows[0];
-    return row ? {
-      id: row.id,
-      courseId: row.course_id,
-      sessionId: row.session_id || void 0,
-      title: row.title,
-      description: row.description,
-      deadline: row.deadline,
-      maxScore: Number(row.max_score),
-      attachmentUrl: row.attachment_url || void 0,
-      lessonId: row.lesson_id || void 0,
-      type: row.type || void 0
-    } : null;
+  async update(db, id2, input) {
+    const map = { title: "title", description: "description", deadline: "deadline", maxScore: "max_score", attachmentUrl: "attachment_url", lessonId: "lesson_id", sessionId: "session_id", type: "type", allowLate: "allow_late" };
+    const entries = Object.entries(input).filter(([key2, value]) => map[key2] && value !== void 0);
+    if (entries.length) await db.query(`UPDATE assignments SET ${entries.map(([key2], i) => `${map[key2]}=$${i + 1}`).join(",")} WHERE id=$${entries.length + 1}`, [...entries.map(([, value]) => value), id2]);
+    const row = (await db.query("SELECT * FROM assignments WHERE id=$1", [id2])).rows[0];
+    return row ? assignmentFromRow(row) : null;
   },
-  async delete(db, id) {
-    await db.query("DELETE FROM assignments WHERE id = $1", [id]);
-    return { id };
+  async delete(db, id2) {
+    await db.query("DELETE FROM assignments WHERE id=$1", [id2]);
+    return { id: id2 };
   }
 };
 
@@ -4559,7 +4664,7 @@ async function storeSnapshotFromDb(db, forceBypassCache = false) {
     db.query("SELECT * FROM forum_replies"),
     db.query("SELECT * FROM forum_posts"),
     db.query("SELECT * FROM teacher_attendance"),
-    db.query("SELECT * FROM session_materials ORDER BY session_id, sort_order, created_at")
+    db.query("SELECT * FROM session_materials ORDER BY session_id NULLS FIRST, category, sort_order, created_at")
   ]);
   const users = usersRes.rows.map(toPublicUser);
   const courses = coursesRes.rows.map(courseFromRow);
@@ -4599,7 +4704,7 @@ async function storeSnapshotFromDb(db, forceBypassCache = false) {
   }));
   const transactions = transactionsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, courseId: row.course_id || "", amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || void 0, processedBy: row.processed_by || void 0, notes: row.notes || void 0 }));
   const courseSections = courseSectionsRes.rows.map(courseSectionFromRow);
-  const courseRegistrations = courseRegistrationsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || void 0, grade: row.grade || void 0, letterGrade: row.letter_grade || void 0, gradePoint: row.grade_point === null ? void 0 : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
+  const courseRegistrations = courseRegistrationsRes.rows.map((row) => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || void 0, grade: row.grade || void 0, letterGrade: row.letter_grade || void 0, gradePoint: row.grade_point === null ? void 0 : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake), placementEmailStatus: row.placement_email_status || void 0, placementEmailAt: row.placement_email_at || void 0 }));
   const certificates = certificatesRes.rows.map((row) => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
   const forumReplies = forumRepliesRes.rows.map((row) => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
   const forumPosts = forumPostsRes.rows.map((row) => {
@@ -4681,16 +4786,32 @@ function limitStoreForRole(store, user) {
       users: store.users.map(safeUser)
     };
   }
+  if (user.role === "manager") {
+    return {
+      ...store,
+      users: store.users.filter((item) => item.id === user.id || item.role === "student" || item.role === "teacher").map(safeUser),
+      auditLogs: [],
+      systemEvents: [],
+      notifications: (store.notifications || []).filter((item) => item.userId === user.id)
+    };
+  }
   if (user.role === "teacher") {
-    const teacherCourseIds = new Set(store.courses.filter((course) => course.teacherId === user.id).map((course) => course.id));
-    const visibleEnrollments = store.enrollments.filter((item) => teacherCourseIds.has(item.courseId));
+    const directSale = isDirectSale();
+    const ownedCourseIds = new Set(store.courses.filter((course) => course.teacherId === user.id).map((course) => course.id));
+    const mySectionList = (store.courseSections || []).filter((cs) => cs.teacherId === user.id);
+    const mySections = new Set(mySectionList.map((cs) => cs.id));
+    const teacherCourseIds = /* @__PURE__ */ new Set([...ownedCourseIds, ...mySectionList.map((cs) => cs.courseId)]);
+    const sectionCourse = new Map(mySectionList.map((cs) => [cs.id, cs.courseId]));
+    const classStudentKeys = new Set((store.courseRegistrations || []).filter((registration) => mySections.has(registration.sectionId) && registration.status === "registered").map((registration) => `${sectionCourse.get(registration.sectionId)}|${registration.studentId}`));
+    const visibleEnrollments = store.enrollments.filter((item) => !directSale && ownedCourseIds.has(item.courseId) || classStudentKeys.has(`${item.courseId}|${item.studentId}`));
+    const visibleEnrollmentIds = new Set(visibleEnrollments.map((item) => item.id));
     const visibleStudentIds = new Set(visibleEnrollments.map((item) => item.studentId));
-    const mySections = new Set(
-      (store.courseSections || []).filter((cs) => cs.teacherId === user.id).map((cs) => cs.id)
-    );
-    const visibleQuizIds = new Set(store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)).map((quiz) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
-    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => teacherCourseIds.has(session.courseId) || mySections.has(session.sectionId)).map((session) => session.id));
+    const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => !directSale && ownedCourseIds.has(session.courseId) || mySections.has(session.sectionId)).map((session) => session.id));
+    const inScope = (item) => item.sessionId ? visibleSessionIds.has(item.sessionId) : ownedCourseIds.has(item.courseId);
+    const visibleQuizzes = store.quizzes.filter(inScope);
+    const visibleQuizIds = new Set(visibleQuizzes.map((quiz) => quiz.id));
+    const visibleAssignments = store.assignments.filter(inScope);
+    const visibleAssignmentIds = new Set(visibleAssignments.map((assignment) => assignment.id));
     const visibleUserIds = /* @__PURE__ */ new Set([user.id]);
     visibleStudentIds.forEach((studentId) => visibleUserIds.add(studentId));
     return {
@@ -4699,41 +4820,46 @@ function limitStoreForRole(store, user) {
       courses: store.courses.filter((course) => teacherCourseIds.has(course.id)),
       lessons: store.lessons.filter((lesson) => teacherCourseIds.has(lesson.courseId)),
       enrollments: visibleEnrollments,
-      lessonProgress: store.lessonProgress.filter((item) => visibleEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
-      quizzes: store.quizzes.filter((quiz) => teacherCourseIds.has(quiz.courseId)),
+      lessonProgress: store.lessonProgress.filter((item) => visibleEnrollmentIds.has(item.enrollmentId)),
+      quizzes: visibleQuizzes,
       questions: store.questions.filter((question) => visibleQuizIds.has(question.quizId)),
       quizAttempts: store.quizAttempts.filter((attempt) => visibleStudentIds.has(attempt.studentId) && visibleQuizIds.has(attempt.quizId)),
-      assignments: store.assignments.filter((assignment) => teacherCourseIds.has(assignment.courseId)),
+      assignments: visibleAssignments,
       submissions: store.submissions.filter((submission) => visibleStudentIds.has(submission.studentId) && visibleAssignmentIds.has(submission.assignmentId)),
       attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)),
-      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material) => material.sessionId ? visibleSessionIds.has(material.sessionId) : teacherCourseIds.has(material.courseId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record) => visibleSessionIds.has(record.sessionId) && visibleStudentIds.has(record.studentId)),
       notifications: (store.notifications || []).filter((item) => item.userId === user.id),
-      courseSections: (store.courseSections || []).filter((section) => mySections.has(section.id)),
-      courseRegistrations: (store.courseRegistrations || []).filter((registration) => visibleStudentIds.has(registration.studentId) || mySections.has(registration.sectionId)),
+      courseSections: mySectionList,
+      courseRegistrations: (store.courseRegistrations || []).filter((registration) => mySections.has(registration.sectionId) || !directSale && visibleStudentIds.has(registration.studentId) && (store.courseSections || []).some((section) => section.id === registration.sectionId && ownedCourseIds.has(section.courseId))),
       teacherAttendance: (store.teacherAttendance || []).filter((ta) => ta.teacherId === user.id),
-      certificates: (store.certificates || []).filter((cert) => teacherCourseIds.has(cert.courseId)),
-      forumPosts: (store.forumPosts || []).filter((post) => teacherCourseIds.has(post.courseId) && (!post.sectionId || mySections.has(post.sectionId)))
+      certificates: (store.certificates || []).filter((cert) => visibleEnrollmentIds.has(cert.enrollmentId)),
+      forumPosts: (store.forumPosts || []).filter((post) => post.sectionId ? mySections.has(post.sectionId) : ownedCourseIds.has(post.courseId))
     };
   }
   if (user.role === "student") {
+    const directSale = isDirectSale();
     const myEnrollments = store.enrollments.filter((item) => item.studentId === user.id);
     const myCourseIds = new Set(myEnrollments.map((item) => item.courseId));
     const activeCourseIds = new Set(myEnrollments.filter((item) => item.status === "active" || item.status === "completed").map((item) => item.courseId));
-    const publicCourseIds = new Set(store.courses.filter((course) => course.status === "published").map((course) => course.id));
+    const publicCourseIds = new Set(directSale ? [] : store.courses.filter((course) => course.status === "published").map((course) => course.id));
     const visibleCourseIds = /* @__PURE__ */ new Set([...publicCourseIds, ...myCourseIds]);
     const visibleQuizzes = store.quizzes.filter((quiz) => activeCourseIds.has(quiz.courseId));
     const visibleQuizIds = new Set(visibleQuizzes.map((quiz) => quiz.id));
-    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => activeCourseIds.has(assignment.courseId)).map((assignment) => assignment.id));
     const myRegisteredSections = new Set(
       (store.courseRegistrations || []).filter((cr) => cr.studentId === user.id && cr.status === "registered").map((cr) => cr.sectionId)
     );
+    const placedCourseIds = new Set((store.courseSections || []).filter((section) => myRegisteredSections.has(section.id) && activeCourseIds.has(section.courseId)).map((section) => section.courseId));
     const visibleSessionIds = new Set((store.attendanceSessions || []).filter((session) => activeCourseIds.has(session.courseId) && (!session.sectionId || myRegisteredSections.has(session.sectionId))).map((session) => session.id));
-    const visibleTeacherIds = new Set(store.courses.filter((course) => visibleCourseIds.has(course.id)).map((course) => course.teacherId));
+    const visibleAssignmentIds = new Set(store.assignments.filter((assignment) => activeCourseIds.has(assignment.courseId) && (!assignment.sessionId || visibleSessionIds.has(assignment.sessionId))).map((assignment) => assignment.id));
+    const visibleTeacherIds = /* @__PURE__ */ new Set([
+      ...store.courses.filter((course) => visibleCourseIds.has(course.id)).map((course) => course.teacherId),
+      ...(store.courseSections || []).filter((section) => myRegisteredSections.has(section.id)).map((section) => section.teacherId)
+    ]);
     return {
       ...baseScopedStore(),
       users: store.users.filter((item) => item.id === user.id || visibleTeacherIds.has(item.id)).map(safeUser),
-      courses: store.courses.filter((course) => visibleCourseIds.has(course.id)),
+      courses: store.courses.filter((course) => visibleCourseIds.has(course.id)).map((course) => placedCourseIds.has(course.id) ? course : { ...course, welcomeLetter: void 0 }),
       lessons: store.lessons.filter((lesson) => visibleCourseIds.has(lesson.courseId)).map((lesson) => activeCourseIds.has(lesson.courseId) ? lesson : sanitizeLessonPreview(lesson)),
       enrollments: myEnrollments,
       lessonProgress: store.lessonProgress.filter((item) => myEnrollments.some((enroll) => enroll.id === item.enrollmentId)),
@@ -4743,12 +4869,12 @@ function limitStoreForRole(store, user) {
       submissions: store.submissions.filter((item) => item.studentId === user.id),
       assignments: store.assignments.filter((item) => visibleAssignmentIds.has(item.id)),
       attendanceSessions: (store.attendanceSessions || []).filter((session) => visibleSessionIds.has(session.id)).map(sanitizeAttendanceSession),
-      sessionMaterials: (store.sessionMaterials || []).filter((material) => visibleSessionIds.has(material.sessionId)),
+      sessionMaterials: (store.sessionMaterials || []).filter((material) => material.sessionId ? visibleSessionIds.has(material.sessionId) : placedCourseIds.has(material.courseId)),
       attendanceRecords: (store.attendanceRecords || []).filter((record) => record.studentId === user.id),
       notifications: store.notifications.filter((item) => item.userId === user.id),
       transactions: (store.transactions || []).filter((item) => item.studentId === user.id),
-      // Every open class is listed for registration, but meeting/group links only reach learners placed in that class.
-      courseSections: (store.courseSections || []).filter((section) => visibleCourseIds.has(section.courseId) || myRegisteredSections.has(section.id)).map((section) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: void 0, groupChatUrl: void 0 }),
+      // Self-service lists every open class for registration; meeting/group links only reach learners placed in that class.
+      courseSections: (store.courseSections || []).filter((section) => myRegisteredSections.has(section.id) || !directSale && visibleCourseIds.has(section.courseId)).map((section) => myRegisteredSections.has(section.id) ? section : { ...section, meetingUrl: void 0, groupChatUrl: void 0 }),
       courseRegistrations: (store.courseRegistrations || []).filter((item) => item.studentId === user.id),
       teacherAttendance: (store.teacherAttendance || []).filter((item) => activeCourseIds.has(item.courseId) && (!item.sectionId || myRegisteredSections.has(item.sectionId))),
       certificates: (store.certificates || []).filter((cert) => cert.studentId === user.id),
@@ -5006,7 +5132,7 @@ var attendanceRepository = {
     const attended = recordsRes.rows.filter((r) => r.status === "present" || r.status === "late" || r.status === "excused").length;
     return Math.round(attended / sessionIds.length * 100);
   },
-  async updateSession(db, id, input) {
+  async updateSession(db, id2, input) {
     const columns = (await db.query(
       "SELECT column_name FROM information_schema.columns WHERE table_name = 'attendance_sessions' AND column_name IN ('date', 'session_date', 'video_url', 'recording_url', 'content')"
     )).rows.map((row2) => row2.column_name);
@@ -5038,13 +5164,13 @@ var attendanceRepository = {
       values.push(input.content || null);
     }
     if (sets.length > 0) {
-      values.push(id);
+      values.push(id2);
       await db.query(
         `UPDATE attendance_sessions SET ${sets.join(", ")} WHERE id = $${paramIndex}`,
         values
       );
     }
-    const row = (await db.query("SELECT * FROM attendance_sessions WHERE id = $1", [id])).rows[0];
+    const row = (await db.query("SELECT * FROM attendance_sessions WHERE id = $1", [id2])).rows[0];
     return row ? {
       id: row.id,
       courseId: row.course_id,
@@ -5115,23 +5241,35 @@ var sessionMaterialsRepository = {
       [sessionId]
     )).rows;
   },
+  /** Opening materials of a course, optionally one category. */
+  async listIntroByCourse(db, courseId2, category) {
+    return (await db.query(
+      `SELECT * FROM session_materials
+       WHERE session_id IS NULL AND course_id = $1 AND ($2::text IS NULL OR category = $2)
+       ORDER BY category, sort_order, created_at`,
+      [courseId2, category || null]
+    )).rows.map(sessionMaterialFromRow);
+  },
   /** Raw row including storage_path; server-side use only. */
-  async findRowById(db, id) {
-    return (await db.query("SELECT * FROM session_materials WHERE id = $1", [id])).rows[0] || null;
+  async findRowById(db, id2) {
+    return (await db.query("SELECT * FROM session_materials WHERE id = $1", [id2])).rows[0] || null;
   },
   async create(db, input) {
     const row = (await db.query(
-      `INSERT INTO session_materials (id, session_id, section_id, course_id, type, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM session_materials WHERE session_id = $2),
-               $12)
+      `INSERT INTO session_materials (id, session_id, section_id, course_id, type, category, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM session_materials
+                WHERE ($2::text IS NOT NULL AND session_id = $2)
+                   OR ($2::text IS NULL AND session_id IS NULL AND course_id = $4 AND category = $6)),
+               $13)
        RETURNING *`,
       [
         input.id || generateId2("mat"),
-        input.sessionId,
+        input.sessionId || null,
         input.sectionId || null,
         input.courseId,
         input.type,
+        input.sessionId ? null : input.category || null,
         input.title,
         input.url || null,
         input.storagePath || null,
@@ -5143,24 +5281,33 @@ var sessionMaterialsRepository = {
     )).rows[0];
     return sessionMaterialFromRow(row);
   },
-  async update(db, id, input) {
+  async update(db, id2, input) {
     const row = (await db.query(
       "UPDATE session_materials SET title = COALESCE($1, title), url = COALESCE($2, url) WHERE id = $3 RETURNING *",
-      [input.title ?? null, input.url ?? null, id]
+      [input.title ?? null, input.url ?? null, id2]
     )).rows[0];
     return row ? sessionMaterialFromRow(row) : null;
   },
-  async remove(db, id) {
-    return (await db.query("DELETE FROM session_materials WHERE id = $1 RETURNING *", [id])).rows[0] || null;
+  async remove(db, id2) {
+    return (await db.query("DELETE FROM session_materials WHERE id = $1 RETURNING *", [id2])).rows[0] || null;
   },
   async reorder(db, sessionId, orderedIds) {
-    for (const [index, id] of orderedIds.entries()) {
+    for (const [index, id2] of orderedIds.entries()) {
       await db.query(
         "UPDATE session_materials SET sort_order = $1 WHERE id = $2 AND session_id = $3",
-        [index + 1, id, sessionId]
+        [index + 1, id2, sessionId]
       );
     }
     return this.listBySession(db, sessionId);
+  },
+  async reorderIntro(db, courseId2, category, orderedIds) {
+    for (const [index, id2] of orderedIds.entries()) {
+      await db.query(
+        "UPDATE session_materials SET sort_order = $1 WHERE id = $2 AND session_id IS NULL AND course_id = $3 AND category = $4",
+        [index + 1, id2, courseId2, category]
+      );
+    }
+    return this.listIntroByCourse(db, courseId2, category);
   },
   /** Storage objects of every uploaded file in a class, so they can be removed with the class. */
   async listStoragePathsForSection(db, sectionId) {
@@ -5229,7 +5376,7 @@ var materialStorage = {
   isRemote() {
     return Boolean(getClient());
   },
-  async put(objectPath, body, contentType) {
+  async put(objectPath, body2, contentType) {
     const supabase = getClient();
     if (supabase) {
       const bucketName = bucket();
@@ -5242,11 +5389,11 @@ var materialStorage = {
           }
           bucketVerified = true;
         }
-        const { error } = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
+        const { error } = await supabase.storage.from(bucketName).upload(objectPath, body2, { contentType, upsert: true });
         if (!error) return;
         if (error.message?.toLowerCase().includes("not found") || error.statusCode === 404) {
           await supabase.storage.createBucket(bucketName, { public: false }).catch(() => void 0);
-          const retry = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
+          const retry = await supabase.storage.from(bucketName).upload(objectPath, body2, { contentType, upsert: true });
           if (!retry.error) return;
         }
         console.warn(`[Storage] Supabase upload failed: ${error.message}. Falling back to DB/local storage.`);
@@ -5260,7 +5407,7 @@ var materialStorage = {
         `INSERT INTO material_files (storage_path, file_data, mime_type)
          VALUES ($1, $2, $3)
          ON CONFLICT (storage_path) DO UPDATE SET file_data = EXCLUDED.file_data, mime_type = EXCLUDED.mime_type`,
-        [objectPath, body, contentType]
+        [objectPath, body2, contentType]
       );
     } catch (dbErr) {
       console.warn("[Storage] DB persistence notice:", dbErr.message);
@@ -5268,7 +5415,7 @@ var materialStorage = {
     try {
       const target = localPathFor(objectPath);
       await fs4.promises.mkdir(path4.dirname(target), { recursive: true });
-      await fs4.promises.writeFile(target, body);
+      await fs4.promises.writeFile(target, body2);
     } catch (fsErr) {
       console.warn("[Storage] Local filesystem write notice:", fsErr.message);
     }
@@ -5331,8 +5478,8 @@ var materialStorage = {
 
 // src/server/crm/signature.ts
 import crypto2 from "crypto";
-function signCrmPayload(secret, timestamp, body) {
-  return crypto2.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+function signCrmPayload(secret, timestamp, body2) {
+  return crypto2.createHmac("sha256", secret).update(`${timestamp}.${body2}`).digest("hex");
 }
 function verifyCrmSignature(secret, timestampHeader, signatureHeader, rawBody, toleranceSeconds) {
   if (!timestampHeader || !signatureHeader) {
@@ -5356,18 +5503,18 @@ var MAX_ATTEMPTS = 10;
 var BATCH_SIZE = 20;
 var DELIVERY_TIMEOUT_MS = 1e4;
 async function enqueueCrmEvent(db, type, data, origin = "lms") {
-  const id = generateId2("crmevt");
-  const payload = { id, type, origin, occurredAt: (/* @__PURE__ */ new Date()).toISOString(), data };
+  const id2 = generateId2("crmevt");
+  const payload = { id: id2, type, origin, occurredAt: (/* @__PURE__ */ new Date()).toISOString(), data };
   await db.query(
     "INSERT INTO crm_outbox (id, event_type, payload, created_at) VALUES ($1, $2, $3, clock_timestamp())",
-    [id, type, JSON.stringify(payload)]
+    [id2, type, JSON.stringify(payload)]
   );
   setTimeout(() => {
     void deliverPendingCrmEvents().catch((err) => {
       console.warn("[crm-outbox] opportunistic delivery error:", err?.message || err);
     });
   }, 500);
-  return id;
+  return id2;
 }
 async function buildEnrollmentEventData(db, enrollmentId) {
   const row = (await db.query(
@@ -5484,7 +5631,7 @@ async function deliverPendingCrmEvents() {
       [BATCH_SIZE]
     )).rows;
     for (const row of rows) {
-      const body = JSON.stringify(row.payload);
+      const body2 = JSON.stringify(row.payload);
       const timestamp = String(Math.floor(Date.now() / 1e3));
       try {
         const response = await fetch(url, {
@@ -5494,9 +5641,9 @@ async function deliverPendingCrmEvents() {
             "X-LMS-Event": row.event_type,
             "X-LMS-Event-Id": row.id,
             "X-LMS-Timestamp": timestamp,
-            "X-LMS-Signature": `sha256=${signCrmPayload(secret, timestamp, body)}`
+            "X-LMS-Signature": `sha256=${signCrmPayload(secret, timestamp, body2)}`
           },
-          body,
+          body: body2,
           signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS)
         });
         if (!response.ok) throw new Error(`CRM responded with HTTP ${response.status}`);
@@ -5714,19 +5861,13 @@ async function placeEnrollment(client2, enrollmentId, sectionId, origin) {
     [enrollmentId]
   )).rows[0];
   let registration = null;
+  let placementChanged = false;
   if (sectionId) {
     const section = (await client2.query("SELECT * FROM course_sections WHERE id = $1 FOR UPDATE", [sectionId])).rows[0];
     if (!section) return { error: "Course section not found.", status: 404 };
     if (section.course_id !== enrollment.course_id) return { error: "Selected section does not belong to this course.", status: 400 };
-    const count = Number((await client2.query(
-      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
-      [sectionId]
-    )).rows[0].count);
-    if (count >= section.max_students) {
-      return { error: "L\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y \u0111\xE3 \u0111\u1EA1t s\u0129 s\u1ED1 t\u1ED1i \u0111a. Kh\xF4ng th\u1EC3 x\u1EBFp th\xEAm h\u1ECDc vi\xEAn.", status: 400 };
-    }
     const existingRegistration = (await client2.query(
-      `SELECT cr.id, cr.status
+      `SELECT cr.id, cr.status, cr.section_id
        FROM course_registrations cr
        JOIN course_sections cs ON cs.id = cr.section_id
        WHERE cr.student_id = $1
@@ -5734,6 +5875,15 @@ async function placeEnrollment(client2, enrollmentId, sectionId, origin) {
          AND cr.status IN ('registered', 'waitlisted')`,
       [enrollment.student_id, enrollment.course_id]
     )).rows[0];
+    const alreadySeated = existingRegistration?.section_id === sectionId && existingRegistration?.status === "registered";
+    placementChanged = !alreadySeated;
+    const count = Number((await client2.query(
+      "SELECT COUNT(*) AS count FROM course_registrations WHERE section_id = $1 AND status = 'registered'",
+      [sectionId]
+    )).rows[0].count);
+    if (!alreadySeated && count >= section.max_students) {
+      return { error: "L\u1EDBp h\u1ECDc ph\u1EA7n n\xE0y \u0111\xE3 \u0111\u1EA1t s\u0129 s\u1ED1 t\u1ED1i \u0111a. Kh\xF4ng th\u1EC3 x\u1EBFp th\xEAm h\u1ECDc vi\xEAn.", status: 400 };
+    }
     if (!existingRegistration) {
       registration = (await client2.query(
         `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
@@ -5749,7 +5899,7 @@ async function placeEnrollment(client2, enrollmentId, sectionId, origin) {
     }
   }
   await enqueueEnrollmentEvent(client2, "enrollment.status_changed", enrollmentId, origin);
-  return { enrollment, registration };
+  return { enrollment, registration, placementChanged };
 }
 async function confirmCoursePayment(client2, enrollmentId, input, origin) {
   const enrollment = (await client2.query(
@@ -5795,6 +5945,156 @@ async function confirmCoursePayment(client2, enrollmentId, input, origin) {
 
 // src/server/services/sepayService.ts
 import crypto3 from "crypto";
+
+// src/scheduleText.ts
+var clean = (value) => String(value ?? "").trim();
+function formatDateVi(value) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+  const text = clean(value);
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? text : formatDateVi(parsed);
+}
+function formatScheduleSummary(schedule) {
+  const slots = (schedule || []).filter((slot) => clean(slot?.dayOfWeek) || clean(slot?.specificDate));
+  if (slots.length === 0) return "";
+  const groups = /* @__PURE__ */ new Map();
+  for (const slot of slots) {
+    const start = clean(slot.startTime);
+    const end = clean(slot.endTime);
+    const hours = start && end ? `${start} \u2013 ${end}` : start || end;
+    const day = clean(slot.dayOfWeek) || formatDateVi(slot.specificDate);
+    const days = groups.get(hours) || [];
+    if (!days.includes(day)) days.push(day);
+    groups.set(hours, days);
+  }
+  return Array.from(groups.entries()).map(([hours, days]) => hours ? `${days.join(", ")} \xB7 ${hours}` : days.join(", ")).join("; ");
+}
+function commonScheduleRoom(schedule) {
+  const rooms = Array.from(new Set((schedule || []).map((slot) => clean(slot?.room)).filter(Boolean)));
+  return rooms.length === 1 ? rooms[0] : "";
+}
+
+// src/server/services/placementNotice.ts
+var teacherDisplayName = (name, email) => !name || String(email || "").toLowerCase().endsWith("@mcna.local") ? "Gi\u1EA3ng vi\xEAn MCNA" : name;
+async function sendClassPlacementNotice(db, input) {
+  const base = { studentId: input.studentId, sectionId: input.sectionId };
+  try {
+    const row = (await db.query(
+      `SELECT cs.section_code, cs.schedule, cs.schedule_json, cs.opening_date, cs.number_of_sessions, cs.group_chat_url,
+              c.title AS course_title,
+              t.name AS teacher_name, t.email AS teacher_email,
+              u.name AS student_name, u.email AS student_email, u.must_change_password,
+              cr.id AS registration_id,
+              e.id AS enrollment_id
+       FROM course_sections cs
+       JOIN courses c ON c.id = cs.course_id
+       JOIN users u ON u.id = $1
+       LEFT JOIN users t ON t.id = cs.teacher_id
+       LEFT JOIN course_registrations cr ON cr.section_id = cs.id AND cr.student_id = u.id AND cr.status = 'registered'
+       LEFT JOIN enrollments e ON e.course_id = cs.course_id AND e.student_id = u.id AND e.status IN ('active', 'completed')
+       WHERE cs.id = $2
+       LIMIT 1`,
+      [input.studentId, input.sectionId]
+    )).rows[0];
+    if (!row) return { ...base, email: null, status: "skipped", reason: "Kh\xF4ng t\xECm th\u1EA5y l\u1EDBp ho\u1EB7c h\u1ECDc vi\xEAn." };
+    if (!row.registration_id) return { ...base, email: row.student_email || null, status: "skipped", reason: "H\u1ECDc vi\xEAn ch\u01B0a c\xF3 ch\u1ED7 trong l\u1EDBp n\xE0y." };
+    if (!row.student_email) return { ...base, email: null, status: "skipped", reason: "H\u1ECDc vi\xEAn ch\u01B0a c\xF3 email." };
+    const schedule = parseSchedule(row);
+    const status = await sendClassPlacementEmail({
+      to: row.student_email,
+      name: row.student_name || "H\u1ECDc vi\xEAn",
+      courseTitle: row.course_title,
+      sectionCode: row.section_code,
+      scheduleText: formatScheduleSummary(schedule),
+      room: commonScheduleRoom(schedule),
+      openingDate: formatDateVi(row.opening_date),
+      numberOfSessions: row.number_of_sessions ? Number(row.number_of_sessions) : null,
+      teacherName: teacherDisplayName(row.teacher_name, row.teacher_email),
+      groupChatUrl: row.group_chat_url,
+      supportPhone: getSupportPhone(),
+      firstLoginPending: Boolean(row.must_change_password)
+    });
+    await db.query(
+      "UPDATE course_registrations SET placement_email_status = $1, placement_email_at = CURRENT_TIMESTAMP WHERE id = $2",
+      [status, row.registration_id]
+    );
+    await auditRepository.log(
+      db,
+      input.actorId || input.studentId,
+      `class_placement_email_${status}`,
+      input.sectionId,
+      `Email x\u1EBFp l\u1EDBp ${row.section_code} t\u1EDBi ${row.student_email}`
+    );
+    if (input.notifyInApp !== false) {
+      await notificationsRepository.create(db, {
+        userId: input.studentId,
+        type: "success",
+        message: `B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp ${row.section_code} c\u1EE7a kh\xF3a "${row.course_title}". Xem l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 t\xE0i li\u1EC7u trong m\u1EE5c L\u1EDBp h\u1ECDc c\u1EE7a t\xF4i.`,
+        relatedEntityType: "enrollment",
+        relatedEntityId: row.enrollment_id || void 0,
+        skipEmail: true
+      });
+    }
+    return { ...base, email: row.student_email, status };
+  } catch (error) {
+    console.error("[placement-notice] failed:", error);
+    return { ...base, email: null, status: "failed", reason: String(error?.message || error) };
+  }
+}
+async function notifyTeacherOfPlacements(db, sectionId, studentCount) {
+  if (studentCount <= 0) return;
+  try {
+    const section = (await db.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
+    if (!section?.teacher_id) return;
+    await notificationsRepository.create(db, {
+      userId: section.teacher_id,
+      type: "info",
+      message: `${studentCount} h\u1ECDc vi\xEAn m\u1EDBi v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp ${section.section_code} c\u1EE7a b\u1EA1n.`,
+      relatedEntityType: "section",
+      relatedEntityId: sectionId
+    });
+  } catch (error) {
+    console.error("[placement-notice] failed to notify teacher:", error);
+  }
+}
+
+// src/operationRules.ts
+function paymentMayPlace(directSale, sectionId) {
+  return !directSale && Boolean(sectionId);
+}
+function certificateDecision(input) {
+  const reasons = [];
+  if (!input.ended) reasons.push("L\u1EDBp ch\u01B0a k\u1EBFt th\xFAc.");
+  if (input.expected < 1 || input.sessions < input.expected || input.recorded < input.sessions) reasons.push("Ch\u01B0a \u0111\u1EE7 bu\u1ED5i h\u1ECDc ho\u1EB7c \u0111i\u1EC3m danh.");
+  if (input.absences > 2) reasons.push(`V\u1EAFng ${input.absences} bu\u1ED5i (t\u1ED1i \u0111a 2).`);
+  if (!input.finalSubmitted) reasons.push("Ch\u01B0a n\u1ED9p b\xE0i cu\u1ED1i kh\xF3a.");
+  return { eligible: reasons.length === 0, reasons };
+}
+function voucherDiscount(price, amount) {
+  if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(amount) || amount < 0) throw new Error("H\u1ECDc ph\xED ho\u1EB7c voucher kh\xF4ng h\u1EE3p l\u1EC7.");
+  const discount = Math.min(price, amount);
+  return { originalPrice: price, discount, amount: price - discount };
+}
+function commissionSnapshot(source, start, now = /* @__PURE__ */ new Date()) {
+  const begins = start ? /* @__PURE__ */ new Date(`${start}T00:00:00+07:00`) : null;
+  const ends = begins ? new Date(begins) : null;
+  if (ends) ends.setUTCMonth(ends.getUTCMonth() + 12);
+  const active = Boolean(begins && ends && now >= begins && now < ends);
+  return { version: "mcna-direct-sale-v1", start, endsAt: ends?.toISOString() || null, months: 12, source, rate: active ? source === "self" ? 0.1 : 0.05 : null };
+}
+function teacherTier(courses, rules) {
+  const sorted = [...rules].sort((a, b) => a.courses - b.courses);
+  const current = sorted.filter((rule) => courses >= rule.courses).at(-1);
+  const next = sorted.find((rule) => rule.courses > courses);
+  return { label: current?.label || "Ch\u01B0a c\u1EA5u h\xECnh", next: next?.label || null, remaining: next ? next.courses - courses : 0 };
+}
+
+// src/server/services/sepayService.ts
 function sha256Hex(input) {
   return crypto3.createHash("sha256").update(input).digest("hex");
 }
@@ -6064,7 +6364,7 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
       };
     }
     const sectionId = matchedTx.requested_section_id;
-    if (sectionId && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
+    if (paymentMayPlace(isDirectSale(), sectionId) && matchedTx.enrollment_status !== "active" && matchedTx.enrollment_status !== "completed") {
       await client2.query("SAVEPOINT sepay_placement");
       const placement = await placeEnrollment(client2, matchedTx.enrollment_id, sectionId, "lms");
       if (isServiceError(placement)) {
@@ -6086,19 +6386,24 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
     client2.release();
   }
   onSuccessfulPayment?.();
+  const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+  const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
+    void sendClassPlacementNotice(pool, { studentId: matchedTx.student_id, sectionId: placedSectionId, notifyInApp: false }).catch((err) => console.error("[SePay] placement notice failed:", err));
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc v\xE0 c\xF3 th\u1EC3 b\u1EAFt \u0111\u1EA7u h\u1ECDc t\u1EADp ngay.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
       message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n vui l\xF2ng ch\u1EDD qu\u1EA3n tr\u1ECB vi\xEAn x\u1EBFp l\u1EDBp h\u1ECDc ph\u1EA7n.`,
-      emailFallback: true
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   }
   void notifyRole(pool, "admin", `SePay: \u0110\xE3 nh\u1EADn thanh to\xE1n ${receivedAmount.toLocaleString("vi-VN")}\u0111 cho kh\xF3a h\u1ECDc "${matchedTx.course_title}".`, {
@@ -6174,11 +6479,90 @@ function registerEventHandlers() {
   });
 }
 
+// src/server/services/certificateEligibility.ts
+import crypto4 from "crypto";
+async function getCertificateEligibility(db, enrollmentId, sectionId) {
+  const row = (await db.query(`SELECT e.*,cs.id section_id,cs.number_of_sessions,cs.status section_status
+    FROM enrollments e JOIN course_registrations cr ON cr.student_id=e.student_id AND cr.status='registered'
+    JOIN course_sections cs ON cs.id=cr.section_id AND cs.course_id=e.course_id
+    WHERE e.id=$1 AND ($2::text IS NULL OR cs.id=$2) ORDER BY cr.registered_at DESC LIMIT 1`, [enrollmentId, sectionId || null])).rows[0];
+  if (!row || !["active", "completed"].includes(row.status)) return { eligible: false, reasons: ["H\u1ECDc vi\xEAn ch\u01B0a \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp."], sectionId: null };
+  const sessions = (await db.query("SELECT id,date,taught_at,taught_minutes FROM attendance_sessions WHERE section_id=$1", [row.section_id])).rows;
+  const settings = (await db.query("SELECT value FROM operation_settings WHERE id='rules'")).rows[0]?.value || {};
+  const absent = settings.absentStatuses || ["absent"];
+  const records = (await db.query("SELECT session_id,status FROM attendance_records WHERE student_id=$1 AND session_id=ANY($2::text[])", [row.student_id, sessions.map((s) => s.id)])).rows;
+  const unique = new Map(records.map((r) => [r.session_id, r.status]));
+  const finalSubmitted = Boolean((await db.query(`SELECT 1 FROM submissions sub JOIN assignments a ON a.id=sub.assignment_id
+    JOIN attendance_sessions s ON s.id=a.session_id WHERE sub.student_id=$1 AND s.section_id=$2 AND a.type='final' LIMIT 1`, [row.student_id, row.section_id])).rowCount);
+  const ended = row.section_status !== "cancelled" && sessions.length > 0 && sessions.every((s) => s.taught_at && new Date(s.date).getTime() + Number(s.taught_minutes || 0) * 6e4 <= Date.now());
+  const decision = certificateDecision({ expected: Number(row.number_of_sessions || 0), sessions: sessions.length, recorded: unique.size, ended, absences: [...unique.values()].filter((v) => absent.includes(v)).length, finalSubmitted });
+  return { ...decision, sectionId: row.section_id, absences: [...unique.values()].filter((v) => absent.includes(v)).length };
+}
+async function autoIssueCertificates(_db, sectionId) {
+  const enrolled = (await pool.query(`SELECT e.id FROM enrollments e JOIN course_sections cs ON cs.course_id=e.course_id
+    JOIN course_registrations cr ON cr.section_id=cs.id AND cr.student_id=e.student_id AND cr.status='registered'
+    WHERE cs.id=$1 AND e.status='active'`, [sectionId])).rows;
+  let issued = 0;
+  for (const item of enrolled) {
+    const client2 = await pool.connect();
+    try {
+      await client2.query("BEGIN");
+      const enrollment = (await client2.query("SELECT * FROM enrollments WHERE id=$1 FOR UPDATE", [item.id])).rows[0];
+      const existing = (await client2.query("SELECT 1 FROM certificates WHERE student_id=$1 AND course_id=$2", [enrollment.student_id, enrollment.course_id])).rowCount;
+      const decision = await getCertificateEligibility(client2, item.id, sectionId);
+      if (!existing && decision.eligible && enrollment.status === "active") {
+        const id2 = generateId2("cert"), code = crypto4.randomBytes(5).toString("hex").toUpperCase();
+        await client2.query("INSERT INTO certificates(id,enrollment_id,student_id,course_id,issued_at,certificate_code,section_id) VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP,$5,$6)", [id2, item.id, enrollment.student_id, enrollment.course_id, code, sectionId]);
+        await client2.query("UPDATE enrollments SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE id=$1", [item.id]);
+        await enqueueCourseCompletedEvent(client2, item.id);
+        await enqueueCertificateIssuedEvent(client2, id2);
+        await client2.query("INSERT INTO notifications(id,user_id,type,message,is_read,created_at,related_entity_type,related_entity_id) VALUES($1,$2,'success',$3,false,CURRENT_TIMESTAMP,'course',$4)", [generateId2("noti"), enrollment.student_id, `B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c c\u1EA5p ch\u1EE9ng ch\u1EC9. M\xE3 x\xE1c minh: ${code}.`, enrollment.course_id]);
+        issued++;
+      }
+      await client2.query("COMMIT");
+    } catch (error) {
+      await client2.query("ROLLBACK");
+      throw error;
+    } finally {
+      client2.release();
+    }
+  }
+  if (issued) invalidateStoreCache();
+  return { issued };
+}
+
+// src/server/services/certificateJob.ts
+async function runCertificateJob() {
+  if (!isDirectSale()) return { issued: 0, checked: 0 };
+  const cursor = (await pool.query("SELECT value FROM operation_settings WHERE id='certificate-job-cursor'")).rows[0]?.value?.lastId || "";
+  const classes = (await pool.query(`SELECT candidates.id FROM (SELECT DISTINCT cs.id FROM course_sections cs
+    JOIN course_registrations cr ON cr.section_id=cs.id AND cr.status='registered'
+    JOIN enrollments e ON e.student_id=cr.student_id AND e.course_id=cs.course_id AND e.status='active'
+    WHERE cs.status<>'cancelled' AND NOT EXISTS(SELECT 1 FROM certificates cert WHERE cert.enrollment_id=e.id)
+      AND EXISTS(SELECT 1 FROM attendance_sessions s WHERE s.section_id=cs.id)
+      AND NOT EXISTS(SELECT 1 FROM attendance_sessions s WHERE s.section_id=cs.id AND
+        (s.taught_at IS NULL OR s.date::timestamptz + COALESCE(s.taught_minutes,0)*interval '1 minute'>CURRENT_TIMESTAMP))
+    ) candidates ORDER BY (candidates.id > $1) DESC,candidates.id LIMIT 25`, [cursor])).rows;
+  let issued = 0;
+  for (const cs of classes) issued += (await autoIssueCertificates(pool, cs.id)).issued;
+  if (classes.length) await pool.query(`INSERT INTO operation_settings(id,value) VALUES('certificate-job-cursor',$1::jsonb)
+    ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value,updated_at=CURRENT_TIMESTAMP`, [JSON.stringify({ lastId: classes[classes.length - 1].id })]);
+  return { issued, checked: classes.length };
+}
+
 // src/server/scheduler.ts
 function startScheduler() {
   setInterval(() => {
     void runSchedulerTask("crm outbox", runCrmOutboxJob);
   }, 30 * 1e3);
+  let checkingCertificates = false;
+  setInterval(() => {
+    if (checkingCertificates) return;
+    checkingCertificates = true;
+    void runSchedulerTask("certificates", runCertificateJob).finally(() => {
+      checkingCertificates = false;
+    });
+  }, 60 * 1e3);
 }
 async function runCrmOutboxJob() {
   return deliverPendingCrmEvents();
@@ -6301,7 +6685,7 @@ function csvCell(value) {
 }
 function toCsv(headers, rows, keys) {
   return `\uFEFF${headers.map(csvCell).join(",")}\r
-${rows.map((row) => keys.map((key) => csvCell(row[key])).join(",")).join("\r\n")}\r
+${rows.map((row) => keys.map((key2) => csvCell(row[key2])).join(",")).join("\r\n")}\r
 `;
 }
 async function toXlsx(sheetName, headers, rows, keys) {
@@ -6310,7 +6694,7 @@ async function toXlsx(sheetName, headers, rows, keys) {
   workbook.created = /* @__PURE__ */ new Date();
   const sheet = workbook.addWorksheet(sheetName);
   sheet.columns = headers.map((header, index) => ({ header, key: keys[index], width: Math.min(Math.max(header.length + 4, 14), 32) }));
-  rows.forEach((row) => sheet.addRow(Object.fromEntries(keys.map((key) => [key, row[key] ?? ""]))));
+  rows.forEach((row) => sheet.addRow(Object.fromEntries(keys.map((key2) => [key2, row[key2] ?? ""]))));
   const headerRow = sheet.getRow(1);
   headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
   headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4338CA" } };
@@ -6319,15 +6703,1031 @@ async function toXlsx(sheetName, headers, rows, keys) {
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
+// src/paidImport.ts
+function normalizeText(value) {
+  return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+var HEADER_SYNONYMS = {
+  name: ["ho ten", "ho va ten", "ten", "name", "full name", "fullname", "khach hang", "ten khach hang", "hoc vien", "ten hoc vien", "ho ten hoc vien"],
+  email: ["email", "gmail", "mail", "e mail", "dia chi email", "email hoc vien"],
+  phone: ["sdt", "so dien thoai", "dien thoai", "phone", "so dt", "mobile", "tel", "so phone"],
+  course: ["khoa hoc", "khoa", "course", "san pham", "ten khoa hoc", "khoa dang ky", "khoa hoc dang ky", "ten khoa"],
+  amount: ["so tien", "da thanh toan", "thanh toan", "hoc phi", "amount", "gia tri", "doanh thu", "so tien da thanh toan", "so tien thanh toan"],
+  sectionCode: ["lop", "ma lop", "class", "lop hoc", "ma lop hoc"],
+  note: ["ghi chu", "note", "ma don", "ma deal", "deal", "reference", "ma giao dich", "ma don hang"]
+};
+var POSITIONAL_COLUMNS = ["name", "email", "phone", "course", "amount", "sectionCode", "note"];
+var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function detectDelimiter(lines) {
+  if (lines.some((line) => line.includes("	"))) return "	";
+  const count = (char) => lines.reduce((sum, line) => sum + line.split(char).length - 1, 0);
+  return count(";") > count(",") ? ";" : ",";
+}
+function splitLine(line, delimiter) {
+  const cells = [];
+  let value = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        value += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (char === delimiter && !quoted) {
+      cells.push(value.trim());
+      value = "";
+      continue;
+    }
+    value += char;
+  }
+  cells.push(value.trim());
+  return cells;
+}
+function headerColumns(cells) {
+  const columns = /* @__PURE__ */ new Map();
+  cells.forEach((cell, index) => {
+    const normalized = normalizeText(cell);
+    if (!normalized) return;
+    const key2 = Object.keys(HEADER_SYNONYMS).find((candidate) => HEADER_SYNONYMS[candidate].includes(normalized));
+    if (key2 && !Array.from(columns.values()).includes(key2)) columns.set(index, key2);
+  });
+  const found = new Set(columns.values());
+  return found.has("email") && (found.has("name") || found.has("course")) ? columns : null;
+}
+function parseAmount(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return void 0;
+  const amount = Number(digits);
+  return Number.isFinite(amount) ? amount : void 0;
+}
+function parsePaidTable(text) {
+  const lines = String(text || "").replace(/^﻿/, "").split(/\r?\n/).map((content, index) => ({ content, line: index + 1 })).filter((item) => item.content.trim());
+  const result = { rows: [], errors: [], headerDetected: false };
+  if (lines.length === 0) return result;
+  const delimiter = detectDelimiter(lines.map((item) => item.content));
+  const header = headerColumns(splitLine(lines[0].content, delimiter));
+  result.headerDetected = Boolean(header);
+  const columns = header || new Map(POSITIONAL_COLUMNS.map((key2, index) => [index, key2]));
+  const seenKeys = /* @__PURE__ */ new Set();
+  for (const item of header ? lines.slice(1) : lines) {
+    const cells = splitLine(item.content, delimiter);
+    const values = {};
+    columns.forEach((key3, index) => {
+      if (cells[index]) values[key3] = cells[index];
+    });
+    const email = String(values.email || "").toLowerCase();
+    const name = String(values.name || "").trim();
+    const course = String(values.course || "").trim();
+    if (!email && !name && !course) continue;
+    if (!EMAIL_PATTERN.test(email)) {
+      result.errors.push({ line: item.line, reason: `Email kh\xF4ng h\u1EE3p l\u1EC7: "${values.email || ""}".` });
+      continue;
+    }
+    if (name.length < 2) {
+      result.errors.push({ line: item.line, reason: `Thi\u1EBFu h\u1ECD t\xEAn c\u1EE7a ${email}.` });
+      continue;
+    }
+    if (!course) {
+      result.errors.push({ line: item.line, reason: `Thi\u1EBFu kh\xF3a h\u1ECDc c\u1EE7a ${email}.` });
+      continue;
+    }
+    const key2 = `${email}|${normalizeText(course)}`;
+    if (seenKeys.has(key2)) {
+      result.errors.push({ line: item.line, reason: `Tr\xF9ng d\xF2ng: ${email} \u0111\xE3 c\xF3 kh\xF3a "${course}" \u1EDF ph\xEDa tr\xEAn.` });
+      continue;
+    }
+    seenKeys.add(key2);
+    result.rows.push({
+      name,
+      email,
+      phone: values.phone ? values.phone.trim() : void 0,
+      course,
+      amount: parseAmount(values.amount),
+      sectionCode: values.sectionCode ? values.sectionCode.trim() : void 0,
+      note: values.note ? values.note.trim() : void 0
+    });
+  }
+  return result;
+}
+var titleHead = (title) => title.split(/[:–—|]| - /)[0];
+function matchCourse(input, courses) {
+  const raw = String(input || "").trim();
+  const wanted = normalizeText(raw);
+  if (!wanted) return { course: null, candidates: [], reason: "none" };
+  const rules = [
+    (course) => course.id === raw,
+    (course) => (course.tags || []).some((tag) => normalizeText(tag) === wanted && normalizeText(tag) !== "mcna"),
+    (course) => normalizeText(course.title) === wanted,
+    (course) => normalizeText(titleHead(course.title)) === wanted,
+    (course) => ` ${normalizeText(course.title)} `.includes(` ${wanted} `)
+  ];
+  for (const rule of rules) {
+    const candidates = courses.filter(rule);
+    if (candidates.length === 1) return { course: candidates[0], candidates };
+    if (candidates.length > 1) return { course: null, candidates, reason: "ambiguous" };
+  }
+  return { course: null, candidates: [], reason: "none" };
+}
+
+// src/server/services/paidEnrollmentImport.ts
+var ENROLLMENT_STATUS_LABEL = {
+  pending: "ch\u1EDD x\u1EBFp l\u1EDBp",
+  active: "\u0111ang h\u1ECDc",
+  completed: "\u0111\xE3 ho\xE0n th\xE0nh",
+  pending_payment: "ch\u1EDD thanh to\xE1n",
+  cancelled: "\u0111\xE3 h\u1EE7y"
+};
+async function planRow(input, index, courses) {
+  const name = String(input.name || "").trim();
+  const email = String(input.email || "").trim().toLowerCase();
+  const courseText = String(input.course || "").trim();
+  const result = { row: index + 1, name, email, course: courseText, status: "error", accountCreated: false, message: "", warnings: [] };
+  const plan = { result, input: { ...input, name, email, course: courseText } };
+  if (!EMAIL_PATTERN.test(email)) return { ...plan, result: { ...result, message: "Email kh\xF4ng h\u1EE3p l\u1EC7." } };
+  if (name.length < 2) return { ...plan, result: { ...result, message: "Thi\u1EBFu h\u1ECD t\xEAn." } };
+  const match = matchCourse(courseText, courses);
+  if (!match.course) {
+    const message = "reason" in match && match.reason === "ambiguous" ? `T\xEAn kh\xF3a h\u1ECDc kh\u1EDBp nhi\u1EC1u kh\xF3a: ${match.candidates.map((course2) => course2.title).join("; ")}. H\xE3y ghi r\xF5 h\u01A1n.` : `Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc "${courseText}" tr\xEAn LMS.`;
+    return { ...plan, result: { ...result, message } };
+  }
+  const course = match.course;
+  result.courseId = course.id;
+  result.courseTitle = course.title;
+  if (course.status !== "published") return { ...plan, course, result: { ...result, message: `Kh\xF3a h\u1ECDc "${course.title}" ch\u01B0a \u0111\u01B0\u1EE3c m\u1EDF tr\xEAn LMS.` } };
+  let sectionId;
+  if (input.sectionCode) {
+    const section = (await pool.query(
+      "SELECT id, course_id, status FROM course_sections WHERE lower(section_code) = lower($1) LIMIT 1",
+      [input.sectionCode.trim()]
+    )).rows[0];
+    if (!section) result.warnings.push(`Ch\u01B0a c\xF3 l\u1EDBp "${input.sectionCode}" tr\xEAn LMS; h\u1ECDc vi\xEAn s\u1EBD \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp sau.`);
+    else if (section.course_id !== course.id) result.warnings.push(`L\u1EDBp "${input.sectionCode}" kh\xF4ng thu\u1ED9c kh\xF3a n\xE0y; h\u1ECDc vi\xEAn s\u1EBD \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp sau.`);
+    else if (section.status !== "open") result.warnings.push(`L\u1EDBp "${input.sectionCode}" hi\u1EC7n kh\xF4ng m\u1EDF; h\u1ECDc vi\xEAn s\u1EBD \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp sau.`);
+    else sectionId = section.id;
+  }
+  const existingUser = await usersRepository.findAuthByEmail(pool, email);
+  if (existingUser && existingUser.role !== "student") {
+    return { ...plan, course, result: { ...result, message: "Email n\xE0y \u0111ang thu\u1ED9c m\u1ED9t t\xE0i kho\u1EA3n kh\xF4ng ph\u1EA3i h\u1ECDc vi\xEAn." } };
+  }
+  if (existingUser && !existingUser.is_active) {
+    return { ...plan, course, result: { ...result, message: "T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn n\xE0y \u0111ang b\u1ECB kh\xF3a." } };
+  }
+  const existingEnrollment = existingUser ? (await pool.query("SELECT id, status FROM enrollments WHERE student_id = $1 AND course_id = $2 LIMIT 1", [existingUser.id, course.id])).rows[0] || null : null;
+  if (existingEnrollment && ["pending", "active", "completed"].includes(existingEnrollment.status)) {
+    result.status = "skipped";
+    result.enrollmentId = existingEnrollment.id;
+    result.message = `\u0110\xE3 ghi danh kh\xF3a n\xE0y (${ENROLLMENT_STATUS_LABEL[existingEnrollment.status]}); b\u1ECF qua.`;
+  } else {
+    result.status = "ready";
+    result.accountCreated = !existingUser;
+    result.message = [
+      existingUser ? "\u0110\xE3 c\xF3 t\xE0i kho\u1EA3n" : "T\u1EA1o t\xE0i kho\u1EA3n m\u1EDBi",
+      existingEnrollment?.status === "pending_payment" ? "x\xE1c nh\u1EADn \u0111\xE3 thanh to\xE1n cho \u0111\u01A1n \u0111ang ch\u1EDD" : "ghi danh \u0111\xE3 thanh to\xE1n, ch\u1EDD x\u1EBFp l\u1EDBp"
+    ].join(" \xB7 ");
+  }
+  return { result, input: plan.input, course, sectionId, existingUser, existingEnrollment };
+}
+async function createStudentAccount(input, password) {
+  const credential3 = hashPassword(password);
+  const user = {
+    id: generateId2("user"),
+    email: input.email,
+    passwordHash: credential3.hash,
+    passwordSalt: credential3.salt,
+    name: input.name,
+    role: "student",
+    isActive: true,
+    phone: input.phone || void 0,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const client2 = await pool.connect();
+  try {
+    await client2.query("BEGIN");
+    await usersRepository.create(client2, user);
+    await client2.query("UPDATE users SET must_change_password = true, signup_source = 'crm' WHERE id = $1", [user.id]);
+    await client2.query("COMMIT");
+  } catch (error) {
+    await client2.query("ROLLBACK");
+    throw error;
+  } finally {
+    client2.release();
+  }
+  await enqueueCrmEvent(pool, "contact.registered", {
+    lmsUserId: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone || null,
+    signupSource: "crm",
+    crmContactId: null,
+    createdAt: user.createdAt
+  }, "crm");
+  return user;
+}
+async function settleEnrollment(plan, studentId, actorName) {
+  const course = plan.course;
+  let enrollmentId = plan.existingEnrollment?.id;
+  let created = false;
+  if (plan.existingEnrollment?.status === "cancelled") {
+    await pool.query(
+      "UPDATE enrollments SET status = $2, enrolled_at = $3, completed_at = NULL WHERE id = $1",
+      [enrollmentId, Number(course.price || 0) > 0 ? "pending_payment" : "pending", (/* @__PURE__ */ new Date()).toISOString()]
+    );
+  } else if (!enrollmentId) {
+    let requested = await requestEnrollment({ studentId, courseId: course.id, sectionId: plan.sectionId, origin: "crm" });
+    if (isServiceError(requested) && requested.status === 400 && plan.sectionId) {
+      plan.result.warnings.push(`Kh\xF4ng gi\u1EEF \u0111\u01B0\u1EE3c ch\u1ED7 \u1EDF l\u1EDBp "${plan.input.sectionCode}": ${requested.error} H\u1ECDc vi\xEAn s\u1EBD \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp sau.`);
+      requested = await requestEnrollment({ studentId, courseId: course.id, origin: "crm" });
+    }
+    if (isServiceError(requested)) return { error: requested.error };
+    enrollmentId = requested.enrollment.id;
+    created = true;
+  }
+  const client2 = await pool.connect();
+  try {
+    await client2.query("BEGIN");
+    const alreadyPaid = Boolean((await client2.query(
+      "SELECT 1 FROM transactions WHERE student_id = $1 AND course_id = $2 AND status = 'approved' LIMIT 1",
+      [studentId, course.id]
+    )).rowCount);
+    const payment = await confirmCoursePayment(
+      client2,
+      enrollmentId,
+      { amount: plan.input.amount, reference: [plan.input.note, `b\u1EA3ng \u0111\xE3 thanh to\xE1n, nh\u1EADp b\u1EDFi ${actorName}`].filter(Boolean).join(" \xB7 ") },
+      "crm"
+    );
+    if (isServiceError(payment)) {
+      await client2.query("ROLLBACK");
+      return { error: payment.error };
+    }
+    if (!alreadyPaid && payment.transactionId && plan.input.amount !== void 0) {
+      await client2.query("UPDATE transactions SET amount = $1 WHERE id = $2", [plan.input.amount, payment.transactionId]);
+    }
+    await client2.query("COMMIT");
+  } catch (error) {
+    await client2.query("ROLLBACK");
+    throw error;
+  } finally {
+    client2.release();
+  }
+  return { enrollmentId, created };
+}
+async function importPaidEnrollments(input) {
+  const courses = (await pool.query("SELECT * FROM courses")).rows.map(courseFromRow);
+  const summary = {
+    total: input.rows.length,
+    accountsCreated: 0,
+    enrollmentsCreated: 0,
+    paymentsConfirmed: 0,
+    skipped: 0,
+    errors: 0,
+    accountEmailsSent: 0,
+    accountEmailsFailed: 0,
+    accountEmailsNotSent: 0
+  };
+  const results = [];
+  const newAccounts = /* @__PURE__ */ new Map();
+  const plannedNewEmails = /* @__PURE__ */ new Set();
+  for (const [index, row] of input.rows.entries()) {
+    let plan;
+    try {
+      plan = await planRow(row, index, courses);
+    } catch (error) {
+      results.push({ row: index + 1, name: row.name, email: row.email, course: row.course, status: "error", accountCreated: false, message: String(error?.message || error), warnings: [] });
+      summary.errors++;
+      continue;
+    }
+    const result = plan.result;
+    results.push(result);
+    if (result.status === "error") {
+      summary.errors++;
+      continue;
+    }
+    if (result.status === "skipped") {
+      summary.skipped++;
+      continue;
+    }
+    if (input.dryRun) {
+      if (result.accountCreated) {
+        if (plannedNewEmails.has(plan.input.email)) {
+          result.accountCreated = false;
+          result.message = result.message.replace("T\u1EA1o t\xE0i kho\u1EA3n m\u1EDBi", "D\xF9ng t\xE0i kho\u1EA3n t\u1EA1o \u1EDF d\xF2ng tr\xEAn");
+        } else {
+          plannedNewEmails.add(plan.input.email);
+          summary.accountsCreated++;
+        }
+      }
+      if (plan.existingEnrollment?.status === "pending_payment") summary.paymentsConfirmed++;
+      else summary.enrollmentsCreated++;
+      continue;
+    }
+    try {
+      let studentId = plan.existingUser?.id;
+      if (!studentId) {
+        const password = String(input.defaultPassword || "");
+        if (password.length < 8) throw new Error("Ch\u01B0a c\xF3 m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh (t\u1ED1i thi\u1EC3u 8 k\xFD t\u1EF1) \u0111\u1EC3 t\u1EA1o t\xE0i kho\u1EA3n.");
+        const user = await createStudentAccount(plan.input, password);
+        studentId = user.id;
+        summary.accountsCreated++;
+        newAccounts.set(user.email, { user, courseTitles: [], rows: [] });
+      } else {
+        result.accountCreated = false;
+        if (plan.input.phone && !plan.existingUser?.phone) {
+          await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [plan.input.phone, studentId]);
+        }
+      }
+      const settled = await settleEnrollment(plan, studentId, input.actorName);
+      if ("error" in settled) {
+        result.status = "error";
+        result.message = settled.error;
+        summary.errors++;
+        continue;
+      }
+      result.enrollmentId = settled.enrollmentId;
+      result.status = result.accountCreated ? "created" : "linked";
+      if (settled.created) summary.enrollmentsCreated++;
+      else summary.paymentsConfirmed++;
+      result.message = [
+        result.accountCreated ? "\u0110\xE3 t\u1EA1o t\xE0i kho\u1EA3n" : "D\xF9ng t\xE0i kho\u1EA3n c\xF3 s\u1EB5n",
+        settled.created ? "\u0111\xE3 ghi danh, ch\u1EDD x\u1EBFp l\u1EDBp" : "\u0111\xE3 x\xE1c nh\u1EADn thanh to\xE1n, ch\u1EDD x\u1EBFp l\u1EDBp"
+      ].join(" \xB7 ");
+      const account = newAccounts.get(plan.input.email);
+      if (account) {
+        account.courseTitles.push(plan.course.title);
+        account.rows.push(result);
+      }
+    } catch (error) {
+      result.status = "error";
+      result.message = error?.code === "23505" ? "Email \u0111\xE3 \u0111\u01B0\u1EE3c d\xF9ng cho m\u1ED9t t\xE0i kho\u1EA3n kh\xE1c." : String(error?.message || error);
+      summary.errors++;
+    }
+  }
+  if (!input.dryRun && input.sendAccountEmail) {
+    for (const account of newAccounts.values()) {
+      const status = await sendStudentAccountEmail({
+        to: account.user.email,
+        name: account.user.name,
+        password: String(input.defaultPassword),
+        courseTitles: Array.from(new Set(account.courseTitles)),
+        supportPhone: getSupportPhone()
+      });
+      for (const row of account.rows) row.accountEmail = status;
+      if (status === "failed") summary.accountEmailsFailed++;
+      else if (status === "mock") summary.accountEmailsNotSent++;
+      else summary.accountEmailsSent++;
+      await auditRepository.log(pool, account.user.id, `student_account_email_${status}`, "email", `G\u1EEDi th\xF4ng tin \u0111\u0103ng nh\u1EADp t\u1EDBi ${account.user.email}`);
+    }
+  }
+  if (!input.dryRun) {
+    await auditRepository.log(
+      pool,
+      input.actorId,
+      "import_paid_enrollments",
+      "enrollments",
+      `D\xF2ng: ${summary.total}; t\xE0i kho\u1EA3n m\u1EDBi: ${summary.accountsCreated}; ghi danh m\u1EDBi: ${summary.enrollmentsCreated}; x\xE1c nh\u1EADn thanh to\xE1n: ${summary.paymentsConfirmed}; b\u1ECF qua: ${summary.skipped}; l\u1ED7i: ${summary.errors}.`
+    );
+  }
+  return { results, summary };
+}
+
+// src/welcomeLetter.ts
+var WELCOME_LETTER_PLACEHOLDERS = [
+  { token: "{{ten_hoc_vien}}", key: "studentName", label: "T\xEAn h\u1ECDc vi\xEAn" },
+  { token: "{{ten_khoa_hoc}}", key: "courseTitle", label: "T\xEAn kh\xF3a h\u1ECDc" },
+  { token: "{{ma_lop}}", key: "sectionCode", label: "M\xE3 l\u1EDBp" },
+  { token: "{{giang_vien}}", key: "teacherName", label: "Gi\u1EA3ng vi\xEAn" },
+  { token: "{{ngay_khai_giang}}", key: "openingDate", label: "Ng\xE0y khai gi\u1EA3ng" },
+  { token: "{{lich_hoc}}", key: "schedule", label: "L\u1ECBch h\u1ECDc" },
+  { token: "{{so_ho_tro}}", key: "supportPhone", label: "S\u1ED1 h\u1ED7 tr\u1EE3" }
+];
+var DEFAULT_WELCOME_LETTER = `Ch\xE0o {{ten_hoc_vien}},
+
+Ch\xFAc m\u1EEBng b\u1EA1n \u0111\xE3 ch\xEDnh th\u1EE9c tr\u1EDF th\xE0nh h\u1ECDc vi\xEAn kh\xF3a {{ten_khoa_hoc}} t\u1EA1i MCNA Technology School!
+
+B\u1EA1n \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp {{ma_lop}}, khai gi\u1EA3ng ng\xE0y {{ngay_khai_giang}}. L\u1ECBch h\u1ECDc: {{lich_hoc}}. Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch: {{giang_vien}}.
+
+\u0110\u1EC3 bu\u1ED5i h\u1ECDc \u0111\u1EA7u ti\xEAn di\u1EC5n ra su\xF4n s\u1EBB, b\u1EA1n n\xEAn:
+1. Tham gia nh\xF3m Zalo c\u1EE7a l\u1EDBp \u0111\u1EC3 nh\u1EADn th\xF4ng b\xE1o v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn.
+2. Xem tr\u01B0\u1EDBc ph\u1EA7n "S\xE1ch & t\xE0i li\u1EC7u tham kh\u1EA3o" ngay b\xEAn d\u01B0\u1EDBi.
+3. L\xE0m th\u1EED "B\xE0i luy\u1EC7n t\u1EADp" \u0111\u1EC3 l\xE0m quen v\u1EDBi c\xF4ng c\u1EE5 tr\u01B0\u1EDBc khi v\xE0o h\u1ECDc.
+
+M\u1ED7i bu\u1ED5i h\u1ECDc tr\xEAn LMS \u0111\u1EC1u c\xF3 slide \u0111\u1EC3 xem l\u1EA1i, file data \u0111\u1EC3 th\u1EF1c h\xE0nh v\xE0 b\xE0i t\u1EADp v\u1EC1 nh\xE0. H\xE3y d\xE0nh th\u1EDDi gian l\xE0m b\xE0i t\u1EADp sau m\u1ED7i bu\u1ED5i, v\xEC \u0111\xF3 l\xE0 c\xE1ch nhanh nh\u1EA5t \u0111\u1EC3 bi\u1EBFn ki\u1EBFn th\u1EE9c th\xE0nh k\u1EF9 n\u0103ng.
+
+C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n nh\u1EAFn v\xE0o nh\xF3m l\u1EDBp ho\u1EB7c g\u1ECDi {{so_ho_tro}}.
+
+Ch\xFAc b\u1EA1n h\u1ECDc th\u1EADt vui v\xE0 thu \u0111\u01B0\u1EE3c nhi\u1EC1u gi\xE1 tr\u1ECB!
+MCNA Technology School`;
+
+// src/server/services/welcomeLetterAi.ts
+var AI_TIMEOUT_MS = 3e4;
+function buildPrompt(course) {
+  const placeholders = WELCOME_LETTER_PLACEHOLDERS.map((item) => `${item.token} (${item.label})`).join(", ");
+  return [
+    "B\u1EA1n l\xE0 chuy\xEAn vi\xEAn \u0111\xE0o t\u1EA1o c\u1EE7a MCNA Technology School. H\xE3y vi\u1EBFt m\u1ED9t l\xE1 th\u01B0 ch\xFAc m\u1EEBng b\u1EB1ng ti\u1EBFng Vi\u1EC7t g\u1EEDi h\u1ECDc vi\xEAn v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp.",
+    "",
+    `Kh\xF3a h\u1ECDc: ${course.title}`,
+    course.level ? `Tr\xECnh \u0111\u1ED9: ${course.level}` : "",
+    course.description ? `M\xF4 t\u1EA3 kh\xF3a h\u1ECDc: ${course.description.slice(0, 1200)}` : "",
+    course.sessionTitles.length ? `N\u1ED9i dung c\xE1c bu\u1ED5i: ${course.sessionTitles.slice(0, 20).join("; ")}` : "",
+    "",
+    "Y\xEAu c\u1EA7u:",
+    '- D\xE0i 150 \u0111\u1EBFn 220 t\u1EEB, gi\u1ECDng \u1EA5m \xE1p, chuy\xEAn nghi\u1EC7p, x\u01B0ng h\xF4 "b\u1EA1n".',
+    `- Th\xF4ng tin ri\xEAng c\u1EE7a t\u1EEBng h\u1ECDc vi\xEAn v\xE0 l\u1EDBp ph\u1EA3i d\xF9ng \u0111\xFAng c\xE1c bi\u1EBFn sau, gi\u1EEF nguy\xEAn d\u1EA5u ngo\u1EB7c nh\u1ECDn k\xE9p: ${placeholders}.`,
+    "- M\u1EDF \u0111\u1EA7u b\u1EB1ng l\u1EDDi ch\xE0o c\xF3 {{ten_hoc_vien}}; n\xEAu l\u1EDBp {{ma_lop}}, ng\xE0y khai gi\u1EA3ng {{ngay_khai_giang}}, l\u1ECBch h\u1ECDc {{lich_hoc}} v\xE0 gi\u1EA3ng vi\xEAn {{giang_vien}}.",
+    "- N\xF3i ng\u1EAFn g\u1ECDn h\u1ECDc vi\xEAn s\u1EBD l\xE0m \u0111\u01B0\u1EE3c g\xEC sau kh\xF3a h\u1ECDc, d\u1EF1a tr\xEAn n\u1ED9i dung c\xE1c bu\u1ED5i \u1EDF tr\xEAn.",
+    "- Nh\u1EAFc h\u1ECDc vi\xEAn tham gia nh\xF3m Zalo c\u1EE7a l\u1EDBp, xem ph\u1EA7n s\xE1ch v\xE0 t\xE0i li\u1EC7u tham kh\u1EA3o, l\xE0m b\xE0i luy\u1EC7n t\u1EADp tr\u01B0\u1EDBc bu\u1ED5i \u0111\u1EA7u.",
+    "- K\u1EBFt th\u01B0 c\xF3 s\u1ED1 h\u1ED7 tr\u1EE3 {{so_ho_tro}} v\xE0 k\xFD t\xEAn MCNA Technology School.",
+    "- Kh\xF4ng cam k\u1EBFt v\u1EC1 vi\u1EC7c l\xE0m, thu nh\u1EADp, ch\u1EE9ng ch\u1EC9 hay \u01B0u \u0111\xE3i. Kh\xF4ng b\u1ECBa th\xF4ng tin ngo\xE0i d\u1EEF li\u1EC7u \u0111\xE3 cho.",
+    "- Ch\u1EC9 tr\u1EA3 v\u1EC1 n\u1ED9i dung th\u01B0 d\u1EA1ng v\u0103n b\u1EA3n thu\u1EA7n, kh\xF4ng markdown, kh\xF4ng ti\xEAu \u0111\u1EC1, kh\xF4ng gi\u1EA3i th\xEDch."
+  ].filter((line) => line !== "").join("\n");
+}
+var cleanLetter = (text) => text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").replace(/\*\*/g, "").trim();
+async function generateWelcomeLetterDraft(course) {
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey) {
+    return { letter: DEFAULT_WELCOME_LETTER, source: "template", note: "M\xE1y ch\u1EE7 ch\u01B0a c\u1EA5u h\xECnh GEMINI_API_KEY n\xEAn d\xF9ng th\u01B0 m\u1EABu c\u1EE7a MCNA." };
+  }
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: (process.env.GEMINI_MODEL || "").trim() || "gemini-2.5-flash",
+        contents: buildPrompt(course),
+        config: { temperature: 0.7 }
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("AI kh\xF4ng ph\u1EA3n h\u1ED3i sau 30 gi\xE2y")), AI_TIMEOUT_MS))
+    ]);
+    const letter = cleanLetter(String(response.text || ""));
+    if (!letter) throw new Error("AI tr\u1EA3 v\u1EC1 n\u1ED9i dung tr\u1ED1ng");
+    return { letter, source: "ai" };
+  } catch (error) {
+    console.warn("[welcome-letter] AI draft failed:", error?.message || error);
+    return {
+      letter: DEFAULT_WELCOME_LETTER,
+      source: "template",
+      note: `Kh\xF4ng g\u1ECDi \u0111\u01B0\u1EE3c AI (${String(error?.message || error).slice(0, 160)}); d\xF9ng th\u01B0 m\u1EABu c\u1EE7a MCNA.`
+    };
+  }
+}
+
+// src/materialAccess.ts
+var MATERIAL_EXTENSIONS = {
+  slide: [".pdf", ".ppt", ".pptx"],
+  document: [".pdf", ".doc", ".docx"],
+  data: [".xlsx", ".xls", ".csv", ".pbix", ".zip", ".rar", ".json", ".txt", ".sql", ".ipynb", ".py", ".md"]
+};
+var isFileMaterialType = (type) => type === "slide" || type === "document" || type === "data";
+var fileExtension = (fileName) => {
+  const match = /\.[A-Za-z0-9]+$/.exec(String(fileName || "").trim());
+  return match ? match[0].toLowerCase() : "";
+};
+var isPdfFile = (mimeType, fileName) => mimeType === "application/pdf" || fileExtension(fileName) === ".pdf";
+function resolveUploadType(requested, fileName) {
+  const ext = fileExtension(fileName);
+  if (requested === "document" && !MATERIAL_EXTENSIONS.document.includes(ext) && MATERIAL_EXTENSIONS.data.includes(ext)) return "data";
+  return requested;
+}
+function learnerMaterialAccess(material) {
+  if (material.type === "youtube" || material.type === "link") return "link";
+  if (material.type === "data") return "download";
+  return isPdfFile(material.mimeType, material.fileName) ? "view" : "unavailable";
+}
+
+// src/server/services/uploadAccess.ts
+import path5 from "path";
+async function validateAttachmentOwner(db, user, url) {
+  if (!url) return;
+  if (!/^\/uploads\/[a-zA-Z0-9._-]+$/.test(url)) throw Object.assign(new Error("Ch\u1EC9 nh\u1EADn t\u1EC7p t\u1EA3i l\xEAn LMS."), { status: 400 });
+  const upload2 = (await db.query("SELECT owner_id FROM private_uploads WHERE filename=$1", [url.slice("/uploads/".length)])).rows[0];
+  if (!upload2 || upload2.owner_id !== user.id) throw Object.assign(new Error("T\u1EC7p kh\xF4ng thu\u1ED9c t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n."), { status: 403 });
+}
+async function uploadAccess(db, user, filename, viewer) {
+  const url = `/uploads/${filename}`;
+  const upload2 = (await db.query("SELECT owner_id FROM private_uploads WHERE filename=$1", [filename])).rows[0];
+  if (user.role === "admin" || user.role === "manager" || upload2?.owner_id === user.id && user.role === "teacher") return { allowed: true, viewOnly: false };
+  const associations = (await db.query(`
+    SELECT a.course_id, a.session_id, NULL::text student_id, 'brief' kind FROM assignments a WHERE a.attachment_url=$1
+    UNION ALL
+    SELECT a.course_id, a.session_id, sub.student_id, 'submission' kind FROM submissions sub JOIN assignments a ON a.id=sub.assignment_id WHERE sub.attachment_url=$1
+    UNION ALL
+    SELECT s.course_id, s.id, NULL::text, CASE WHEN sol.published THEN 'solution' ELSE 'hidden' END FROM session_solutions sol JOIN attendance_sessions s ON s.id=sol.session_id WHERE sol.attachment_url=$1
+    UNION ALL
+    SELECT a.course_id, a.session_id, sub.student_id, 'submission' FROM submission_versions v JOIN submissions sub ON sub.id=v.submission_id JOIN assignments a ON a.id=sub.assignment_id WHERE v.attachment_url=$1`, [url])).rows;
+  for (const item of associations) {
+    const session = item.session_id ? (await db.query("SELECT section_id FROM attendance_sessions WHERE id=$1", [item.session_id])).rows[0] : null;
+    if (user.role === "teacher") {
+      const assigned = (await db.query(`SELECT 1 FROM course_sections WHERE id=$1 AND teacher_id=$2`, [session?.section_id, user.id])).rowCount;
+      if (assigned) return { allowed: true, viewOnly: false };
+    }
+    if (user.role !== "student" || item.kind === "hidden" || item.student_id && item.student_id !== user.id) continue;
+    const placed = (await db.query(`SELECT 1 FROM enrollments e JOIN course_registrations cr ON cr.student_id=e.student_id JOIN course_sections cs ON cs.id=cr.section_id AND cs.course_id=e.course_id
+      WHERE e.student_id=$1 AND e.course_id=$2 AND e.status IN ('active','completed') AND cr.status='registered' AND ($3::text IS NULL OR cs.id=$3) LIMIT 1`, [user.id, item.course_id, session?.section_id || null])).rowCount;
+    if (!placed) continue;
+    if (item.kind === "submission" || allowHomeworkDownload()) return { allowed: true, viewOnly: false };
+    if (viewer && /\.(pdf|png|jpe?g|webp|gif)$/i.test(path5.extname(filename))) return { allowed: true, viewOnly: true };
+  }
+  if (user.role === "student" && upload2?.owner_id === user.id && !associations.length) return { allowed: true, viewOnly: false };
+  return { allowed: false, viewOnly: false, reason: "Kh\xF4ng c\xF3 quy\u1EC1n t\u1EA3i t\u1EC7p n\xE0y. \u0110\u1EC1 b\xE0i/l\u1EDDi gi\u1EA3i ch\u1EC9 xem tr\u1EF1c tuy\u1EBFn tr\xEAn LMS." };
+}
+
+// src/server/operationsRoutes.ts
+import { z as z2 } from "zod";
+
+// src/server/services/teacherAssignmentNotice.ts
+import crypto5 from "crypto";
+async function sendTeacherAssignmentNotice(sectionId, force = false) {
+  const db = await pool.connect();
+  let row, noticeKey = "";
+  try {
+    await db.query("BEGIN");
+    row = (await db.query(`SELECT cs.*,c.title course_title,u.name teacher_name,u.email teacher_email FROM course_sections cs
+      JOIN courses c ON c.id=cs.course_id JOIN users u ON u.id=cs.teacher_id AND u.role='teacher' AND u.is_active=true WHERE cs.id=$1 FOR UPDATE OF cs`, [sectionId])).rows[0];
+    if (!row) {
+      await db.query("ROLLBACK");
+      return { status: "skipped" };
+    }
+    noticeKey = crypto5.createHash("sha256").update(JSON.stringify([row.teacher_id, row.section_code, row.opening_date, parseSchedule(row), row.group_chat_url, row.meeting_url])).digest("hex");
+    if (!force && row.assignment_notice_key === noticeKey) {
+      await db.query("ROLLBACK");
+      return { status: row.assignment_email_status };
+    }
+    await db.query("UPDATE course_sections SET assignment_notice_key=$1,assignment_email_status='sending' WHERE id=$2", [noticeKey, sectionId]);
+    const message = `B\u1EA1n \u0111\u01B0\u1EE3c ph\xE2n c\xF4ng l\u1EDBp ${row.section_code} \u2014 ${row.course_title}.
+L\u1ECBch: ${formatScheduleSummary(parseSchedule(row))}.
+Khai gi\u1EA3ng: ${row.opening_date || "Ch\u01B0a c\u1EADp nh\u1EADt"}.
+Nh\xF3m Zalo: ${row.group_chat_url || "Ch\u01B0a c\u1EADp nh\u1EADt"}.
+Ph\xF2ng h\u1ECDc: ${row.meeting_url || "Ch\u01B0a c\u1EADp nh\u1EADt"}.
+H\u1ED7 tr\u1EE3: ${getSupportPhone()}.`;
+    if (row.assignment_notice_key !== noticeKey) await db.query("INSERT INTO notifications(id,user_id,type,message,is_read,created_at,related_entity_type,related_entity_id) VALUES($1,$2,'info',$3,false,CURRENT_TIMESTAMP,'section',$4)", [generateId2("noti"), row.teacher_id, message, sectionId]);
+    await db.query("COMMIT");
+    const status = await dispatchEmail(row.teacher_email, row.teacher_name, `[MCNA] Ph\xE2n c\xF4ng gi\u1EA3ng d\u1EA1y l\u1EDBp ${row.section_code}`, `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml2(message)}</div>`, message);
+    await pool.query("UPDATE course_sections SET assignment_email_status=$1 WHERE id=$2 AND assignment_notice_key=$3", [status, sectionId, noticeKey]);
+    return { status };
+  } catch (error) {
+    await db.query("ROLLBACK").catch(() => void 0);
+    await pool.query("UPDATE course_sections SET assignment_email_status='failed' WHERE id=$1 AND assignment_notice_key=$2", [sectionId, noticeKey]).catch(() => void 0);
+    console.error("[teacher-assignment-notice]", error);
+    return { status: "failed" };
+  } finally {
+    db.release();
+  }
+}
+
+// src/server/operationsRoutes.ts
+var id = z2.string().trim().min(1).max(200);
+var key = z2.string().trim().min(8).max(200);
+var month = z2.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+var staff = ["admin", "manager"];
+var fail = (message, status = 400) => {
+  throw Object.assign(new Error(message), { status });
+};
+var body = (schema, req) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) fail(parsed.error.issues.map((i) => i.message).join(" "));
+  return parsed.data;
+};
+function registerOperationsRoutes(app2, deps) {
+  const { pool: pool2, requireAuth: requireAuth2, invalidateStoreCache: invalidateStoreCache2, audit: audit2, createUserAccount: createUserAccount2 } = deps;
+  const transaction = async (fn) => {
+    const db = await pool2.connect();
+    try {
+      await db.query("BEGIN");
+      const value = await fn(db);
+      await db.query("COMMIT");
+      invalidateStoreCache2();
+      return value;
+    } catch (error) {
+      await db.query("ROLLBACK");
+      throw error;
+    } finally {
+      db.release();
+    }
+  };
+  const monthLock = async (db, teacherId, monthValue) => db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`teaching:${teacherId}:${monthValue}`]);
+  const add = (method, route, roles, fn) => {
+    app2[method](`/api/operations${route}`, requireAuth2, (req, res, next) => {
+      if (!req.user || !roles.includes(req.user.role)) return res.status(403).json({ error: "Kh\xF4ng c\xF3 quy\u1EC1n th\u1EF1c hi\u1EC7n." });
+      fn(req).then((value) => res.json(value)).catch(next);
+    });
+  };
+  const settings = async (db = pool2) => (await db.query("SELECT value FROM operation_settings WHERE id='rules'")).rows[0].value;
+  const sales = async (req) => {
+    if (req.user.role === "admin") return;
+    if (!(await pool2.query("SELECT 1 FROM users WHERE id=$1 AND can_manage_sales=true", [req.user.id])).rowCount) fail("Ch\u01B0a \u0111\u01B0\u1EE3c c\u1EA5p quy\u1EC1n t\u01B0 v\u1EA5n/voucher.", 403);
+  };
+  const section = async (req, sectionId, db = pool2) => {
+    const row = (await db.query("SELECT * FROM course_sections WHERE id=$1", [sectionId])).rows[0];
+    if (!row) fail("Kh\xF4ng t\xECm th\u1EA5y l\u1EDBp.", 404);
+    if (req.user.role === "teacher" && row.teacher_id !== req.user.id) fail("B\u1EA1n kh\xF4ng ph\u1EE5 tr\xE1ch l\u1EDBp n\xE0y.", 403);
+    return row;
+  };
+  const session = async (req, sessionId, db = pool2) => {
+    const row = (await db.query("SELECT * FROM attendance_sessions WHERE id=$1", [sessionId])).rows[0];
+    if (!row?.section_id) fail("Bu\u1ED5i h\u1ECDc ph\u1EA3i thu\u1ED9c m\u1ED9t l\u1EDBp.", 404);
+    await section(req, row.section_id, db);
+    return row;
+  };
+  add("get", "/settings", staff, async () => settings());
+  add("put", "/settings", ["admin"], async (req) => {
+    const rules = body(z2.object({
+      absentStatuses: z2.array(z2.enum(["absent", "late", "excused"])).min(1),
+      tierRules: z2.array(z2.object({ label: z2.string().trim().min(1).max(40), courses: z2.number().int().min(0) })).max(50),
+      commissionStart: z2.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v).nullable(),
+      bankBin: z2.string().regex(/^([0-9]{6})?$/),
+      bankAccount: z2.string().regex(/^([0-9]{5,30})?$/),
+      bankName: z2.string().trim().max(120)
+    }).strict(), req);
+    if (new Set(rules.tierRules.map((r) => r.courses)).size !== rules.tierRules.length) fail("M\u1ED7i b\u1EADc ph\u1EA3i c\xF3 m\u1ED1c s\u1ED1 kh\xF3a ri\xEAng.");
+    await pool2.query("UPDATE operation_settings SET value=$1,updated_by=$2,updated_at=CURRENT_TIMESTAMP WHERE id='rules'", [JSON.stringify(rules), req.user.id]);
+    await audit2(req, "update_operation_settings", "rules", "C\u1EADp nh\u1EADt quy t\u1EAFc v\u1EADn h\xE0nh");
+    return { ok: true };
+  });
+  add("get", "/teachers", staff, async () => {
+    return (await pool2.query(`SELECT u.id,u.name,u.email,u.phone,u.is_active,COALESCE(array_agg(ts.course_id) FILTER(WHERE ts.course_id IS NOT NULL),'{}') course_ids
+      FROM users u LEFT JOIN teacher_subjects ts ON ts.teacher_id=u.id WHERE u.role='teacher' GROUP BY u.id ORDER BY u.name`)).rows;
+  });
+  add("post", "/sections/:id/teacher-notice", staff, async (req) => {
+    await section(req, req.params.id);
+    await audit2(req, "resend_teacher_notice", req.params.id, "G\u1EEDi l\u1EA1i email ph\xE2n l\u1EDBp");
+    return sendTeacherAssignmentNotice(req.params.id, true);
+  });
+  add("post", "/teachers", staff, async (req) => {
+    const input = body(z2.object({ name: z2.string().trim().min(2).max(160), email: z2.email().trim().toLowerCase(), phone: z2.string().trim().max(30).optional(), password: z2.string().min(8).optional(), courseIds: z2.array(id).max(100) }).strict(), req);
+    const password = input.password || getDefaultStudentPassword();
+    if (!password) fail("C\u1EA5u h\xECnh m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh ho\u1EB7c nh\u1EADp m\u1EADt kh\u1EA9u ban \u0111\u1EA7u (\xEDt nh\u1EA5t 8 k\xFD t\u1EF1).");
+    const teacher = await transaction(async (db) => {
+      const created = await createUserAccount2(db, { ...input, role: "teacher" }, password);
+      await db.query("UPDATE users SET must_change_password=true WHERE id=$1", [created.id]);
+      for (const courseId2 of new Set(input.courseIds)) await db.query("INSERT INTO teacher_subjects(teacher_id,course_id) VALUES($1,$2)", [created.id, courseId2]);
+      return { id: created.id, name: created.name, email: created.email };
+    });
+    await audit2(req, "create_teacher", teacher.id, teacher.email);
+    return teacher;
+  });
+  add("put", "/teachers/:id/subjects", staff, async (req) => {
+    const input = body(z2.object({ courseIds: z2.array(id).max(100) }).strict(), req);
+    await transaction(async (db) => {
+      if (!(await db.query("SELECT 1 FROM users WHERE id=$1 AND role='teacher' FOR UPDATE", [req.params.id])).rowCount) fail("Kh\xF4ng ph\u1EA3i t\xE0i kho\u1EA3n gi\u1EA3ng vi\xEAn.", 404);
+      await db.query("DELETE FROM teacher_subjects WHERE teacher_id=$1", [req.params.id]);
+      for (const courseId2 of new Set(input.courseIds)) await db.query("INSERT INTO teacher_subjects(teacher_id,course_id) VALUES($1,$2)", [req.params.id, courseId2]);
+    });
+    await audit2(req, "update_teacher_subjects", req.params.id, input.courseIds.join(","));
+    return { ok: true };
+  });
+  add("patch", "/sales-permissions/:id", ["admin"], async (req) => {
+    const input = body(z2.object({ enabled: z2.boolean() }).strict(), req);
+    const result = await pool2.query("UPDATE users SET can_manage_sales=$1 WHERE id=$2 AND role='manager' RETURNING id", [input.enabled, req.params.id]);
+    if (!result.rowCount) fail("Ch\u1EC9 c\u1EA5p quy\u1EC1n n\xE0y cho t\xE0i kho\u1EA3n Qu\u1EA3n l\xFD l\u1EDBp.", 400);
+    await audit2(req, "sales_permission", req.params.id, String(input.enabled));
+    return { ok: true };
+  });
+  add("get", "/sessions/:id", [...staff, "teacher"], async (req) => {
+    const s = await session(req, req.params.id);
+    const roster = (await pool2.query("SELECT u.id,u.name,u.email FROM users u JOIN course_registrations cr ON cr.student_id=u.id WHERE cr.section_id=$1 AND cr.status='registered' ORDER BY u.name", [s.section_id])).rows;
+    const records = (await pool2.query("SELECT * FROM attendance_records WHERE session_id=$1", [s.id])).rows;
+    const submissions = (await pool2.query(`SELECT sub.*,a.title assignment_title,a.max_score,u.name student_name FROM submissions sub
+      JOIN assignments a ON a.id=sub.assignment_id JOIN users u ON u.id=sub.student_id WHERE a.session_id=$1 ORDER BY sub.submitted_at DESC`, [s.id])).rows;
+    return { session: s, roster, records, submissions };
+  });
+  add("put", "/sessions/:id/attendance", [...staff, "teacher"], async (req) => {
+    const input = body(z2.object({
+      records: z2.array(z2.object({ studentId: id, status: z2.enum(["present", "absent", "late", "excused"]), note: z2.string().trim().max(1e3).default("") })).max(500),
+      complete: z2.boolean().default(false),
+      minutes: z2.number().int().min(1).max(1440).optional()
+    }).strict(), req);
+    if (new Set(input.records.map((r) => r.studentId)).size !== input.records.length) fail("Danh s\xE1ch c\xF3 h\u1ECDc vi\xEAn tr\xF9ng.");
+    const s = await transaction(async (db) => {
+      await db.query("SELECT id FROM attendance_sessions WHERE id=$1 FOR UPDATE", [req.params.id]);
+      const s2 = await session(req, req.params.id, db);
+      const monthValue = new Date(s2.date).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).slice(0, 7);
+      await monthLock(db, s2.teacher_id, monthValue);
+      if (new Date(s2.date).getTime() > Date.now()) fail("Kh\xF4ng \u0111i\u1EC3m danh ho\u1EB7c x\xE1c nh\u1EADn bu\u1ED5i h\u1ECDc t\u01B0\u01A1ng lai.");
+      const roster = (await db.query("SELECT student_id FROM course_registrations WHERE section_id=$1 AND status='registered'", [s2.section_id])).rows.map((r) => r.student_id);
+      for (const record of input.records) {
+        if (!roster.includes(record.studentId)) fail("C\xF3 h\u1ECDc vi\xEAn kh\xF4ng thu\u1ED9c l\u1EDBp.");
+        const updated = await db.query("UPDATE attendance_records SET status=$1,note=$2,updated_by=$3,updated_at=CURRENT_TIMESTAMP WHERE session_id=$4 AND student_id=$5", [record.status, record.note, req.user.id, s2.id, record.studentId]);
+        if (!updated.rowCount) await db.query(`INSERT INTO attendance_records(id,session_id,student_id,status,note,updated_by,updated_at,checkin_method) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,'manual')`, [generateId2("atr"), s2.id, record.studentId, record.status, record.note, req.user.id]);
+      }
+      if (input.complete) {
+        if (!input.minutes || roster.some((studentId) => !input.records.some((r) => r.studentId === studentId))) fail("Nh\u1EADp th\u1EDDi l\u01B0\u1EE3ng th\u1EF1c t\u1EBF v\xE0 \u0111i\u1EC3m danh \u0111\u1EE7 h\u1ECDc vi\xEAn tr\u01B0\u1EDBc khi x\xE1c nh\u1EADn.");
+        await db.query("UPDATE attendance_sessions SET taught_at=CURRENT_TIMESTAMP,taught_minutes=$1,taught_by=$2 WHERE id=$3", [input.minutes, req.user.id, s2.id]);
+        await db.query("UPDATE teaching_months SET status='revision',note='Bu\u1ED5i d\u1EA1y th\u1EF1c t\u1EBF \u0111\xE3 thay \u0111\u1ED5i; c\u1EA7n x\xE1c nh\u1EADn l\u1EA1i.',updated_at=CURRENT_TIMESTAMP WHERE teacher_id=$1 AND month=to_char($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM')", [s2.teacher_id, s2.date]);
+      }
+      return s2;
+    });
+    await audit2(req, "mark_session_attendance", s.id, `${input.records.length} h\u1ECDc vi\xEAn; \u0111\xE3 d\u1EA1y=${input.complete}`);
+    const certificates = await autoIssueCertificates(pool2, s.section_id);
+    return { ok: true, ...certificates };
+  });
+  add("get", "/submissions/:id/history", [...staff, "teacher", "student"], async (req) => {
+    const sub = (await pool2.query("SELECT sub.*,a.session_id FROM submissions sub JOIN assignments a ON a.id=sub.assignment_id WHERE sub.id=$1", [req.params.id])).rows[0];
+    if (!sub) fail("Kh\xF4ng t\xECm th\u1EA5y b\xE0i n\u1ED9p.", 404);
+    if (req.user.role === "student") {
+      if (sub.student_id !== req.user.id) fail("Kh\xF4ng c\xF3 quy\u1EC1n.", 403);
+    } else await session(req, sub.session_id);
+    return (await pool2.query("SELECT * FROM submission_versions WHERE submission_id=$1 ORDER BY submitted_at DESC", [sub.id])).rows;
+  });
+  add("get", "/sessions/:id/solution", [...staff, "teacher", "student"], async (req) => {
+    if (req.user.role === "student") {
+      const access = (await pool2.query(`SELECT 1 FROM attendance_sessions s JOIN course_registrations cr ON cr.section_id=s.section_id AND cr.status='registered'
+        JOIN enrollments e ON e.student_id=cr.student_id AND e.course_id=s.course_id AND e.status IN ('active','completed') WHERE s.id=$1 AND cr.student_id=$2`, [req.params.id, req.user.id])).rowCount;
+      if (!access) fail("Kh\xF4ng c\xF3 quy\u1EC1n.", 403);
+    } else await session(req, req.params.id);
+    return (await pool2.query(`SELECT * FROM session_solutions WHERE session_id=$1 AND ($2::boolean OR published=true)`, [req.params.id, req.user.role !== "student"])).rows[0] || null;
+  });
+  add("put", "/sessions/:id/solution", [...staff, "teacher"], async (req) => {
+    await session(req, req.params.id);
+    const input = body(z2.object({ content: z2.string().max(2e4), attachmentUrl: z2.string().nullable().optional(), published: z2.boolean() }).strict(), req);
+    const existing = (await pool2.query("SELECT attachment_url FROM session_solutions WHERE session_id=$1", [req.params.id])).rows[0];
+    if (input.attachmentUrl && input.attachmentUrl !== existing?.attachment_url) await validateAttachmentOwner(pool2, req.user, input.attachmentUrl);
+    await pool2.query(`INSERT INTO session_solutions(session_id,content,attachment_url,published,updated_by) VALUES($1,$2,$3,$4,$5)
+      ON CONFLICT(session_id) DO UPDATE SET content=EXCLUDED.content,attachment_url=EXCLUDED.attachment_url,published=EXCLUDED.published,updated_by=EXCLUDED.updated_by,updated_at=CURRENT_TIMESTAMP`, [req.params.id, input.content, input.attachmentUrl || null, input.published, req.user.id]);
+    await audit2(req, "update_solution", req.params.id, `c\xF4ng b\u1ED1=${input.published}`);
+    return { ok: true };
+  });
+  add("get", "/sections/:id/certificates", staff, async (req) => {
+    const cs = await section(req, req.params.id);
+    const list = (await pool2.query(`SELECT e.id enrollment_id,u.name,u.email FROM enrollments e JOIN users u ON u.id=e.student_id
+      JOIN course_registrations cr ON cr.student_id=e.student_id WHERE e.course_id=$1 AND cr.section_id=$2 AND cr.status='registered'`, [cs.course_id, cs.id])).rows;
+    return Promise.all(list.map(async (row) => ({ ...row, ...await getCertificateEligibility(pool2, row.enrollment_id, cs.id), certificate: (await pool2.query("SELECT certificate_code FROM certificates WHERE enrollment_id=$1", [row.enrollment_id])).rows[0] || null })));
+  });
+  add("post", "/sections/:id/certificates/reconcile", staff, async (req) => {
+    await section(req, req.params.id);
+    const result = await autoIssueCertificates(pool2, req.params.id);
+    await audit2(req, "reconcile_certificates", req.params.id, JSON.stringify(result));
+    return result;
+  });
+  add("get", "/my-certificates", ["student"], async (req) => (await pool2.query("SELECT cert.*,c.title course_title,u.name student_name FROM certificates cert JOIN courses c ON c.id=cert.course_id JOIN users u ON u.id=cert.student_id WHERE cert.student_id=$1 ORDER BY issued_at DESC", [req.user.id])).rows);
+  const teachingSnapshot = async (teacherId, m, db = pool2) => {
+    const rows = (await db.query(`SELECT s.id,s.topic,s.date,s.taught_minutes,cs.section_code,c.title course_title FROM attendance_sessions s
+      JOIN course_sections cs ON cs.id=s.section_id JOIN courses c ON c.id=s.course_id
+      WHERE s.teacher_id=$1 AND s.taught_at IS NOT NULL AND to_char(s.date::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM')=$2 ORDER BY s.date`, [teacherId, m])).rows;
+    return { sessions: rows, totalMinutes: rows.reduce((sum, row) => sum + Number(row.taught_minutes || 0), 0) };
+  };
+  add("get", "/teaching", [...staff, "teacher"], async (req) => {
+    const parsed = month.safeParse(req.query.month || (/* @__PURE__ */ new Date()).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).slice(0, 7));
+    if (!parsed.success) fail("Th\xE1ng kh\xF4ng h\u1EE3p l\u1EC7.");
+    const m = parsed.data;
+    const teacherId = req.user.role === "teacher" ? req.user.id : String(req.query.teacherId || req.user.id);
+    const snapshot = await teachingSnapshot(teacherId, m);
+    const courses = Number((await pool2.query(`SELECT COUNT(DISTINCT cs.id)::int count FROM course_sections cs WHERE cs.status<>'cancelled'
+      AND EXISTS(SELECT 1 FROM attendance_sessions own WHERE own.section_id=cs.id AND own.teacher_id=$1 AND own.taught_at IS NOT NULL)
+      AND EXISTS(SELECT 1 FROM attendance_sessions s WHERE s.section_id=cs.id)
+      AND (SELECT COUNT(*) FROM attendance_sessions s WHERE s.section_id=cs.id AND s.taught_at IS NOT NULL)>=COALESCE(cs.number_of_sessions,1)`, [teacherId])).rows[0].count);
+    const totalMinutes = Number((await pool2.query("SELECT COALESCE(SUM(taught_minutes),0)::int count FROM attendance_sessions WHERE teacher_id=$1 AND taught_at IS NOT NULL", [teacherId])).rows[0].count);
+    return { ...snapshot, monthlyMinutes: snapshot.totalMinutes, teacherId, month: m, totalMinutes, courses, tier: teacherTier(courses, (await settings()).tierRules || []), confirmation: (await pool2.query("SELECT * FROM teaching_months WHERE teacher_id=$1 AND month=$2", [teacherId, m])).rows[0] || null };
+  });
+  add("post", "/teaching/confirm", ["teacher"], async (req) => {
+    const input = body(z2.object({ month, note: z2.string().max(2e3).default("") }).strict(), req);
+    const currentMonth = (/* @__PURE__ */ new Date()).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).slice(0, 7);
+    if (input.month >= currentMonth) fail("Ch\u1EC9 x\xE1c nh\u1EADn th\xE1ng \u0111\xE3 k\u1EBFt th\xFAc.");
+    await transaction(async (db) => {
+      await monthLock(db, req.user.id, input.month);
+      const snapshot = await teachingSnapshot(req.user.id, input.month, db);
+      if (!snapshot.sessions.length) fail("Th\xE1ng n\xE0y ch\u01B0a c\xF3 bu\u1ED5i d\u1EA1y th\u1EF1c t\u1EBF.");
+      const changed = await db.query(`INSERT INTO teaching_months(teacher_id,month,status,snapshot,note) VALUES($1,$2,'submitted',$3,$4)
+      ON CONFLICT(teacher_id,month) DO UPDATE SET status='submitted',snapshot=EXCLUDED.snapshot,note=EXCLUDED.note,reviewed_by=NULL,updated_at=CURRENT_TIMESTAMP WHERE teaching_months.status<>'approved'`, [req.user.id, input.month, JSON.stringify(snapshot), input.note]);
+      if (!changed.rowCount) fail("Th\xE1ng \u0111\xE3 \u0111\u01B0\u1EE3c duy\u1EC7t.", 409);
+    });
+    await audit2(req, "confirm_teaching_month", req.user.id, input.month);
+    return { ok: true };
+  });
+  add("post", "/teaching/review", staff, async (req) => {
+    const input = body(z2.object({ teacherId: id, month, status: z2.enum(["approved", "revision"]), note: z2.string().trim().max(2e3).default("") }).strict(), req);
+    await transaction(async (db) => {
+      await monthLock(db, input.teacherId, input.month);
+      const claim = (await db.query("SELECT * FROM teaching_months WHERE teacher_id=$1 AND month=$2 FOR UPDATE", [input.teacherId, input.month])).rows[0];
+      if (!claim || claim.status !== "submitted") fail("Gi\u1EA3ng vi\xEAn ch\u01B0a g\u1EEDi x\xE1c nh\u1EADn th\xE1ng n\xE0y.");
+      const actual = await teachingSnapshot(input.teacherId, input.month, db);
+      const fingerprint = (snapshot) => JSON.stringify(snapshot.sessions.map((s) => [s.id, new Date(s.date).toISOString(), Number(s.taught_minutes)]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+      if (fingerprint(claim.snapshot) !== fingerprint(actual)) fail("Bu\u1ED5i d\u1EA1y \u0111\xE3 thay \u0111\u1ED5i, gi\u1EA3ng vi\xEAn c\u1EA7n x\xE1c nh\u1EADn l\u1EA1i.");
+      await db.query("UPDATE teaching_months SET status=$1,note=$2,reviewed_by=$3,updated_at=CURRENT_TIMESTAMP WHERE teacher_id=$4 AND month=$5", [input.status, input.note, req.user.id, input.teacherId, input.month]);
+    });
+    await audit2(req, "review_teaching_month", input.teacherId, `${input.month}: ${input.status}`);
+    return { ok: true };
+  });
+  add("get", "/templates", [...staff, "teacher"], async (req) => {
+    if (req.user.role !== "teacher") return (await pool2.query("SELECT id,course_id,title,created_at FROM lesson_plan_templates ORDER BY created_at DESC")).rows;
+    return (await pool2.query(`SELECT t.id,t.course_id,t.title,t.created_at FROM lesson_plan_templates t WHERE EXISTS(SELECT 1 FROM teacher_subjects ts WHERE ts.teacher_id=$1 AND ts.course_id=t.course_id)
+      OR EXISTS(SELECT 1 FROM course_sections cs WHERE cs.teacher_id=$1 AND cs.course_id=t.course_id)`, [req.user.id])).rows;
+  });
+  add("post", "/templates", staff, async (req) => {
+    const input = body(z2.object({ sectionId: id, title: z2.string().trim().min(2).max(160) }).strict(), req);
+    const cs = await section(req, input.sectionId);
+    const sessions = (await pool2.query("SELECT * FROM attendance_sessions WHERE section_id=$1 ORDER BY date,id", [cs.id])).rows;
+    if (!sessions.length) fail("L\u1EDBp ch\u01B0a c\xF3 bu\u1ED5i h\u1ECDc \u0111\u1EC3 l\u01B0u m\u1EABu.");
+    const snapshots = await Promise.all(sessions.map(async (s) => ({
+      topic: s.topic,
+      content: s.content || "",
+      materials: (await pool2.query("SELECT * FROM session_materials WHERE session_id=$1", [s.id])).rows,
+      assignments: (await pool2.query("SELECT * FROM assignments WHERE session_id=$1", [s.id])).rows,
+      solution: (await pool2.query("SELECT content,attachment_url FROM session_solutions WHERE session_id=$1", [s.id])).rows[0] || null
+    })));
+    const templateId = generateId2("plan");
+    await pool2.query("INSERT INTO lesson_plan_templates(id,course_id,title,sessions,created_by) VALUES($1,$2,$3,$4,$5)", [templateId, cs.course_id, input.title, JSON.stringify(snapshots), req.user.id]);
+    await audit2(req, "create_plan_template", templateId, input.title);
+    return { id: templateId };
+  });
+  add("post", "/sections/:id/plan", [...staff, "teacher"], async (req) => {
+    const input = body(z2.object({ mode: z2.enum(["default", "custom"]), templateId: id.optional() }).strict(), req);
+    await transaction(async (db) => {
+      await db.query("SELECT id FROM course_sections WHERE id=$1 FOR UPDATE", [req.params.id]);
+      const cs = await section(req, req.params.id, db);
+      if (input.templateId) {
+        const template = (await db.query("SELECT * FROM lesson_plan_templates WHERE id=$1 AND course_id=$2", [input.templateId, cs.course_id])).rows[0];
+        if (!template) fail("M\u1EABu kh\xF4ng thu\u1ED9c m\xF4n c\u1EE7a l\u1EDBp.");
+        const sessions = (await db.query("SELECT * FROM attendance_sessions WHERE section_id=$1 ORDER BY date,id", [cs.id])).rows;
+        if (sessions.length !== template.sessions.length) fail("S\u1ED1 bu\u1ED5i l\u1EDBp v\xE0 gi\xE1o \xE1n m\u1EABu kh\xF4ng kh\u1EDBp.");
+        if ((await db.query(`SELECT 1 FROM attendance_sessions s WHERE s.section_id=$1 AND (s.taught_at IS NOT NULL OR EXISTS(SELECT 1 FROM session_materials m WHERE m.session_id=s.id) OR EXISTS(SELECT 1 FROM assignments a WHERE a.session_id=s.id) OR EXISTS(SELECT 1 FROM session_solutions sol WHERE sol.session_id=s.id)) LIMIT 1`, [cs.id])).rowCount) fail("Ch\u1EC9 \xE1p d\u1EE5ng m\u1EABu v\xE0o l\u1EDBp ch\u01B0a c\xF3 t\xE0i li\u1EC7u/b\xE0i t\u1EADp/bu\u1ED5i \u0111\xE3 d\u1EA1y. Kh\xF4ng ghi \u0111\xE8 d\u1EEF li\u1EC7u hi\u1EC7n c\xF3.");
+        for (let index = 0; index < sessions.length; index++) {
+          const target = sessions[index], source = template.sessions[index];
+          await db.query("UPDATE attendance_sessions SET topic=$1,content=$2 WHERE id=$3", [source.topic, source.content, target.id]);
+          for (const material of source.materials) await db.query(`INSERT INTO session_materials(id,session_id,section_id,course_id,type,title,url,storage_path,file_name,mime_type,size_bytes,sort_order,created_by)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [generateId2("mat"), target.id, cs.id, cs.course_id, material.type, material.title, material.url, material.storage_path, material.file_name, material.mime_type, material.size_bytes, material.sort_order, req.user.id]);
+          for (const assignment of source.assignments) {
+            const date = new Date(target.date);
+            date.setDate(date.getDate() + 7);
+            await db.query(`INSERT INTO assignments(id,course_id,session_id,title,description,deadline,max_score,type,allow_late,attachment_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [generateId2("assign"), cs.course_id, target.id, assignment.title, assignment.description, date.toISOString(), assignment.max_score, assignment.type, assignment.allow_late, assignment.attachment_url]);
+          }
+          if (source.solution) await db.query("INSERT INTO session_solutions(session_id,content,attachment_url,published,updated_by) VALUES($1,$2,$3,false,$4)", [target.id, source.solution.content, source.solution.attachment_url, req.user.id]);
+        }
+      } else if (input.mode === "default") fail("Ch\u1ECDn b\u1ED9 gi\xE1o \xE1n m\u1EB7c \u0111\u1ECBnh.");
+      await db.query("UPDATE course_sections SET lesson_plan_mode=$1,lesson_plan_template_id=COALESCE($2,lesson_plan_template_id) WHERE id=$3", [input.mode, input.templateId || null, cs.id]);
+    });
+    await audit2(req, "set_class_plan", req.params.id, input.mode);
+    return { ok: true };
+  });
+  add("post", "/consultations", ["student"], async (req) => {
+    const input = body(z2.object({ courseId: id.optional(), message: z2.string().trim().min(2).max(2e3), requestKey: key }).strict(), req);
+    const request = await transaction(async (db) => {
+      const row = (await db.query(`INSERT INTO consultation_requests(id,student_id,course_id,message,request_key) VALUES($1,$2,$3,$4,$5) ON CONFLICT(student_id,request_key) DO NOTHING RETURNING *`, [generateId2("lead"), req.user.id, input.courseId || null, input.message, input.requestKey])).rows[0];
+      if (row) await enqueueCrmEvent(db, "consultation.requested", { requestId: row.id, lmsUserId: req.user.id, courseId: input.courseId || null, message: input.message });
+      return row || (await db.query("SELECT * FROM consultation_requests WHERE student_id=$1 AND request_key=$2", [req.user.id, input.requestKey])).rows[0];
+    });
+    return request;
+  });
+  add("get", "/sales", staff, async (req) => {
+    await sales(req);
+    return {
+      consultations: (await pool2.query("SELECT r.*,u.name,u.email,u.phone,c.title course_title FROM consultation_requests r JOIN users u ON u.id=r.student_id LEFT JOIN courses c ON c.id=r.course_id ORDER BY r.created_at DESC LIMIT 300")).rows,
+      vouchers: (await pool2.query("SELECT * FROM vouchers ORDER BY created_at DESC LIMIT 300")).rows,
+      orders: (await pool2.query("SELECT o.*,u.name,c.title course_title FROM upsell_orders o JOIN users u ON u.id=o.student_id JOIN courses c ON c.id=o.course_id ORDER BY o.created_at DESC LIMIT 300")).rows,
+      recommendations: (await pool2.query("SELECT * FROM course_recommendations")).rows
+    };
+  });
+  add("patch", "/consultations/:id", staff, async (req) => {
+    await sales(req);
+    const input = body(z2.object({ status: z2.enum(["new", "contacted", "closed"]) }).strict(), req);
+    const row = (await pool2.query("UPDATE consultation_requests SET status=$1,assigned_to=$2 WHERE id=$3 RETURNING id", [input.status, req.user.id, req.params.id])).rows[0];
+    if (!row) fail("Kh\xF4ng t\xECm th\u1EA5y y\xEAu c\u1EA7u.", 404);
+    await audit2(req, "update_consultation", row.id, input.status);
+    return row;
+  });
+  add("post", "/vouchers", staff, async (req) => {
+    await sales(req);
+    const input = body(z2.object({ code: z2.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{3,40}$/), amount: z2.number().int().positive().max(1e8), courseId: id.optional(), studentId: id.optional(), expiresAt: z2.iso.datetime({ offset: true }), maxUses: z2.number().int().min(1).max(1e4) }).strict(), req);
+    if (Date.parse(input.expiresAt) <= Date.now()) fail("Voucher ph\u1EA3i c\xF3 h\u1EA1n s\u1EED d\u1EE5ng trong t\u01B0\u01A1ng lai.");
+    if (input.studentId && !(await pool2.query("SELECT 1 FROM users WHERE id=$1 AND role='student'", [input.studentId])).rowCount) fail("\u0110\u1ED1i t\u01B0\u1EE3ng voucher ph\u1EA3i l\xE0 h\u1ECDc vi\xEAn.");
+    const row = (await pool2.query("INSERT INTO vouchers(id,code,amount,course_id,student_id,expires_at,max_uses,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *", [generateId2("voucher"), input.code, input.amount, input.courseId || null, input.studentId || null, input.expiresAt, input.maxUses, req.user.id])).rows[0];
+    await audit2(req, "create_voucher", row.id, input.code);
+    return row;
+  });
+  add("post", "/broadcast", staff, async (req) => {
+    await sales(req);
+    const input = body(z2.object({ studentIds: z2.array(id).min(1).max(500), message: z2.string().trim().min(2).max(2e3), voucherId: id.optional(), requestKey: key }).strict(), req);
+    let sent = 0;
+    await transaction(async (db) => {
+      if (!(await db.query("INSERT INTO operation_dispatches(id,actor_id,request_key) VALUES($1,$2,$3) ON CONFLICT(actor_id,request_key) DO NOTHING RETURNING id", [generateId2("dispatch"), req.user.id, input.requestKey])).rowCount) return;
+      const ids = [...new Set(input.studentIds)];
+      if ((await db.query("SELECT id FROM users WHERE id=ANY($1::text[]) AND role='student' AND is_active=true", [ids])).rowCount !== ids.length) fail("Ch\u1EC9 g\u1EEDi t\u1EDBi h\u1ECDc vi\xEAn \u0111ang ho\u1EA1t \u0111\u1ED9ng.");
+      let message = input.message;
+      if (input.voucherId) {
+        const voucher = (await db.query("SELECT * FROM vouchers WHERE id=$1 AND expires_at>CURRENT_TIMESTAMP", [input.voucherId])).rows[0];
+        if (!voucher || voucher.student_id && ids.some((studentId) => studentId !== voucher.student_id)) fail("Voucher kh\xF4ng \xE1p d\u1EE5ng cho to\xE0n b\u1ED9 ng\u01B0\u1EDDi nh\u1EADn.");
+        message += `
+Voucher ${voucher.code}: gi\u1EA3m ${Number(voucher.amount).toLocaleString("vi-VN")}\u0111; h\u1EBFt h\u1EA1n ${new Date(voucher.expires_at).toLocaleDateString("vi-VN")}.`;
+      }
+      for (const userId of ids) await db.query("INSERT INTO notifications(id,user_id,type,message,is_read,created_at) VALUES($1,$2,'info',$3,false,CURRENT_TIMESTAMP)", [generateId2("noti"), userId, message]);
+      sent = ids.length;
+    });
+    await audit2(req, "sales_broadcast", req.user.id, `${sent} h\u1ECDc vi\xEAn`);
+    return { sent };
+  });
+  add("put", "/recommendations", staff, async (req) => {
+    await sales(req);
+    const input = body(z2.object({ sourceCourseId: id, targetCourseIds: z2.array(id).max(20) }).strict(), req);
+    if (input.targetCourseIds.includes(input.sourceCourseId)) fail("Kh\xF4ng g\u1EE3i \xFD l\u1EA1i c\xF9ng kh\xF3a.");
+    await transaction(async (db) => {
+      await db.query("DELETE FROM course_recommendations WHERE source_course_id=$1", [input.sourceCourseId]);
+      for (const target of new Set(input.targetCourseIds)) await db.query("INSERT INTO course_recommendations(source_course_id,target_course_id) VALUES($1,$2)", [input.sourceCourseId, target]);
+    });
+    return { ok: true };
+  });
+  add("get", "/my-offers", ["student"], async (req) => {
+    const rules = await settings();
+    return {
+      courses: (await pool2.query(`SELECT DISTINCT c.id,c.title,c.description,c.price FROM courses c JOIN course_recommendations r ON r.target_course_id=c.id
+      JOIN enrollments e ON e.course_id=r.source_course_id WHERE e.student_id=$1 AND e.status='completed' AND c.status='published' AND c.price>0
+      AND NOT EXISTS(SELECT 1 FROM enrollments owned WHERE owned.course_id=c.id AND owned.student_id=$1 AND owned.status<>'cancelled')`, [req.user.id])).rows,
+      vouchers: (await pool2.query(`SELECT v.code,v.amount,v.course_id,v.expires_at FROM vouchers v WHERE (v.student_id IS NULL OR v.student_id=$1) AND v.expires_at>CURRENT_TIMESTAMP
+        AND (SELECT COUNT(*) FROM upsell_orders used WHERE used.voucher_id=v.id AND used.status IN ('pending','paid'))<v.max_uses`, [req.user.id])).rows,
+      orders: (await pool2.query("SELECT o.id,o.course_id,c.title course_title,o.original_price,o.discount,o.amount,o.status,o.reference,o.created_at FROM upsell_orders o JOIN courses c ON c.id=o.course_id WHERE o.student_id=$1 ORDER BY o.created_at DESC", [req.user.id])).rows,
+      bank: { bin: rules.bankBin, account: rules.bankAccount, name: rules.bankName },
+      supportPhone: getSupportPhone()
+    };
+  });
+  add("post", "/upsell-orders", ["student", ...staff], async (req) => {
+    const input = body(z2.object({ courseId: id, studentId: id.optional(), voucherCode: z2.string().trim().toUpperCase().max(40).optional(), requestKey: key }).strict(), req);
+    if (req.user.role !== "student") await sales(req);
+    const studentId = req.user.role === "student" ? req.user.id : input.studentId;
+    if (!studentId) fail("Ch\u1ECDn h\u1ECDc vi\xEAn.");
+    const source = req.user.role === "student" ? "self" : "sale";
+    return transaction(async (db) => {
+      if (!(await db.query("SELECT 1 FROM users WHERE id=$1 AND role='student' AND is_active=true FOR UPDATE", [studentId])).rowCount) fail("H\u1ECDc vi\xEAn kh\xF4ng h\u1EE3p l\u1EC7.");
+      const previous = (await db.query("SELECT o.*,v.code voucher_code FROM upsell_orders o LEFT JOIN vouchers v ON v.id=o.voucher_id WHERE o.student_id=$1 AND o.request_key=$2", [studentId, input.requestKey])).rows[0];
+      if (previous) {
+        if (previous.course_id !== input.courseId || previous.source !== source || (previous.voucher_code || "") !== (input.voucherCode || "")) fail("M\xE3 y\xEAu c\u1EA7u \u0111\xE3 d\xF9ng cho \u0111\u01A1n kh\xE1c.", 409);
+        return previous;
+      }
+      const course = (await db.query("SELECT * FROM courses WHERE id=$1 AND status='published'", [input.courseId])).rows[0];
+      if (!course) fail("Kh\xF3a h\u1ECDc ch\u01B0a m\u1EDF.");
+      if ((await db.query("SELECT 1 FROM enrollments WHERE student_id=$1 AND course_id=$2 AND status<>'cancelled'", [studentId, input.courseId])).rowCount) fail("H\u1ECDc vi\xEAn \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a n\xE0y.");
+      if ((await db.query("SELECT 1 FROM upsell_orders WHERE student_id=$1 AND course_id=$2 AND status='pending'", [studentId, input.courseId])).rowCount) fail("\u0110\xE3 c\xF3 \u0111\u01A1n \u0111ang ch\u1EDD x\xE1c nh\u1EADn.");
+      if (source === "self" && !(await db.query(`SELECT 1 FROM course_recommendations r JOIN enrollments e ON e.course_id=r.source_course_id WHERE e.student_id=$1 AND e.status='completed' AND r.target_course_id=$2`, [studentId, input.courseId])).rowCount) fail("Kh\xF3a n\xE0y ch\u01B0a n\u1EB1m trong g\u1EE3i \xFD h\u1ECDc ti\u1EBFp c\u1EE7a b\u1EA1n.", 403);
+      let voucher = null;
+      if (input.voucherCode) {
+        voucher = (await db.query("SELECT * FROM vouchers WHERE code=$1 FOR UPDATE", [input.voucherCode])).rows[0];
+        if (!voucher || new Date(voucher.expires_at).getTime() <= Date.now() || voucher.course_id && voucher.course_id !== input.courseId || voucher.student_id && voucher.student_id !== studentId) fail("Voucher kh\xF4ng h\u1EE3p l\u1EC7 ho\u1EB7c kh\xF4ng \xE1p d\u1EE5ng.");
+        const used = Number((await db.query("SELECT COUNT(*)::int count FROM upsell_orders WHERE voucher_id=$1 AND status IN ('pending','paid')", [voucher.id])).rows[0].count);
+        if (used >= voucher.max_uses) fail("Voucher \u0111\xE3 h\u1EBFt l\u01B0\u1EE3t s\u1EED d\u1EE5ng.");
+      }
+      const price = voucherDiscount(Number(course.price), Number(voucher?.amount || 0));
+      const policy = commissionSnapshot(source, (await settings(db)).commissionStart);
+      const order = (await db.query(`INSERT INTO upsell_orders(id,student_id,course_id,voucher_id,original_price,discount,amount,source,commission_rate,policy,request_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`, [generateId2("upsell"), studentId, input.courseId, voucher?.id || null, price.originalPrice, price.discount, price.amount, source, policy.rate, JSON.stringify(policy), input.requestKey])).rows[0];
+      await enqueueCrmEvent(db, "upsell.requested", { orderId: order.id, lmsUserId: studentId, courseId: input.courseId, amount: price.amount, source, policy });
+      return order;
+    });
+  });
+  add("post", "/upsell-orders/:id/confirm", staff, async (req) => {
+    await sales(req);
+    const input = body(z2.object({ amount: z2.number().int().nonnegative(), reference: z2.string().trim().min(3).max(200) }).strict(), req);
+    const result = await transaction(async (db) => {
+      const order = (await db.query("SELECT * FROM upsell_orders WHERE id=$1 FOR UPDATE", [req.params.id])).rows[0];
+      if (!order) fail("Kh\xF4ng t\xECm th\u1EA5y \u0111\u01A1n.", 404);
+      if (order.status === "paid") {
+        if (input.amount !== Number(order.amount) || input.reference !== order.reference) fail("\u0110\u01A1n \u0111\xE3 x\xE1c nh\u1EADn v\u1EDBi s\u1ED1 ti\u1EC1n/m\xE3 \u0111\u1ED1i so\xE1t kh\xE1c.", 409);
+        return order;
+      }
+      if (order.status !== "pending" || input.amount !== Number(order.amount)) fail("Tr\u1EA1ng th\xE1i ho\u1EB7c s\u1ED1 ti\u1EC1n kh\xF4ng kh\u1EDBp.");
+      const learner = (await db.query("SELECT id FROM users WHERE id=$1 AND role='student' FOR UPDATE", [order.student_id])).rows[0];
+      if (!learner) fail("Kh\xF4ng t\xECm th\u1EA5y h\u1ECDc vi\xEAn.");
+      let enrollment = (await db.query("SELECT * FROM enrollments WHERE student_id=$1 AND course_id=$2 FOR UPDATE", [order.student_id, order.course_id])).rows[0];
+      if (enrollment && !["cancelled", "pending_payment", "pending"].includes(enrollment.status)) fail("Kh\xF3a h\u1ECDc \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t ngo\xE0i \u0111\u01A1n n\xE0y; c\u1EA7n \u0111\u1ED1i so\xE1t.");
+      if (!enrollment) enrollment = (await db.query("INSERT INTO enrollments(id,student_id,course_id,status,enrolled_at) VALUES($1,$2,$3,'pending',CURRENT_TIMESTAMP) RETURNING *", [generateId2("enroll"), order.student_id, order.course_id])).rows[0];
+      else await db.query("UPDATE enrollments SET status='pending',completed_at=NULL,requested_section_id=NULL WHERE id=$1", [enrollment.id]);
+      await db.query("INSERT INTO transactions(id,student_id,course_id,amount,status,payment_method,created_at,processed_at,processed_by,notes) VALUES($1,$2,$3,$4,'approved','Upsell manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$5,$6)", [generateId2("tx"), order.student_id, order.course_id, input.amount, req.user.id, `${order.id}: ${input.reference}`]);
+      const updated = (await db.query("UPDATE upsell_orders SET status='paid',reference=$1,enrollment_id=$2,confirmed_by=$3 WHERE id=$4 RETURNING *", [input.reference, enrollment.id, req.user.id, order.id])).rows[0];
+      await enqueueCrmEvent(db, "upsell.payment_confirmed", { orderId: order.id, enrollmentId: enrollment.id, lmsUserId: order.student_id, amount: input.amount, reference: input.reference });
+      return updated;
+    });
+    await audit2(req, "confirm_upsell_payment", req.params.id, input.reference);
+    return result;
+  });
+  add("post", "/upsell-orders/:id/cancel", ["student", ...staff], async (req) => {
+    if (req.user.role !== "student") await sales(req);
+    const result = await pool2.query("UPDATE upsell_orders SET status='cancelled' WHERE id=$1 AND status='pending' AND ($2::boolean OR student_id=$3) RETURNING id", [req.params.id, req.user.role !== "student", req.user.id]);
+    if (!result.rowCount) fail("Kh\xF4ng th\u1EC3 h\u1EE7y \u0111\u01A1n n\xE0y.", 400);
+    await audit2(req, "cancel_upsell_order", req.params.id, "H\u1EE7y \u0111\u01A1n ch\u1EDD thanh to\xE1n");
+    return { ok: true };
+  });
+}
+
+// src/server/services/materialReferences.ts
+async function removeUnreferencedMaterials(paths) {
+  const removable = [];
+  for (const objectPath of new Set(paths)) {
+    const live = (await pool.query("SELECT 1 FROM session_materials WHERE storage_path=$1 LIMIT 1", [objectPath])).rowCount;
+    const template = (await pool.query(`SELECT 1 FROM lesson_plan_templates t CROSS JOIN LATERAL jsonb_array_elements(t.sessions) s
+      CROSS JOIN LATERAL jsonb_array_elements(s->'materials') m WHERE m->>'storage_path'=$1 LIMIT 1`, [objectPath])).rowCount;
+    if (!live && !template) removable.push(objectPath);
+  }
+  if (removable.length) await materialStorage.remove(removable);
+}
+
 // server.ts
-var uploadDir = process.env.UPLOAD_DIR || path5.join(process.cwd(), "public", "uploads");
+var uploadDir = process.env.UPLOAD_DIR || path6.join(process.cwd(), "storage", "uploads");
 try {
   if (!fs5.existsSync(uploadDir)) {
     fs5.mkdirSync(uploadDir, { recursive: true });
   }
 } catch (error) {
   console.warn(`Could not create ${uploadDir}, falling back to OS temp dir for uploads.`);
-  uploadDir = path5.join(os3.tmpdir(), "lms_uploads");
+  uploadDir = path6.join(os3.tmpdir(), "lms_uploads");
   if (!fs5.existsSync(uploadDir)) {
     fs5.mkdirSync(uploadDir, { recursive: true });
   }
@@ -6336,8 +7736,8 @@ var storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path5.extname(file.originalname).toLowerCase();
-    const base = path5.basename(file.originalname, path5.extname(file.originalname)).replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || "upload";
+    const ext = path6.extname(file.originalname).toLowerCase();
+    const base = path6.basename(file.originalname, path6.extname(file.originalname)).replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || "upload";
     cb(null, `${uniqueSuffix}-${base}${ext}`);
   }
 });
@@ -6389,7 +7789,7 @@ var allowedUploadMimeTypes = /* @__PURE__ */ new Set([
   "video/webm"
 ]);
 var uploadFileFilter = (_req, file, cb) => {
-  const ext = path5.extname(file.originalname).toLowerCase();
+  const ext = path6.extname(file.originalname).toLowerCase();
   const mime = String(file.mimetype || "").toLowerCase();
   const blockedExtensions = /* @__PURE__ */ new Set([".svg", ".html", ".htm", ".js", ".svgz"]);
   const blockedMimeTypes = /* @__PURE__ */ new Set(["image/svg+xml", "text/html", "application/javascript", "text/javascript"]);
@@ -6419,23 +7819,26 @@ var MATERIAL_MIME_BY_EXT = {
   ".csv": "text/csv",
   ".pbix": "application/octet-stream",
   ".zip": "application/zip",
-  ".rar": "application/x-rar-compressed"
+  ".rar": "application/x-rar-compressed",
+  ".json": "application/json",
+  ".txt": "text/plain",
+  ".sql": "text/plain",
+  ".ipynb": "application/x-ipynb+json",
+  ".py": "text/x-python",
+  ".md": "text/markdown"
 };
 var materialUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
-    const ext = path5.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
+    const ext = path6.extname(Buffer.from(file.originalname, "latin1").toString("utf8")).toLowerCase();
     if (MATERIAL_MIME_BY_EXT[ext]) return cb(null, true);
-    const err = new Error("T\xE0i li\u1EC7u bu\u1ED5i h\u1ECDc ch\u1EC9 nh\u1EADn t\u1EC7p .ppt, .pptx, .pdf, .doc, .docx, .xlsx, .xls, .csv, .pbix, .zip, .rar.");
+    const err = new Error("T\xE0i li\u1EC7u bu\u1ED5i h\u1ECDc ch\u1EC9 nh\u1EADn slide/t\xE0i li\u1EC7u (.pdf, .ppt, .pptx, .doc, .docx) v\xE0 file data (.xlsx, .xls, .csv, .pbix, .zip, .rar, .json, .txt, .sql, .ipynb, .py, .md).");
     err.status = 400;
     cb(err);
   },
   limits: { fileSize: MAX_UPLOAD_FILE_BYTES2 }
 });
-var MATERIAL_FILE_EXTENSIONS = {
-  slide: /* @__PURE__ */ new Set([".ppt", ".pptx", ".pdf"]),
-  document: /* @__PURE__ */ new Set([".doc", ".docx", ".pdf", ".xlsx", ".xls", ".csv", ".pbix", ".zip", ".rar"])
-};
+var paidTableUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 dotenv2.config();
 var app = express();
 app.set("trust proxy", 1);
@@ -6450,7 +7853,7 @@ var PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET;
 var PAYMENT_WEBHOOK_SECRET_VALUE = PAYMENT_WEBHOOK_SECRET;
 if (!PAYMENT_WEBHOOK_SECRET) {
   if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") {
-    PAYMENT_WEBHOOK_SECRET_VALUE = crypto4.randomBytes(32).toString("hex");
+    PAYMENT_WEBHOOK_SECRET_VALUE = crypto6.randomBytes(32).toString("hex");
     console.warn("WARNING: PAYMENT_WEBHOOK_SECRET environment variable is not set. Using a secure random value generated at runtime; payment webhooks will be rejected.");
   } else {
     PAYMENT_WEBHOOK_SECRET_VALUE = "dev-only-payment-webhook-secret-do-not-use-in-prod";
@@ -6485,11 +7888,13 @@ var UPLOAD_MIME_BY_EXT = {
   ".webm": "video/webm"
 };
 async function handleServeUpload(req, res) {
-  const filename = path5.basename(req.params.filename);
-  const localFile = path5.join(uploadDir, filename);
+  const filename = path6.basename(req.params.filename);
+  const privateLocalFile = path6.join(uploadDir, filename);
+  const legacyFile = path6.join(process.cwd(), "public", "uploads", filename);
+  const localFile = fs5.existsSync(privateLocalFile) ? privateLocalFile : legacyFile;
   if (fs5.existsSync(localFile)) {
     res.setHeader("X-Content-Type-Options", "nosniff");
-    const ext = path5.extname(filename).toLowerCase();
+    const ext = path6.extname(filename).toLowerCase();
     const mime = UPLOAD_MIME_BY_EXT[ext];
     if (mime) res.setHeader("Content-Type", mime);
     return res.sendFile(localFile);
@@ -6497,21 +7902,25 @@ async function handleServeUpload(req, res) {
   try {
     const download = await materialStorage.getDownload(`uploads/${filename}`, filename, { inline: true });
     if (download.kind === "redirect") {
-      return res.redirect(302, download.url);
+      const remote = await fetch(download.url, { signal: AbortSignal.timeout(6e4) });
+      if (!remote.ok) return res.status(502).json({ error: "Kh\xF4ng t\u1EA3i \u0111\u01B0\u1EE3c t\u1EC7p." });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.type(UPLOAD_MIME_BY_EXT[path6.extname(filename).toLowerCase()] || "application/octet-stream").send(Buffer.from(await remote.arrayBuffer()));
     }
     if (download.kind === "buffer") {
-      const ext = path5.extname(filename).toLowerCase();
+      const ext = path6.extname(filename).toLowerCase();
       const mime = download.mimeType || UPLOAD_MIME_BY_EXT[ext] || "application/octet-stream";
       res.setHeader("Content-Type", mime);
       res.setHeader("X-Content-Type-Options", "nosniff");
       const encodedName = encodeURIComponent(filename);
       const asciiName = filename.replace(/[^\x20-\x7E]/g, "_");
-      res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+      if (!res.hasHeader("Content-Disposition")) res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
       return res.send(download.buffer);
     }
     if (download.kind === "local" && fs5.existsSync(download.absolutePath)) {
       res.setHeader("X-Content-Type-Options", "nosniff");
-      const ext = path5.extname(filename).toLowerCase();
+      const ext = path6.extname(filename).toLowerCase();
       const mime = UPLOAD_MIME_BY_EXT[ext];
       if (mime) res.setHeader("Content-Type", mime);
       return res.sendFile(download.absolutePath);
@@ -6521,23 +7930,41 @@ async function handleServeUpload(req, res) {
   }
   return res.status(404).json({ error: "T\u1EC7p \u0111\xEDnh k\xE8m kh\xF4ng t\u1ED3n t\u1EA1i ho\u1EB7c \u0111\xE3 b\u1ECB x\xF3a." });
 }
-app.use("/uploads", express.static(uploadDir, {
-  setHeaders: (res) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-  }
-}));
-app.get("/uploads/:filename", asyncHandler(handleServeUpload));
-app.get("/api/uploads/:filename", asyncHandler(handleServeUpload));
+var guardedUpload = asyncHandler(async (req, res, next) => {
+  const filename = path6.basename(req.params.filename);
+  const isThumbnail = /\.(png|jpe?g|gif|webp|bmp)$/i.test(filename) && !isDevMockDb && Boolean((await pool.query(`SELECT 1 FROM courses WHERE thumbnail=$1
+    AND NOT EXISTS(SELECT 1 FROM assignments WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM submissions WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM submission_versions WHERE attachment_url=$1)
+    AND NOT EXISTS(SELECT 1 FROM session_solutions WHERE attachment_url=$1) LIMIT 1`, [`/uploads/${filename}`])).rowCount);
+  if (isThumbnail) return handleServeUpload(req, res);
+  return requireAuth(req, res, async (error) => {
+    if (error) return next(error);
+    try {
+      const access = await uploadAccess(pool, req.user, filename, req.get("X-LMS-Viewer") === "1");
+      if (!access.allowed) return res.status(403).json({ error: access.reason });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("Content-Disposition", access.viewOnly ? "inline" : "attachment");
+      return await handleServeUpload(req, res);
+    } catch (err) {
+      next(err);
+    }
+  });
+});
+app.get("/uploads/:filename", guardedUpload);
+app.get("/api/uploads/:filename", guardedUpload);
+app.use("/uploads", (_req, res) => res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\u1EC7p." }));
 app.post("/api/upload", requireCsrf, requireAuth, upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
   try {
     const fileBuffer = await fs5.promises.readFile(req.file.path);
-    const ext = path5.extname(req.file.filename).toLowerCase();
+    const ext = path6.extname(req.file.filename).toLowerCase();
     const mime = req.file.mimetype || UPLOAD_MIME_BY_EXT[ext] || "application/octet-stream";
     await materialStorage.put(`uploads/${req.file.filename}`, fileBuffer, mime);
   } catch (persistErr) {
     console.warn("[upload] Persistent storage notice:", persistErr?.message || persistErr);
   }
+  if (!isDevMockDb) await pool.query("INSERT INTO private_uploads(filename,owner_id,mime_type) VALUES($1,$2,$3)", [req.file.filename, req.user.id, req.file.mimetype]);
   res.json({ url: `/uploads/${req.file.filename}` });
 }));
 app.use((req, _res, next) => {
@@ -6562,10 +7989,10 @@ async function createUserAccount(db, input, password) {
   return usersRepository.create(db, user);
 }
 function generateTemporaryPassword() {
-  return `Lms-${crypto4.randomBytes(8).toString("base64url")}-1`;
+  return `Lms-${crypto6.randomBytes(8).toString("base64url")}-1`;
 }
 async function createStudentWithTemporaryPassword(input, source, loginUrl) {
-  const temporaryPassword = generateTemporaryPassword();
+  const temporaryPassword = source === "crm" && isDirectSale() ? getDefaultStudentPassword() || generateTemporaryPassword() : generateTemporaryPassword();
   const client2 = await pool.connect();
   let user;
   try {
@@ -6613,10 +8040,10 @@ async function createStudentWithTemporaryPassword(input, source, loginUrl) {
   return { user, temporaryPassword };
 }
 function sha256Hex2(input) {
-  return crypto4.createHash("sha256").update(input).digest("hex");
+  return crypto6.createHash("sha256").update(input).digest("hex");
 }
 function generatePasswordResetToken() {
-  return crypto4.randomBytes(32).toString("base64url");
+  return crypto6.randomBytes(32).toString("base64url");
 }
 function lmsBaseUrl(req) {
   return (process.env.LMS_LOGIN_URL || `${req.protocol}://${req.get("host") || "localhost:3000"}`).replace(/\/$/, "");
@@ -6684,7 +8111,7 @@ function signToken(user) {
     exp: Math.floor(Date.now() / 1e3) + 60 * 60 * 8
   }));
   const unsigned = `${header}.${payload}`;
-  const signature = crypto4.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
+  const signature = crypto6.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
   return `${unsigned}.${signature}`;
 }
 async function verifyToken(token) {
@@ -6692,11 +8119,11 @@ async function verifyToken(token) {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expected = crypto4.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
+  const expected = crypto6.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
   const sigBuffer = Buffer.from(signature, "base64url");
   const expBuffer = Buffer.from(expected, "base64url");
   if (sigBuffer.byteLength !== expBuffer.byteLength) return null;
-  if (!crypto4.timingSafeEqual(sigBuffer, expBuffer)) return null;
+  if (!crypto6.timingSafeEqual(sigBuffer, expBuffer)) return null;
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1e3)) return null;
   return parsed;
@@ -6740,14 +8167,14 @@ function createIpRateLimiter(name, max, windowSec, message) {
   return async (req, res, next) => {
     try {
       if (process.env.DISABLE_RATE_LIMIT === "true") return next();
-      const key = `ratelimit:${name}:${req.ip || req.socket.remoteAddress || "unknown"}`;
+      const key2 = `ratelimit:${name}:${req.ip || req.socket.remoteAddress || "unknown"}`;
       const current = await safeRedis(async () => {
-        const count = await redis.incr(key);
-        if (count === 1) await redis.expire(key, windowSec);
+        const count = await redis.incr(key2);
+        if (count === 1) await redis.expire(key2, windowSec);
         return count;
       }, 1);
       if (current > max) {
-        const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+        const ttl = await safeRedis(() => redis.ttl(key2), windowSec);
         res.setHeader("Retry-After", String(ttl));
         return res.status(429).json({ error: message });
       }
@@ -6765,16 +8192,16 @@ var rateLimitCertificateVerify = createIpRateLimiter("certificate-verify", 60, 6
 async function rateLimitLogin(req, res, next) {
   try {
     if (process.env.DISABLE_RATE_LIMIT === "true") return next();
-    const key = `ratelimit:login:${req.ip || req.socket.remoteAddress || "unknown"}`;
+    const key2 = `ratelimit:login:${req.ip || req.socket.remoteAddress || "unknown"}`;
     const max = 10;
     const windowSec = 15 * 60;
     const current = await safeRedis(async () => {
-      const count = await redis.incr(key);
-      if (count === 1) await redis.expire(key, windowSec);
+      const count = await redis.incr(key2);
+      if (count === 1) await redis.expire(key2, windowSec);
       return count;
     }, 1);
     if (current > max) {
-      const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+      const ttl = await safeRedis(() => redis.ttl(key2), windowSec);
       res.setHeader("Retry-After", String(ttl));
       return res.status(429).json({ error: "Too many login attempts. Please try again later." });
     }
@@ -6786,16 +8213,16 @@ async function rateLimitLogin(req, res, next) {
 async function rateLimitResetPassword(req, res, next) {
   try {
     if (process.env.DISABLE_RATE_LIMIT === "true") return next();
-    const key = `ratelimit:resetpwd:${req.ip || req.socket.remoteAddress || "unknown"}`;
+    const key2 = `ratelimit:resetpwd:${req.ip || req.socket.remoteAddress || "unknown"}`;
     const max = 5;
     const windowSec = 15 * 60;
     const current = await safeRedis(async () => {
-      const count = await redis.incr(key);
-      if (count === 1) await redis.expire(key, windowSec);
+      const count = await redis.incr(key2);
+      if (count === 1) await redis.expire(key2, windowSec);
       return count;
     }, 1);
     if (current > max) {
-      const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+      const ttl = await safeRedis(() => redis.ttl(key2), windowSec);
       res.setHeader("Retry-After", String(ttl));
       return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
     }
@@ -6807,16 +8234,16 @@ async function rateLimitResetPassword(req, res, next) {
 async function rateLimitBulkImport(req, res, next) {
   try {
     if (process.env.DISABLE_RATE_LIMIT === "true") return next();
-    const key = `ratelimit:bulkimport:${req.ip || req.socket.remoteAddress || "unknown"}`;
+    const key2 = `ratelimit:bulkimport:${req.ip || req.socket.remoteAddress || "unknown"}`;
     const max = 3;
     const windowSec = 15 * 60;
     const current = await safeRedis(async () => {
-      const count = await redis.incr(key);
-      if (count === 1) await redis.expire(key, windowSec);
+      const count = await redis.incr(key2);
+      if (count === 1) await redis.expire(key2, windowSec);
       return count;
     }, 1);
     if (current > max) {
-      const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+      const ttl = await safeRedis(() => redis.ttl(key2), windowSec);
       res.setHeader("Retry-After", String(ttl));
       return res.status(429).json({ error: "Too many bulk import attempts. Please try again later." });
     }
@@ -6892,14 +8319,14 @@ function certificateFromRow(row) {
 }
 async function generateCertificateCode(db) {
   for (let attempt = 0; attempt < 8; attempt++) {
-    const raw = crypto4.randomBytes(4).toString("hex").toUpperCase();
+    const raw = crypto6.randomBytes(4).toString("hex").toUpperCase();
     const code = `MCNA-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
     const existing = await db.query("SELECT 1 FROM certificates WHERE certificate_code = $1", [code]);
     if (existing.rowCount === 0) return code;
   }
   return `MCNA-${Date.now().toString(36).toUpperCase()}`;
 }
-async function placementNotice(db, enrollmentId, sectionId, feeConfirmed) {
+async function learnerPlacementSummary(db, enrollmentId, sectionId, feeConfirmed) {
   const row = (await db.query(
     `SELECT c.title, cs.section_code
        FROM enrollments e
@@ -7058,10 +8485,11 @@ async function maybePostGradeEntry(db, studentId, sourceType, sourceId, score, m
     console.error("[maybePostGradeEntry] Failed to write grade entry:", err);
   }
 }
-var scheduleSlotTime = (slot, key) => String(
-  key === "start" ? slot?.startTime || slot?.start_time || "" : slot?.endTime || slot?.end_time || ""
+var scheduleSlotTime = (slot, key2) => String(
+  key2 === "start" ? slot?.startTime || slot?.start_time || "" : slot?.endTime || slot?.end_time || ""
 ).trim();
 var scheduleSlotRoom = (slot) => String(slot?.room || "").trim();
+var isOnlineRoom = (room) => /online|zoom|meet|teams|trực tuyến|truc tuyen/i.test(room);
 var scheduleSlotDayLabel = (slot) => String(slot?.dayOfWeek || slot?.day_of_week || slot?.specificDate || slot?.specific_date || "").trim();
 var timeToMinutes = (value) => {
   const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})/);
@@ -7074,8 +8502,8 @@ var timeToMinutes = (value) => {
 var slotDateDayIndex = (slot) => {
   const specificDate = String(slot?.specificDate || slot?.specific_date || "").slice(0, 10);
   if (!isDateOnlyText(specificDate)) return null;
-  const [year, month, day] = specificDate.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const [year, month2, day] = specificDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month2 - 1, day)).getUTCDay();
 };
 var slotsOccurOnSameDay = (left, right) => {
   const leftDate = String(left?.specificDate || left?.specific_date || "").slice(0, 10);
@@ -7101,13 +8529,13 @@ async function validateCourseSectionScheduleConflicts(db, section) {
     const start = timeToMinutes(scheduleSlotTime(slot, "start"));
     const end = timeToMinutes(scheduleSlotTime(slot, "end"));
     if (start === null || end === null || start >= end) {
-      errors.push(`Invalid class time for ${scheduleSlotDayLabel(slot) || "schedule slot"}: ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`);
+      errors.push(`Gi\u1EDD h\u1ECDc kh\xF4ng h\u1EE3p l\u1EC7 (${scheduleSlotDayLabel(slot) || "ca h\u1ECDc"}): ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}. Gi\u1EDD b\u1EAFt \u0111\u1EA7u ph\u1EA3i tr\u01B0\u1EDBc gi\u1EDD k\u1EBFt th\xFAc, d\u1EA1ng HH:MM.`);
     }
   }
   for (let i = 0; i < schedule.length; i++) {
     for (let j = i + 1; j < schedule.length; j++) {
       if (slotsOverlap(schedule[i], schedule[j])) {
-        errors.push(`This class has overlapping schedule slots on ${scheduleSlotDayLabel(schedule[i]) || "the same day"}.`);
+        errors.push(`L\u1EDBp c\xF3 hai ca h\u1ECDc tr\xF9ng gi\u1EDD v\xE0o ${scheduleSlotDayLabel(schedule[i]) || "c\xF9ng m\u1ED9t ng\xE0y"}.`);
       }
     }
   }
@@ -7129,14 +8557,14 @@ async function validateCourseSectionScheduleConflicts(db, section) {
         if (!slotsOverlap(slot, existingSlot)) continue;
         if (existing.teacher_id === section.teacherId) {
           errors.push(
-            `Teacher schedule conflict with class ${existing.section_code} (${existing.course_title || "course"}) on ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
+            `Gi\u1EA3ng vi\xEAn ${existing.teacher_name || ""} tr\xF9ng l\u1ECBch d\u1EA1y v\u1EDBi l\u1EDBp ${existing.section_code} (${existing.course_title || "kh\xF3a h\u1ECDc"}) v\xE0o ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`.replace("  ", " ")
           );
         }
         const room = scheduleSlotRoom(slot).toLowerCase();
         const existingRoom = scheduleSlotRoom(existingSlot).toLowerCase();
-        if (room && existingRoom && room === existingRoom) {
+        if (room && existingRoom && room === existingRoom && !isOnlineRoom(room)) {
           errors.push(
-            `Room schedule conflict with class ${existing.section_code} (${existing.course_title || "course"}) in room ${scheduleSlotRoom(slot)} on ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
+            `Ph\xF2ng ${scheduleSlotRoom(slot)} tr\xF9ng l\u1ECBch v\u1EDBi l\u1EDBp ${existing.section_code} (${existing.course_title || "kh\xF3a h\u1ECDc"}) v\xE0o ${scheduleSlotDayLabel(slot)} ${scheduleSlotTime(slot, "start")} - ${scheduleSlotTime(slot, "end")}.`
           );
         }
       }
@@ -7369,7 +8797,7 @@ async function syncClientStoreToDb(store) {
 }
 function dashboardFromStore(store, user) {
   const scoped = limitStoreForRole(store, user);
-  if (user.role === "admin") {
+  if (user.role === "admin" || user.role === "manager") {
     return {
       ...scoped,
       dashboard: {
@@ -7447,7 +8875,7 @@ function requireInternalJobSecret(req, res, next) {
   const supplied = req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.get("x-cron-secret");
   const suppliedBuffer = Buffer.from(supplied || "");
   const configuredBuffer = Buffer.from(configured || "");
-  const matches = suppliedBuffer.length === configuredBuffer.length && crypto4.timingSafeEqual(suppliedBuffer, configuredBuffer);
+  const matches = suppliedBuffer.length === configuredBuffer.length && crypto6.timingSafeEqual(suppliedBuffer, configuredBuffer);
   if (!configured || !supplied || !matches) {
     return res.status(configured ? 401 : 503).json({ error: configured ? "Unauthorized cron request." : "CRON_SECRET is not configured." });
   }
@@ -7455,7 +8883,8 @@ function requireInternalJobSecret(req, res, next) {
 }
 for (const method of ["get", "post"]) {
   app[method]("/api/internal/jobs/crm-outbox", requireInternalJobSecret, asyncHandler(async (_req, res) => {
-    res.json(await runCrmOutboxJob());
+    const delivery = await runCrmOutboxJob();
+    res.json({ ...delivery, certificates: await runCertificateJob() });
   }));
 }
 var healthHandler = asyncHandler(async (_req, res) => {
@@ -7467,6 +8896,18 @@ var healthHandler = asyncHandler(async (_req, res) => {
 });
 app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
+app.get("/api/public/config", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(getPublicAppConfig());
+});
+var DIRECT_SALE_SIGNUP_MESSAGE = "LMS kh\xF4ng m\u1EDF t\u1EF1 \u0111\u0103ng k\xFD. T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn \u0111\u01B0\u1EE3c MCNA c\u1EA5p sau khi b\u1EA1n \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc v\u1EDBi b\u1ED9 ph\u1EADn t\u01B0 v\u1EA5n.";
+var DIRECT_SALE_ENROLL_MESSAGE = "Vi\u1EC7c \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc do b\u1ED9 ph\u1EADn t\u01B0 v\u1EA5n MCNA th\u1EF1c hi\u1EC7n. L\u1EDBp h\u1ECDc s\u1EBD hi\u1EC3n th\u1ECB trong t\xE0i kho\u1EA3n khi b\u1EA1n \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp.";
+function requireSelfService(message, code) {
+  return (_req, res, next) => {
+    if (isDirectSale()) return res.status(403).json({ error: `${message} H\u1ED7 tr\u1EE3: ${getSupportPhone()}.`, code });
+    next();
+  };
+}
 app.use("/api", requireCsrf);
 app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -7488,7 +8929,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
       createdAt: userItem.createdAt
     };
     setAuthCookie(res, signToken(user2));
-    const csrfToken2 = crypto4.randomBytes(24).toString("base64url");
+    const csrfToken2 = crypto6.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken2);
     return res.json({ user: user2, csrfToken: csrfToken2 });
   }
@@ -7510,7 +8951,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
   }
   const user = toPublicUser(row);
   setAuthCookie(res, signToken(user));
-  const csrfToken = crypto4.randomBytes(24).toString("base64url");
+  const csrfToken = crypto6.randomBytes(24).toString("base64url");
   setCsrfCookie(res, csrfToken);
   await auditRepository.log(pool, user.id, "authentication_login", "security", `Authenticated role ${user.role}.`);
   res.json({ user, csrfToken });
@@ -7553,7 +8994,8 @@ app.post("/api/auth/reset-password/complete", rateLimitResetPassword, validateBo
   res.json({ ok: true, message: "M\u1EADt kh\u1EA9u \u0111\xE3 \u0111\u01B0\u1EE3c \u0111\u1EB7t l\u1EA1i th\xE0nh c\xF4ng. B\u1EA1n c\xF3 th\u1EC3 \u0111\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u m\u1EDBi." });
 }));
 var ACCOUNT_REQUEST_MESSAGE = "N\u1EBFu email h\u1EE3p l\u1EC7, th\xF4ng tin \u0111\u0103ng nh\u1EADp \u0111\xE3 \u0111\u01B0\u1EE3c g\u1EEDi t\u1EDBi h\u1ED9p th\u01B0 c\u1EE7a b\u1EA1n. Vui l\xF2ng ki\u1EC3m tra c\u1EA3 th\u01B0 m\u1EE5c Spam.";
-app.post("/api/auth/register", rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
+var exposeDevSecrets = () => process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "staging" && !process.env.VERCEL;
+app.post("/api/auth/register", requireSelfService(DIRECT_SALE_SIGNUP_MESSAGE, "SELF_SIGNUP_DISABLED"), rateLimitRegister, validateBody(schemas.selfRegister), asyncHandler(async (req, res) => {
   const existing = await usersRepository.findAuthByEmail(pool, req.body.email);
   if (existing) {
     void sendAccountExistsEmail(pool, existing.id, { to: existing.email, name: existing.name, loginUrl: lmsBaseUrl(req) }).catch((err) => console.error("[register] failed to send account-exists email:", err));
@@ -7602,7 +9044,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   let csrfToken = cookieToken;
   if (!csrfToken) {
-    csrfToken = crypto4.randomBytes(24).toString("base64url");
+    csrfToken = crypto6.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken);
   }
   res.json({
@@ -7644,7 +9086,8 @@ app.get("/api/store", requireAuth, asyncHandler(async (req, res) => {
     res.json(limited);
   } catch (err) {
     console.error("[/api/store error]", err);
-    res.status(500).json({ error: err.message || "Internal server error", stack: err.stack });
+    const canExposeDetails = exposeDevSecrets();
+    res.status(500).json(canExposeDetails ? { error: err.message || "Internal server error", stack: err.stack } : { error: "Kh\xF4ng t\u1EA3i \u0111\u01B0\u1EE3c d\u1EEF li\u1EC7u. Vui l\xF2ng th\u1EED l\u1EA1i." });
   }
 }));
 app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
@@ -7653,7 +9096,7 @@ app.get("/api/dashboard/admin", requireAuth, requireRole(["manager", "admin"]), 
     return res.json({ ...dashboardFromStore(store2, req.user), auditLogs: [] });
   }
   const store = await storeSnapshotFromDb(pool);
-  res.json({ ...dashboardFromStore(store, req.user), auditLogs: await auditRepository.listRecent(pool, 100) });
+  res.json({ ...dashboardFromStore(store, req.user), auditLogs: req.user.role === "admin" ? await auditRepository.listRecent(pool, 100) : [] });
 }));
 app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => {
   const store = isDevMockDb ? devMockStore || getInitialStore() : await storeSnapshotFromDb(pool);
@@ -7872,9 +9315,9 @@ function requireCrmIntegration(req, res, next) {
   if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
   const authorization = req.header("Authorization") || "";
   const provided = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
-  const keyMatches = crypto4.timingSafeEqual(
-    crypto4.createHash("sha256").update(provided).digest(),
-    crypto4.createHash("sha256").update(apiKey).digest()
+  const keyMatches = crypto6.timingSafeEqual(
+    crypto6.createHash("sha256").update(provided).digest(),
+    crypto6.createHash("sha256").update(apiKey).digest()
   );
   if (!provided || !keyMatches) return res.status(401).json({ error: "Invalid CRM API key." });
   const configuredTolerance = Number(process.env.CRM_SIGNATURE_TOLERANCE_SECONDS || 300);
@@ -8042,7 +9485,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       }
       transactionId = payment.transactionId;
       const sectionId = req.body.sectionId || enrollmentRow.requested_section_id;
-      if (sectionId && !["active", "completed"].includes(enrollmentRow.status)) {
+      if (paymentMayPlace(isDirectSale(), sectionId) && !["active", "completed"].includes(enrollmentRow.status)) {
         await client2.query("SAVEPOINT placement");
         const placement = await placeEnrollment(client2, enrollmentRow.id, sectionId, "crm");
         if (isServiceError(placement)) {
@@ -8060,14 +9503,8 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
       client2.release();
     }
     if (placedSectionId) {
-      await notificationsRepository.create(pool, {
-        userId: enrollmentRow.student_id,
-        type: "success",
-        message: await placementNotice(pool, enrollmentRow.id, placedSectionId, true),
-        relatedEntityType: "enrollment",
-        relatedEntityId: enrollmentRow.id,
-        emailFallback: true
-      });
+      await sendClassPlacementNotice(pool, { studentId: enrollmentRow.student_id, sectionId: placedSectionId });
+      await notifyTeacherOfPlacements(pool, placedSectionId, 1);
     }
     void (async () => {
       try {
@@ -8108,31 +9545,31 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
   });
 }));
 app.get("/api/courses", requireAuth, asyncHandler(async (_req, res) => res.json(await coursesRepository.list(pool))));
-app.post("/api/courses", requireAuth, requireRole(["admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
-  const body = req.body;
+app.post("/api/courses", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+  const body2 = req.body;
   const course = await coursesRepository.create(pool, {
-    title: body.title,
-    description: body.description,
-    teacherId: body.teacherId || req.user.id,
+    title: body2.title,
+    description: body2.description,
+    teacherId: body2.teacherId || req.user.id,
     status: "published",
-    category: body.category,
-    thumbnail: body.thumbnail,
-    price: body.price,
-    originalPrice: body.originalPrice ?? void 0,
-    level: body.level,
-    tags: body.tags,
-    openingDate: body.openingDate,
-    numberOfLessons: body.numberOfLessons
+    category: body2.category,
+    thumbnail: body2.thumbnail,
+    price: body2.price,
+    originalPrice: body2.originalPrice ?? void 0,
+    level: body2.level,
+    tags: body2.tags,
+    openingDate: body2.openingDate,
+    numberOfLessons: body2.numberOfLessons
   });
-  await ensureCourseLessonsForSchedule(pool, course.id, body.numberOfLessons, [], body.openingDate);
+  await ensureCourseLessonsForSchedule(pool, course.id, body2.numberOfLessons, [], body2.openingDate);
   invalidateStoreCache();
   await audit(req, "create_course", course.id, course.title);
   res.status(201).json(course);
 }));
-app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const existing = await coursesRepository.findById(pool, req.params.id);
   if (!existing) return res.status(404).json({ error: "Course not found." });
-  const body = req.body;
+  const body2 = req.body;
   if (req.user.role === "teacher") {
     if (existing.teacherId !== req.user.id) {
       return res.status(403).json({ error: "Permission denied." });
@@ -8147,28 +9584,28 @@ app.put("/api/courses/:id", requireAuth, requireRole(["teacher", "admin"]), vali
       level: existing.level,
       tags: existing.tags,
       openingDate: existing.openingDate,
-      numberOfLessons: body.numberOfLessons
+      numberOfLessons: body2.numberOfLessons
     });
-    await ensureCourseLessonsForSchedule(pool, req.params.id, body.numberOfLessons, [], existing.openingDate);
+    await ensureCourseLessonsForSchedule(pool, req.params.id, body2.numberOfLessons, [], existing.openingDate);
     invalidateStoreCache();
-    await audit(req, "update_course_lessons_count", req.params.id, `Lessons: ${body.numberOfLessons}`);
+    await audit(req, "update_course_lessons_count", req.params.id, `Lessons: ${body2.numberOfLessons}`);
     return res.json(updated2);
   }
   const updated = await coursesRepository.updateDetails(pool, req.params.id, {
-    title: body.title,
-    description: body.description,
-    category: body.category,
-    thumbnail: body.thumbnail,
-    price: body.price,
-    originalPrice: body.originalPrice ?? void 0,
-    level: body.level,
-    tags: body.tags,
-    openingDate: body.openingDate,
-    numberOfLessons: body.numberOfLessons
+    title: body2.title,
+    description: body2.description,
+    category: body2.category,
+    thumbnail: body2.thumbnail,
+    price: body2.price,
+    originalPrice: body2.originalPrice ?? void 0,
+    level: body2.level,
+    tags: body2.tags,
+    openingDate: body2.openingDate,
+    numberOfLessons: body2.numberOfLessons
   });
-  await ensureCourseLessonsForSchedule(pool, req.params.id, body.numberOfLessons, [], body.openingDate);
+  await ensureCourseLessonsForSchedule(pool, req.params.id, body2.numberOfLessons, [], body2.openingDate);
   invalidateStoreCache();
-  await audit(req, "update_course", req.params.id, body.title);
+  await audit(req, "update_course", req.params.id, body2.title);
   res.json(updated);
 }));
 app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
@@ -8179,7 +9616,7 @@ app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "manage
   await audit(req, "publish_course_direct", course.id, course.title);
   res.json(course);
 }));
-app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/publish", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const course = await coursesRepository.setStatus(pool, req.params.id, "published");
   if (!course) return res.status(404).json({ error: "Course not found." });
   invalidateStoreCache();
@@ -8201,7 +9638,7 @@ app.post("/api/courses/:id/reject", requireAuth, requireRole(["manager", "admin"
   }
   res.json(course);
 }));
-app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/courses/:id", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const courseId2 = req.params.id;
   const enrollmentsCountRes = await pool.query("SELECT COUNT(*) AS count FROM enrollments WHERE course_id = $1 AND status = 'active'", [courseId2]);
   const enrollmentsCount = Number(enrollmentsCountRes.rows[0].count);
@@ -8211,6 +9648,13 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), a
   const client2 = await pool.connect();
   try {
     await client2.query("BEGIN");
+    if (isDirectSale()) {
+      await client2.query("SELECT id FROM courses WHERE id=$1 FOR UPDATE", [courseId2]);
+      const used = await client2.query(`SELECT 1 FROM enrollments WHERE course_id=$1
+        UNION ALL SELECT 1 FROM attendance_sessions WHERE course_id=$1 AND taught_at IS NOT NULL
+        UNION ALL SELECT 1 FROM upsell_orders WHERE course_id=$1 LIMIT 1`, [courseId2]);
+      if (used.rowCount) throw Object.assign(new Error("Kh\xF3a \u0111\xE3 c\xF3 ghi danh, \u0111\u01A1n h\xE0ng ho\u1EB7c gi\u1EDD d\u1EA1y. H\xE3y \u1EA9n kh\xF3a thay v\xEC x\xF3a l\u1ECBch s\u1EED."), { status: 409 });
+    }
     await client2.query(
       `DELETE FROM forum_replies
        WHERE post_id IN (SELECT id FROM forum_posts WHERE course_id = $1)`,
@@ -8255,7 +9699,7 @@ app.delete("/api/courses/:id", requireAuth, requireRole(["manager", "admin"]), a
   await audit(req, "delete_course", courseId2, "Successfully performed cascading delete on course and related assets.");
   res.json({ ok: true });
 }));
-app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
+app.post("/api/lessons", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.body.courseId)) {
     return res.status(403).json({ error: "Permission denied." });
   }
@@ -8264,7 +9708,7 @@ app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin"]), validat
   await audit(req, "add_lesson", lesson.id, lesson.title);
   res.status(201).json(lesson);
 }));
-app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
+app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateLesson), asyncHandler(async (req, res) => {
   const lessonRow = (await pool.query("SELECT course_id FROM lessons WHERE id = $1", [req.params.id])).rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
   if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, lessonRow.course_id)) {
@@ -8276,7 +9720,7 @@ app.put("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), vali
   await audit(req, "update_lesson", lesson.id, lesson.title);
   res.json(lesson);
 }));
-app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const lessonRes = await pool.query("SELECT * FROM lessons WHERE id = $1", [req.params.id]);
   const lessonRow = lessonRes.rows[0];
   if (!lessonRow) return res.status(404).json({ error: "Lesson not found." });
@@ -8289,7 +9733,7 @@ app.delete("/api/lessons/:id", requireAuth, requireRole(["teacher", "admin"]), a
   res.json({ ok: true });
 }));
 app.get("/api/enrollments", requireAuth, asyncHandler(async (req, res) => res.json(await enrollmentsRepository.listForUser(pool, req.user))));
-app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), validateBody(schemas.registerEnrollment), asyncHandler(async (req, res) => {
+app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), requireSelfService(DIRECT_SALE_ENROLL_MESSAGE, "SELF_ENROLL_DISABLED"), validateBody(schemas.registerEnrollment), asyncHandler(async (req, res) => {
   const result = await requestEnrollment({
     studentId: req.user.id,
     courseId: req.body.courseId,
@@ -8318,7 +9762,7 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   }
   res.status(201).json(result.enrollment);
 }));
-app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const enrollmentId = req.params.id;
   const chosenSectionId = typeof req.body?.sectionId === "string" && req.body.sectionId.trim() ? req.body.sectionId.trim() : void 0;
   const client2 = await pool.connect();
@@ -8353,14 +9797,6 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     client2.release();
   }
   invalidateStoreCache();
-  await notificationsRepository.create(pool, {
-    userId: studentId,
-    type: "success",
-    message: await placementNotice(pool, enrollmentId, targetSectionId, true),
-    relatedEntityType: "enrollment",
-    relatedEntityId: enrollmentId,
-    emailFallback: true
-  });
   const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [studentId])).rows[0];
   const sName = studentUser?.name || studentUser?.email || "H\u1ECDc vi\xEAn";
   await notificationsRepository.create(pool, {
@@ -8368,15 +9804,19 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     type: "success",
     message: `\u0110\xE3 k\xEDch ho\u1EA1t th\xE0nh c\xF4ng \u0111\u01A1n ghi danh cho h\u1ECDc vi\xEAn ${sName}.`
   });
-  if (targetSectionId) {
-    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [targetSectionId])).rows[0];
-    if (sec?.teacher_id) {
-      await notificationsRepository.create(pool, {
-        userId: sec.teacher_id,
-        type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${sName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || targetSectionId}" c\u1EE7a b\u1EA1n.`
-      });
-    }
+  let placementNotice = null;
+  if (targetSectionId && placement.placementChanged) {
+    placementNotice = await sendClassPlacementNotice(pool, { studentId, sectionId: targetSectionId, actorId: req.user.id });
+    await notifyTeacherOfPlacements(pool, targetSectionId, 1);
+  } else if (!targetSectionId) {
+    await notificationsRepository.create(pool, {
+      userId: studentId,
+      type: "success",
+      message: await learnerPlacementSummary(pool, enrollmentId, targetSectionId, true),
+      relatedEntityType: "enrollment",
+      relatedEntityId: enrollmentId,
+      skipEmail: Boolean(studentUser?.email)
+    });
   }
   if (studentUser?.email) {
     void (async () => {
@@ -8409,7 +9849,7 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["admin"]), a
     })();
   }
   await audit(req, "activate_enrollment_one_click", enrollmentId, targetSectionId || "no-section");
-  res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration });
+  res.json({ success: true, enrollment: placement.enrollment, registration: placement.registration, placementEmail: placementNotice?.status || null });
 }));
 app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.approveEnrollment), asyncHandler(async (req, res) => {
   const sectionId = req.body.sectionId;
@@ -8432,14 +9872,6 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
   }
   const { enrollment, registration } = placement;
   invalidateStoreCache();
-  await notificationsRepository.create(pool, {
-    userId: enrollment.student_id,
-    type: "success",
-    message: await placementNotice(pool, req.params.id, sectionId, false),
-    relatedEntityType: "enrollment",
-    relatedEntityId: req.params.id,
-    emailFallback: true
-  });
   const approveStudentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollment.student_id])).rows[0];
   const approveSName = approveStudentUser?.name || approveStudentUser?.email || "H\u1ECDc vi\xEAn";
   await notificationsRepository.create(pool, {
@@ -8447,27 +9879,34 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     type: "success",
     message: `\u0110\xE3 duy\u1EC7t ghi danh cho h\u1ECDc vi\xEAn ${approveSName}.`
   });
-  if (sectionId) {
-    const sec = (await pool.query("SELECT teacher_id, section_code FROM course_sections WHERE id = $1", [sectionId])).rows[0];
-    if (sec?.teacher_id) {
-      await notificationsRepository.create(pool, {
-        userId: sec.teacher_id,
-        type: "info",
-        message: `H\u1ECDc vi\xEAn m\u1EDBi (${approveSName}) v\u1EEBa \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp "${sec.section_code || sectionId}" c\u1EE7a b\u1EA1n.`
-      });
-    }
+  let placementNotice = null;
+  if (sectionId && placement.placementChanged) {
+    placementNotice = await sendClassPlacementNotice(pool, { studentId: enrollment.student_id, sectionId, actorId: req.user.id });
+    await notifyTeacherOfPlacements(pool, sectionId, 1);
+  } else if (!sectionId) {
+    await notificationsRepository.create(pool, {
+      userId: enrollment.student_id,
+      type: "success",
+      message: await learnerPlacementSummary(pool, req.params.id, sectionId, false),
+      relatedEntityType: "enrollment",
+      relatedEntityId: req.params.id,
+      emailFallback: true
+    });
   }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
-  res.json({ enrollment, registration });
+  res.json({ enrollment, registration, placementEmail: placementNotice?.status || null });
 }));
 app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
   const { placements } = req.body;
-  if (!Array.isArray(placements)) {
+  if (!Array.isArray(placements) || placements.length === 0) {
     return res.status(400).json({ error: "M\u1EA3ng danh s\xE1ch x\u1EBFp l\u1EDBp placements l\xE0 b\u1EAFt bu\u1ED9c." });
   }
+  if (placements.length > 500) return res.status(400).json({ error: "M\u1ED7i l\u1EA7n x\u1EBFp t\u1ED1i \u0111a 500 h\u1ECDc vi\xEAn." });
+  const shouldNotify = req.body.notify !== false;
   const client2 = await pool.connect();
   const results = [];
   const errors = [];
+  let committed = false;
   try {
     await client2.query("BEGIN");
     const sectionCounts = /* @__PURE__ */ new Map();
@@ -8477,8 +9916,8 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       let sectionId = p.sectionId;
       if (p.email) {
         const studentRow = (await client2.query(
-          "SELECT id FROM users WHERE email = $1 LIMIT 1",
-          [p.email]
+          "SELECT id FROM users WHERE lower(email) = lower($1) LIMIT 1",
+          [String(p.email).trim()]
         )).rows[0];
         if (!studentRow) {
           errors.push({ index, error: `Kh\xF4ng t\xECm th\u1EA5y h\u1ECDc vi\xEAn v\u1EDBi email: ${p.email}` });
@@ -8503,6 +9942,10 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         errors.push({ index, error: `Kh\xF4ng t\xECm th\u1EA5y l\u1EDBp h\u1ECDc ph\u1EA7n ID ${sectionId}.` });
         continue;
       }
+      if (section.status === "cancelled") {
+        errors.push({ index, error: `L\u1EDBp ${section.section_code} \u0111\xE3 h\u1EE7y, kh\xF4ng th\u1EC3 x\u1EBFp h\u1ECDc vi\xEAn.` });
+        continue;
+      }
       let currentCount = sectionCounts.get(sectionId);
       if (currentCount === void 0) {
         const countRes = await client2.query(
@@ -8511,10 +9954,6 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         );
         currentCount = Number(countRes.rows[0].count);
         sectionCounts.set(sectionId, currentCount);
-      }
-      if (currentCount >= section.max_students) {
-        errors.push({ index, error: `L\u1EDBp h\u1ECDc ph\u1EA7n ${section.section_code} \u0111\xE3 \u0111\u1EA1t s\u0129 s\u1ED1 t\u1ED1i \u0111a (${section.max_students}).` });
-        continue;
       }
       if (!enrollmentId) {
         if (!studentId) {
@@ -8530,7 +9969,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         } else {
           const courseForPlacement = (await client2.query("SELECT price FROM courses WHERE id = $1", [section.course_id])).rows[0];
           if (Number(courseForPlacement?.price || 0) > 0) {
-            errors.push({ index, error: "Payment must be confirmed before class placement." });
+            errors.push({ index, error: "H\u1ECDc vi\xEAn ch\u01B0a \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn thanh to\xE1n n\xEAn ch\u01B0a x\u1EBFp l\u1EDBp \u0111\u01B0\u1EE3c." });
             continue;
           }
           enrollmentId = generateId2("enroll");
@@ -8542,15 +9981,15 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       }
       const enrollmentRow = (await client2.query("SELECT * FROM enrollments WHERE id = $1 FOR UPDATE", [enrollmentId])).rows[0];
       if (!enrollmentRow) {
-        errors.push({ index, error: "Enrollment not found for class placement." });
+        errors.push({ index, error: "Kh\xF4ng t\xECm th\u1EA5y l\u01B0\u1EE3t ghi danh \u0111\u1EC3 x\u1EBFp l\u1EDBp." });
         continue;
       }
       if (enrollmentRow.course_id !== section.course_id) {
-        errors.push({ index, error: "Enrollment does not belong to the target class course." });
+        errors.push({ index, error: "L\u01B0\u1EE3t ghi danh n\xE0y kh\xF4ng thu\u1ED9c kh\xF3a h\u1ECDc c\u1EE7a l\u1EDBp \u0111\u01B0\u1EE3c ch\u1ECDn." });
         continue;
       }
       if (!await hasConfirmedPaymentForCoursePlacement(client2, enrollmentRow.student_id, enrollmentRow.course_id)) {
-        errors.push({ index, error: "Payment must be confirmed before class placement." });
+        errors.push({ index, error: "H\u1ECDc vi\xEAn ch\u01B0a \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn thanh to\xE1n n\xEAn ch\u01B0a x\u1EBFp l\u1EDBp \u0111\u01B0\u1EE3c." });
         continue;
       }
       await client2.query(
@@ -8566,7 +10005,7 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
         continue;
       }
       const existingRegistration = (await client2.query(
-        `SELECT cr.id
+        `SELECT cr.id, cr.section_id, cr.status
          FROM course_registrations cr
          JOIN course_sections cs ON cs.id = cr.section_id
          WHERE cr.student_id = $1
@@ -8574,6 +10013,11 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
            AND cr.status IN ('registered', 'waitlisted')`,
         [studentId, section.course_id]
       )).rows[0];
+      const alreadySeated = existingRegistration?.section_id === sectionId && existingRegistration?.status === "registered";
+      if (!alreadySeated && currentCount >= section.max_students) {
+        errors.push({ index, error: `L\u1EDBp h\u1ECDc ph\u1EA7n ${section.section_code} \u0111\xE3 \u0111\u1EA1t s\u0129 s\u1ED1 t\u1ED1i \u0111a (${section.max_students}).` });
+        continue;
+      }
       if (!existingRegistration) {
         await client2.query(
           `INSERT INTO course_registrations (id, student_id, section_id, status, registered_at, credits, is_retake)
@@ -8586,8 +10030,14 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
           [sectionId, existingRegistration.id]
         );
       }
-      results.push({ index, enrollmentId, sectionId });
-      sectionCounts.set(sectionId, currentCount + 1);
+      results.push({ index, enrollmentId, sectionId, studentId, changed: !alreadySeated });
+      if (!alreadySeated) {
+        sectionCounts.set(sectionId, currentCount + 1);
+        const previousSectionId = existingRegistration?.status === "registered" ? existingRegistration.section_id : null;
+        if (previousSectionId && sectionCounts.has(previousSectionId)) {
+          sectionCounts.set(previousSectionId, Math.max(0, sectionCounts.get(previousSectionId) - 1));
+        }
+      }
     }
     if (errors.length > 0) {
       await client2.query("ROLLBACK");
@@ -8597,11 +10047,121 @@ app.post("/api/admin/enrollments/bulk-place", requireAuth, requireRole(["manager
       await enqueueEnrollmentEvent(client2, "enrollment.status_changed", placed.enrollmentId);
     }
     await client2.query("COMMIT");
+    committed = true;
     invalidateStoreCache();
-    res.json({ success: true, count: results.length });
+    const changed = results.filter((item) => item.changed);
+    const notices = [];
+    if (shouldNotify) {
+      for (let offset = 0; offset < changed.length; offset += 3) {
+        notices.push(...await Promise.all(changed.slice(offset, offset + 3).map(
+          (item) => sendClassPlacementNotice(pool, { studentId: item.studentId, sectionId: item.sectionId, actorId: req.user.id })
+        )));
+      }
+      const perSection = /* @__PURE__ */ new Map();
+      for (const item of changed) perSection.set(item.sectionId, (perSection.get(item.sectionId) || 0) + 1);
+      for (const [sectionId, count] of perSection) await notifyTeacherOfPlacements(pool, sectionId, count);
+      invalidateStoreCache();
+    }
+    const emails = { sent: 0, mock: 0, failed: 0, skipped: 0 };
+    for (const notice of notices) emails[notice.status]++;
+    await audit(req, "bulk_place_enrollments", "enrollments", `X\u1EBFp l\u1EDBp ${results.length} h\u1ECDc vi\xEAn (m\u1EDBi: ${changed.length}); email g\u1EEDi: ${emails.sent}, l\u1ED7i: ${emails.failed}, ch\u01B0a g\u1EEDi do thi\u1EBFu SMTP: ${emails.mock}.`);
+    res.json({
+      success: true,
+      count: results.length,
+      placed: changed.length,
+      unchanged: results.length - changed.length,
+      emails,
+      notices: notices.map((notice) => ({ studentId: notice.studentId, sectionId: notice.sectionId, email: notice.email, status: notice.status, reason: notice.reason }))
+    });
   } catch (err) {
+    if (!committed) await client2.query("ROLLBACK");
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: committed ? `\u0110\xE3 x\u1EBFp l\u1EDBp xong nh\u01B0ng g\u1EB7p l\u1ED7i khi g\u1EEDi th\xF4ng b\xE1o: ${err.message || err}` : err.message || "Kh\xF4ng th\u1EC3 th\u1EF1c hi\u1EC7n x\u1EBFp l\u1EDBp h\xE0ng lo\u1EA1t."
+      });
+    }
+  } finally {
+    client2.release();
+  }
+}));
+var rateLimitPaidImport = createIpRateLimiter("paid-import", 60, 15 * 60, "B\u1EA1n thao t\xE1c nh\u1EADp danh s\xE1ch qu\xE1 nhanh. Vui l\xF2ng th\u1EED l\u1EA1i sau \xEDt ph\xFAt.");
+app.get("/api/admin/paid-enrollments/config", requireAuth, requireRole(["manager", "admin"]), (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ defaultPassword: getDefaultStudentPassword(), supportPhone: getSupportPhone() });
+});
+async function xlsxFirstSheetToTsv(buffer) {
+  const workbook = new ExcelJS2.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return "";
+  const lines = [];
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    const cells = [];
+    for (let column = 1; column <= sheet.columnCount; column++) {
+      cells.push(String(row.getCell(column).text ?? "").replace(/[\t\r\n]+/g, " ").trim());
+    }
+    lines.push(cells.join("	"));
+  });
+  return lines.join("\n");
+}
+app.post("/api/admin/paid-enrollments/parse", requireAuth, requireRole(["manager", "admin"]), paidTableUpload.single("file"), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Vui l\xF2ng ch\u1ECDn t\u1EC7p danh s\xE1ch." });
+  const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+  const ext = path6.extname(fileName).toLowerCase();
+  let text;
+  if (ext === ".xlsx") {
+    try {
+      text = await xlsxFirstSheetToTsv(req.file.buffer);
+    } catch {
+      return res.status(400).json({ error: "Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c t\u1EC7p Excel n\xE0y. H\xE3y l\u01B0u l\u1EA1i d\u1EA1ng .xlsx ho\u1EB7c d\xE1n tr\u1EF1c ti\u1EBFp c\xE1c \xF4 v\xE0o \xF4 nh\u1EADp." });
+    }
+  } else if (ext === ".csv" || ext === ".txt" || ext === ".tsv") {
+    text = req.file.buffer.toString("utf8");
+  } else {
+    return res.status(400).json({ error: "Ch\u1EC9 nh\u1EADn t\u1EC7p .xlsx, .csv ho\u1EB7c .txt. V\u1EDBi Google Sheets, h\xE3y t\u1EA3i v\u1EC1 d\u1EA1ng .xlsx ho\u1EB7c d\xE1n tr\u1EF1c ti\u1EBFp c\xE1c \xF4." });
+  }
+  res.json(parsePaidTable(text));
+}));
+app.post("/api/admin/paid-enrollments/import", requireAuth, requireRole(["manager", "admin"]), rateLimitPaidImport, validateBody(schemas.paidImport), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Nh\u1EADp danh s\xE1ch c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  const outcome = await importPaidEnrollments({
+    rows: req.body.rows,
+    defaultPassword: req.body.defaultPassword || getDefaultStudentPassword() || void 0,
+    sendAccountEmail: req.body.sendAccountEmail,
+    dryRun: req.body.dryRun,
+    actorId: req.user.id,
+    actorName: req.user.name || req.user.email
+  });
+  if (!req.body.dryRun) invalidateStoreCache();
+  res.json(outcome);
+}));
+app.post("/api/admin/placements/resend-email", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.resendPlacementEmail), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "G\u1EEDi email x\u1EBFp l\u1EDBp c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  const notices = [];
+  for (const item of req.body.items) {
+    notices.push(await sendClassPlacementNotice(pool, { studentId: item.studentId, sectionId: item.sectionId, actorId: req.user.id, notifyInApp: false }));
+  }
+  invalidateStoreCache();
+  const emails = { sent: 0, mock: 0, failed: 0, skipped: 0 };
+  for (const notice of notices) emails[notice.status]++;
+  res.json({ emails, notices });
+}));
+app.post("/api/admin/catalog/import-mcna", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "N\u1EA1p danh m\u1EE5c c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  const client2 = await pool.connect();
+  try {
+    await client2.query("BEGIN");
+    const summary = await importMcnaCatalog(client2, { skipClasses: true });
+    await client2.query("COMMIT");
+    invalidateStoreCache();
+    await audit(req, "import_mcna_catalog", "courses", `T\u1EA1o m\u1EDBi ${summary.coursesCreated}, c\u1EADp nh\u1EADt ${summary.coursesUpdated} kh\xF3a h\u1ECDc.`);
+    res.json({ ...summary, source: mcnaCatalog.source || "mcna.vn", scrapedAt: mcnaCatalog.scrapedAt || null });
+  } catch (error) {
     await client2.query("ROLLBACK");
-    res.status(500).json({ error: err.message || "Kh\xF4ng th\u1EC3 th\u1EF1c hi\u1EC7n x\u1EBFp l\u1EDBp h\xE0ng lo\u1EA1t." });
+    if (String(error?.message || "").startsWith("No teacher account found")) {
+      return res.status(400).json({ error: "Ch\u01B0a c\xF3 t\xE0i kho\u1EA3n gi\u1EA3ng vi\xEAn n\xE0o. H\xE3y t\u1EA1o \xEDt nh\u1EA5t m\u1ED9t gi\u1EA3ng vi\xEAn tr\u01B0\u1EDBc khi n\u1EA1p danh m\u1EE5c kh\xF3a h\u1ECDc." });
+    }
+    throw error;
   } finally {
     client2.release();
   }
@@ -8764,7 +10324,7 @@ app.delete("/api/feedback-templates/:id", requireAuth, requireRole(["teacher", "
   await audit(req, "delete_feedback_template", req.params.id, existing.title);
   return res.status(204).send();
 }));
-app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
+app.post("/api/certificates/issue", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.issueCertificate), asyncHandler(async (req, res) => {
   const client2 = await pool.connect();
   let committed = false;
   try {
@@ -8778,6 +10338,15 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       await client2.query("ROLLBACK");
       return res.status(400).json({ error: "Enrollment is not eligible for certificate issuance." });
     }
+    const eligibility = isDirectSale() ? await getCertificateEligibility(client2, enrollment.id) : null;
+    if (eligibility && !eligibility.eligible && !req.body.overrideReason) {
+      await client2.query("ROLLBACK");
+      return res.status(400).json({ error: eligibility.reasons.join(" "), reasons: eligibility.reasons });
+    }
+    if (isDirectSale() && !eligibility?.sectionId) {
+      await client2.query("ROLLBACK");
+      return res.status(400).json({ error: "Ph\u1EA3i x\u1EBFp l\u1EDBp tr\u01B0\u1EDBc khi c\u1EA5p ch\u1EE9ng ch\u1EC9." });
+    }
     const existingCertificate = (await client2.query(
       "SELECT * FROM certificates WHERE enrollment_id = $1 OR (student_id = $2 AND course_id = $3) LIMIT 1",
       [enrollment.id, enrollment.student_id, enrollment.course_id]
@@ -8790,10 +10359,10 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
     const issuedAt = (/* @__PURE__ */ new Date()).toISOString();
     const certificateCode = await generateCertificateCode(client2);
     const certificate = (await client2.query(
-      `INSERT INTO certificates (id, enrollment_id, student_id, course_id, issued_at, certificate_code)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO certificates (id, enrollment_id, student_id, course_id, issued_at, certificate_code, section_id, override_reason, issued_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [generateId2("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode]
+      [generateId2("cert"), enrollment.id, enrollment.student_id, enrollment.course_id, issuedAt, certificateCode, eligibility?.sectionId || null, req.body.overrideReason || null, req.user.id]
     )).rows[0];
     await client2.query(
       "UPDATE enrollments SET status = 'completed', completed_at = $1 WHERE id = $2",
@@ -8809,7 +10378,7 @@ app.post("/api/certificates/issue", requireAuth, requireRole(["admin"]), validat
       type: "success",
       message: `Ch\u1EE9ng ch\u1EC9 kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c c\u1EA5p ch\xEDnh th\u1EE9c. M\xE3 ki\u1EC3m \u0111\u1ECBnh: ${certificateCode}.`
     });
-    await audit(req, "issue_certificate", certificate.id, certificateCode);
+    await audit(req, "issue_certificate", certificate.id, `${certificateCode}; ${req.body.overrideReason || "\u0110\u1EA1t \u0111i\u1EC1u ki\u1EC7n"}`);
     res.status(201).json(certificateFromRow(certificate));
   } catch (error) {
     if (!committed) await client2.query("ROLLBACK");
@@ -8942,8 +10511,20 @@ app.post("/api/quizzes/submit", requireAuth, requireRole(["student"]), validateB
   await audit(req, "submit_quiz_attempt", result.row.quizId, `Score ${result.row.score}.`);
   res.status(201).json(result.row);
 }));
-app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
-  if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, req.body.courseId)) return res.status(403).json({ error: "Permission denied." });
+async function teacherCanManageAssignment(teacherId, courseId2, sessionId) {
+  if (!sessionId) return coursesRepository.teacherOwnsCourse(pool, teacherId, courseId2);
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM attendance_sessions s
+     JOIN course_sections cs ON cs.id = s.section_id
+     WHERE s.id = $1 AND s.course_id = $2 AND cs.teacher_id = $3`,
+    [sessionId, courseId2, teacherId]
+  )).rowCount);
+}
+app.post("/api/assignments", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.createAssignment), asyncHandler(async (req, res) => {
+  if (isDirectSale() && !req.body.sessionId) return res.status(400).json({ error: "B\xE0i t\u1EADp ph\u1EA3i thu\u1ED9c m\u1ED9t bu\u1ED5i h\u1ECDc c\u1EE7a l\u1EDBp." });
+  await validateAttachmentOwner(pool, req.user, req.body.attachmentUrl);
+  if (req.user.role === "teacher" && !await teacherCanManageAssignment(req.user.id, req.body.courseId, req.body.sessionId)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, req.body.courseId])).rows[0];
     if (!session) return res.status(400).json({ error: "Assignment must be assigned to a valid lesson/session in this course." });
@@ -8956,10 +10537,17 @@ app.post("/api/assignments", requireAuth, requireRole(["teacher", "admin"]), val
   await audit(req, "create_assignment", assignment.id, assignment.title);
   res.status(201).json(assignment);
 }));
-app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
+app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateAssignment), asyncHandler(async (req, res) => {
+  if (isDirectSale() && req.body.sessionId === null) return res.status(400).json({ error: "Kh\xF4ng th\u1EC3 b\u1ECF li\xEAn k\u1EBFt bu\u1ED5i h\u1ECDc c\u1EE7a b\xE0i t\u1EADp." });
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
-  if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
+  if (req.body.attachmentUrl && req.body.attachmentUrl !== assignment.attachment_url) await validateAttachmentOwner(pool, req.user, req.body.attachmentUrl);
+  if (req.user.role === "teacher") {
+    const targetSessionId = req.body.sessionId || assignment.session_id;
+    if (!await teacherCanManageAssignment(req.user.id, assignment.course_id, assignment.session_id) || !await teacherCanManageAssignment(req.user.id, assignment.course_id, targetSessionId)) {
+      return res.status(403).json({ error: "Permission denied." });
+    }
+  }
   if (req.body.sessionId) {
     const session = (await pool.query("SELECT id FROM attendance_sessions WHERE id = $1 AND course_id = $2", [req.body.sessionId, assignment.course_id])).rows[0];
     if (!session) return res.status(400).json({ error: "Assignment must be assigned to a valid lesson/session in this course." });
@@ -8972,10 +10560,10 @@ app.put("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), 
   await audit(req, "update_assignment", req.params.id, updated.title);
   res.json(updated);
 }));
-app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/assignments/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const assignment = (await pool.query("SELECT * FROM assignments WHERE id = $1", [req.params.id])).rows[0];
   if (!assignment) return res.status(404).json({ error: "Assignment not found." });
-  if (req.user.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user.id, assignment.course_id)) return res.status(403).json({ error: "Permission denied." });
+  if (req.user.role === "teacher" && !await teacherCanManageAssignment(req.user.id, assignment.course_id, assignment.session_id)) return res.status(403).json({ error: "Permission denied." });
   await assignmentsRepository.delete(pool, req.params.id);
   invalidateStoreCache();
   await audit(req, "delete_assignment", req.params.id, assignment.title);
@@ -9004,13 +10592,16 @@ app.post("/api/assignments/submit", requireAuth, requireRole(["student"]), valid
     }
     return res.status(201).json(sub);
   }
+  await validateAttachmentOwner(pool, req.user, req.body.attachmentUrl);
   const result = await assignmentsRepository.submit(pool, req.user.id, req.body.assignmentId, req.body.content, req.body.attachmentUrl);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
   await audit(req, "submit_assignment", result.row.id, result.row.assignmentId);
+  const assignmentSession = (await pool.query("SELECT s.section_id FROM assignments a JOIN attendance_sessions s ON s.id=a.session_id WHERE a.id=$1", [req.body.assignmentId])).rows[0];
+  if (assignmentSession?.section_id && isDirectSale()) await autoIssueCertificates(pool, assignmentSession.section_id);
   res.status(201).json(result.row);
 }));
-app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
+app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.gradeAssignment), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const sub = store.submissions.find((s) => s.id === req.body.submissionId);
@@ -9022,18 +10613,20 @@ app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin"]
   }
   const submission = await assignmentsRepository.findSubmissionForGrading(pool, req.body.submissionId);
   if (!submission) return res.status(404).json({ error: "Submission not found." });
-  if (req.user.role === "teacher" && submission.teacher_id !== req.user.id) return res.status(403).json({ error: "Permission denied." });
+  if (req.user.role === "teacher" && !await teacherCanManageAssignment(req.user.id, submission.course_id, submission.session_id)) return res.status(403).json({ error: "Permission denied." });
   if (req.body.score > Number(submission.max_score)) return res.status(400).json({ error: "Invalid score." });
-  const result = await assignmentsRepository.grade(pool, req.body.submissionId, req.body.score, req.body.feedback);
-  if (submission) {
+  if (isDirectSale() && !req.body.expectedSubmittedAt) return res.status(400).json({ error: "C\u1EA7n phi\xEAn b\u1EA3n b\xE0i n\u1ED9p \u0111ang ch\u1EA5m. T\u1EA3i l\u1EA1i danh s\xE1ch b\xE0i n\u1ED9p." });
+  const result = await assignmentsRepository.grade(pool, req.body.submissionId, req.body.score, req.body.feedback, req.body.expectedSubmittedAt);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  if (submission && !isDirectSale()) {
     await maybePostGradeEntry(pool, submission.student_id, "assignment", req.body.submissionId, req.body.score, Number(submission.max_score) || 100);
   }
-  await maybePostFinalCourseGradeForSubmission(pool, req.body.submissionId);
+  if (!isDirectSale()) await maybePostFinalCourseGradeForSubmission(pool, req.body.submissionId);
   invalidateStoreCache();
-  await audit(req, "grade_assignment", req.body.submissionId, `Score ${req.body.score}.`);
+  await audit(req, "grade_assignment", req.body.submissionId, JSON.stringify({ score: req.body.score, feedback: req.body.feedback, version: req.body.expectedSubmittedAt }));
   res.json(result);
 }));
-app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "teacher", "admin"]), validateBody(schemas.createForumPost), asyncHandler(async (req, res) => {
+app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "teacher", "manager", "admin"]), validateBody(schemas.createForumPost), asyncHandler(async (req, res) => {
   const { courseId: courseId2, sectionId, title, content } = req.body;
   if (courseId2 !== req.params.courseId) {
     return res.status(400).json({ error: "Course ID mismatch." });
@@ -9073,7 +10666,7 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         return res.status(403).json({ error: "You can only post on the forum of courses you teach." });
       }
     }
-  } else if (role !== "admin") {
+  } else if (role !== "admin" && role !== "manager") {
     return res.status(403).json({ error: "Permission denied." });
   }
   const post = await forumRepository.createPost(pool, { courseId: courseId2, sectionId, authorId: userId, title, content });
@@ -9112,7 +10705,7 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
   await audit(req, "create_forum_post", post.id, `Course: ${courseId2}`);
   res.status(201).json(post);
 }));
-app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student", "teacher", "admin"]), validateBody(schemas.createForumReply), asyncHandler(async (req, res) => {
+app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student", "teacher", "manager", "admin"]), validateBody(schemas.createForumReply), asyncHandler(async (req, res) => {
   const { content } = req.body;
   const { postId } = req.params;
   const userId = req.user.id;
@@ -9159,7 +10752,7 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         return res.status(403).json({ error: "You can only reply on the forum of courses you teach." });
       }
     }
-  } else if (role !== "admin") {
+  } else if (role !== "admin" && role !== "manager") {
     return res.status(403).json({ error: "Permission denied." });
   }
   const reply = await forumRepository.createReply(pool, { postId, authorId: userId, content });
@@ -9282,9 +10875,14 @@ app.post("/api/admin/users/bulk", requireAuth, requireRole(["admin"]), rateLimit
     created
   });
 }));
+var MANAGER_ACCOUNT_SCOPE_MESSAGE = "Qu\u1EA3n l\xFD l\u1EDBp ch\u1EC9 thao t\xE1c \u0111\u01B0\u1EE3c v\u1EDBi t\xE0i kho\u1EA3n h\u1ECDc vi\xEAn v\xE0 gi\u1EA3ng vi\xEAn.";
+function canManageAccount(actor, target) {
+  return actor.role === "admin" || target.role === "student" || target.role === "teacher";
+}
 app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["manager", "admin"]), rateLimitResetPassword, asyncHandler(async (req, res) => {
   const user = await usersRepository.findById(pool, req.params.id);
   if (!user) return res.status(404).json({ error: "User not found." });
+  if (!canManageAccount(req.user, user)) return res.status(403).json({ error: MANAGER_ACCOUNT_SCOPE_MESSAGE });
   const { resetToken, expiresAt } = await issuePasswordResetToken(user.id, req.user.id);
   const resetUrl = passwordResetUrl(req, resetToken);
   let emailSent = false;
@@ -9334,9 +10932,72 @@ app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["ma
     res.status(500).json({ error: `Provisioning failed: ${err.message || err}` });
   }
 }));
+app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  const targetEmail = (req.body?.targetEmail || req.user?.email || "").trim();
+  if (!targetEmail || !targetEmail.includes("@")) {
+    return res.status(400).json({ error: "\u0110\u1ECBa ch\u1EC9 email nh\u1EADn th\u1EED nghi\u1EC7m kh\xF4ng h\u1EE3p l\u1EC7." });
+  }
+  const configured = hasSmtpConfig();
+  if (!configured) {
+    return res.status(400).json({
+      error: "H\u1EC7 th\u1ED1ng ch\u01B0a \u0111\u01B0\u1EE3c c\u1EA5u h\xECnh bi\u1EBFn m\xF4i tr\u01B0\u1EDDng SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      details: {
+        configured: false,
+        smtpHost: process.env.SMTP_HOST || "Ch\u01B0a c\u1EA5u h\xECnh",
+        smtpUser: process.env.SMTP_USER || "Ch\u01B0a c\u1EA5u h\xECnh",
+        smtpPort: process.env.SMTP_PORT || "465",
+        appUrl: lmsBaseUrl(req)
+      }
+    });
+  }
+  try {
+    const transporter2 = getTransporter2();
+    const info = await transporter2.sendMail({
+      from: getSmtpFrom(),
+      to: targetEmail,
+      subject: `[MCNA LMS] Th\u1EED nghi\u1EC7m g\u1EEDi email h\u1EC7 th\u1ED1ng`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+          <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ki\u1EC3m tra k\u1EBFt n\u1ED1i g\u1EEDi email h\u1EC7 th\u1ED1ng</p>
+          </div>
+          <p style="font-size: 14px; color: #1e293b;">Xin ch\xE0o <strong>${escapeHtml2(req.user?.name || "Qu\u1EA3n tr\u1ECB vi\xEAn")}</strong>,</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+            Email n\xE0y \u0111\u01B0\u1EE3c g\u1EEDi th\u1EED nghi\u1EC7m t\u1EEB h\u1EC7 th\u1ED1ng LMS MCNA t\u1EA1i domain: <a href="${lmsBaseUrl(req)}" style="color: #4f46e5; font-weight: 600;">${lmsBaseUrl(req)}</a>.
+          </p>
+          <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 6px 0;"><strong>Th\u1EDDi gian g\u1EEDi:</strong> ${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
+            <p style="margin: 0 0 6px 0;"><strong>T\xE0i kho\u1EA3n g\u1EEDi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0;"><strong>\u0110\u1ECBa ch\u1EC9 nh\u1EADn:</strong> ${escapeHtml2(targetEmail)}</p>
+          </div>
+          <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
+            \u2713 M\xE1y ch\u1EE7 SMTP ho\u1EA1t \u0111\u1ED9ng b\xECnh th\u01B0\u1EDDng v\xE0 s\u1EB5n s\xE0ng g\u1EEDi email t\u1EDBi h\u1ECDc vi\xEAn.
+          </p>
+        </div>
+      `,
+      text: `MCNA LMS: Email th\u1EED nghi\u1EC7m g\u1EEDi th\xE0nh c\xF4ng t\u1EEB ${lmsBaseUrl(req)} t\u1EDBi ${targetEmail} l\xFAc ${(/* @__PURE__ */ new Date()).toISOString()}`
+    });
+    res.json({
+      ok: true,
+      message: `\u0110\xE3 g\u1EEDi th\xE0nh c\xF4ng email th\u1EED nghi\u1EC7m t\u1EDBi ${targetEmail}!`,
+      messageId: info.messageId,
+      sender: getSmtpFrom(),
+      targetEmail
+    });
+  } catch (err) {
+    console.error("[admin/email/test] SMTP send error:", err);
+    res.status(500).json({
+      ok: false,
+      error: `G\u1EEDi mail th\u1EA5t b\u1EA1i: ${err.message || String(err)}`,
+      code: err.code || "SMTP_ERROR",
+      tip: "Vui l\xF2ng ki\u1EC3m tra l\u1EA1i SMTP_USER v\xE0 SMTP_PASS (App Password), ho\u1EB7c c\u1EA5u h\xECnh b\u1EA3o m\u1EADt 2FA c\u1EE7a t\xE0i kho\u1EA3n g\u1EEDi."
+    });
+  }
+}));
 app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   const { role } = req.body;
-  const allowedRoles = ["student", "teacher", "admin"];
+  const allowedRoles = ["student", "teacher", "manager", "admin"];
   if (!allowedRoles.includes(role)) {
     return res.status(400).json({ error: "Invalid role value." });
   }
@@ -9353,6 +11014,9 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyn
   res.json({ ok: true, message: "Role updated successfully." });
 }));
 app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["manager", "admin"]), validateBody(schemas.setUserActive), asyncHandler(async (req, res) => {
+  const target = await usersRepository.findById(pool, req.params.id);
+  if (!target) return res.status(404).json({ error: "User not found." });
+  if (!canManageAccount(req.user, target)) return res.status(403).json({ error: MANAGER_ACCOUNT_SCOPE_MESSAGE });
   const user = await usersRepository.setActive(pool, req.params.id, req.body.isActive);
   if (!user) return res.status(404).json({ error: "User not found." });
   if (req.body.isActive === false && user.role === "student" && user.schoolEmail) {
@@ -9546,7 +11210,7 @@ app.post("/api/admin/crm/outbox/sync", requireAuth, requireRole(["admin"]), asyn
     ...result
   });
 }));
-app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.post("/api/course-sections", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user.role === "teacher") {
@@ -9560,16 +11224,31 @@ app.post("/api/course-sections", requireAuth, requireRole(["teacher", "admin"]),
     openingDate: req.body.openingDate || course.openingDate
   };
   if (!payload.teacherId) return res.status(400).json({ error: "teacherId is required." });
+  if (!(await pool.query("SELECT 1 FROM users WHERE id=$1 AND role='teacher' AND is_active=true", [payload.teacherId])).rowCount) return res.status(400).json({ error: "Ch\u1ECDn gi\u1EA3ng vi\xEAn \u0111ang ho\u1EA1t \u0111\u1ED9ng." });
+  const teacherSubjects = (await pool.query("SELECT course_id FROM teacher_subjects WHERE teacher_id=$1", [payload.teacherId])).rows;
+  if (teacherSubjects.length && !teacherSubjects.some((item) => item.course_id === payload.courseId)) return res.status(400).json({ error: "Gi\u1EA3ng vi\xEAn ch\u01B0a \u0111\u01B0\u1EE3c \u0111\u0103ng k\xFD d\u1EA1y m\xF4n n\xE0y." });
   const scheduleConflicts = await validateCourseSectionScheduleConflicts(pool, payload);
   if (scheduleConflicts.length > 0) {
     return res.status(409).json({ error: scheduleConflicts[0], conflicts: scheduleConflicts });
   }
-  const row = await upsertCourseSection(pool, payload);
+  const client2 = await pool.connect();
+  let row;
+  try {
+    await client2.query("BEGIN");
+    row = await upsertCourseSection(client2, payload);
+    await client2.query("COMMIT");
+  } catch (error) {
+    await client2.query("ROLLBACK");
+    throw error;
+  } finally {
+    client2.release();
+  }
   invalidateStoreCache();
   await audit(req, "create_course_section", row.id, row.sectionCode);
+  await sendTeacherAssignmentNotice(row.id);
   res.status(201).json(row);
 }));
-app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
+app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.courseSection), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   const course = await coursesRepository.findById(pool, req.body.courseId);
@@ -9588,6 +11267,10 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
     openingDate: req.body.openingDate || existing.opening_date || course.openingDate
   };
   if (!payload.teacherId) return res.status(400).json({ error: "teacherId is required." });
+  if (existing.course_id !== payload.courseId) return res.status(409).json({ error: "Kh\xF4ng chuy\u1EC3n m\xF4n c\u1EE7a l\u1EDBp hi\u1EC7n c\xF3. H\xE3y t\u1EA1o l\u1EDBp m\u1EDBi \u0111\u1EC3 gi\u1EEF \u0111\xFAng l\u1ECBch s\u1EED v\xE0 quy\u1EC1n truy c\u1EADp." });
+  if (!(await pool.query("SELECT 1 FROM users WHERE id=$1 AND role='teacher' AND is_active=true", [payload.teacherId])).rowCount) return res.status(400).json({ error: "Ch\u1ECDn gi\u1EA3ng vi\xEAn \u0111ang ho\u1EA1t \u0111\u1ED9ng." });
+  const teacherSubjects = (await pool.query("SELECT course_id FROM teacher_subjects WHERE teacher_id=$1", [payload.teacherId])).rows;
+  if (teacherSubjects.length && !teacherSubjects.some((item) => item.course_id === payload.courseId)) return res.status(400).json({ error: "Gi\u1EA3ng vi\xEAn ch\u01B0a \u0111\u01B0\u1EE3c \u0111\u0103ng k\xFD d\u1EA1y m\xF4n n\xE0y." });
   const sessionsWithMaterials = await generatedSessionsWithMaterialsBeyond(pool, req.params.id, Number(payload.numberOfSessions));
   if (sessionsWithMaterials.length > 0) {
     return res.status(409).json({
@@ -9598,12 +11281,25 @@ app.put("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"
   if (scheduleConflicts.length > 0) {
     return res.status(409).json({ error: scheduleConflicts[0], conflicts: scheduleConflicts });
   }
-  const row = await upsertCourseSection(pool, payload);
+  const client2 = await pool.connect();
+  let row;
+  try {
+    await client2.query("BEGIN");
+    await client2.query("SELECT id FROM course_sections WHERE id=$1 FOR UPDATE", [req.params.id]);
+    row = await upsertCourseSection(client2, payload);
+    await client2.query("COMMIT");
+  } catch (error) {
+    await client2.query("ROLLBACK");
+    throw error;
+  } finally {
+    client2.release();
+  }
   invalidateStoreCache();
   await audit(req, "update_course_section", row.id, row.sectionCode);
+  await sendTeacherAssignmentNotice(row.id);
   res.json(row);
 }));
-app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   const existing = (await pool.query("SELECT * FROM course_sections WHERE id = $1", [req.params.id])).rows[0];
   if (!existing) return res.status(404).json({ error: "Course section not found." });
   if (req.user.role === "teacher" && existing.teacher_id !== req.user.id) {
@@ -9613,6 +11309,13 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   const client2 = await pool.connect();
   try {
     await client2.query("BEGIN");
+    await client2.query("SELECT id FROM course_sections WHERE id=$1 FOR UPDATE", [req.params.id]);
+    await client2.query("SELECT id FROM attendance_sessions WHERE section_id=$1 ORDER BY id FOR UPDATE", [req.params.id]);
+    const protectedClass = await client2.query(`SELECT 1 FROM course_registrations WHERE section_id=$1 AND status='registered'
+      UNION ALL SELECT 1 FROM attendance_sessions s WHERE s.section_id=$1 AND (s.taught_at IS NOT NULL
+        OR EXISTS(SELECT 1 FROM attendance_records r WHERE r.session_id=s.id)
+        OR EXISTS(SELECT 1 FROM assignments a WHERE a.session_id=s.id)) LIMIT 1`, [req.params.id]);
+    if (protectedClass.rowCount) throw Object.assign(new Error("L\u1EDBp \u0111\xE3 c\xF3 h\u1ECDc vi\xEAn, b\xE0i t\u1EADp ho\u1EB7c bu\u1ED5i d\u1EA1y. H\xE3y chuy\u1EC3n tr\u1EA1ng th\xE1i l\u1EDBp thay v\xEC x\xF3a l\u1ECBch s\u1EED."), { status: 409 });
     await client2.query("DELETE FROM course_registrations WHERE section_id = $1", [req.params.id]);
     await client2.query("DELETE FROM section_schedules WHERE section_id = $1", [req.params.id]);
     await client2.query("DELETE FROM course_sections WHERE id = $1", [req.params.id]);
@@ -9623,14 +11326,14 @@ app.delete("/api/course-sections/:id", requireAuth, requireRole(["teacher", "adm
   } finally {
     client2.release();
   }
-  await materialStorage.remove(materialStoragePaths).catch((err) => {
+  await removeUnreferencedMaterials(materialStoragePaths).catch((err) => {
     console.error("[session-materials] failed to remove files of deleted section:", err);
   });
   invalidateStoreCache();
   await audit(req, "delete_course_section", req.params.id, existing.section_code);
   res.status(204).send();
 }));
-app.post("/api/course-registrations", requireAuth, requireRole(["student"]), validateBody(schemas.courseRegistration), asyncHandler(async (req, res) => {
+app.post("/api/course-registrations", requireAuth, requireRole(["student"]), requireSelfService(DIRECT_SALE_ENROLL_MESSAGE, "SELF_ENROLL_DISABLED"), validateBody(schemas.courseRegistration), asyncHandler(async (req, res) => {
   const result = await courseRegistrationsRepository.register(pool, req.user.id, req.body.sectionId);
   if ("error" in result) return res.status(result.status).json({ error: result.error });
   invalidateStoreCache();
@@ -9769,11 +11472,11 @@ var paymentWebhookHandler = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Missing webhook signature header." });
   }
   const payload = req.rawBody || JSON.stringify(req.body);
-  const expectedSignature = crypto4.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
+  const expectedSignature = crypto6.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
   const receivedSignature = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
   const sigBuffer = Buffer.from(receivedSignature, "utf8");
   const expBuffer = Buffer.from(expectedSignature, "utf8");
-  if (sigBuffer.length !== expBuffer.length || !crypto4.timingSafeEqual(sigBuffer, expBuffer)) {
+  if (sigBuffer.length !== expBuffer.length || !crypto6.timingSafeEqual(sigBuffer, expBuffer)) {
     return res.status(401).json({ error: "Invalid webhook signature." });
   }
   const { eventId, timestamp, transactionId, status, notes } = req.body;
@@ -9878,7 +11581,7 @@ var sepayWebhookHandler = asyncHandler(async (req, res) => {
   const token = match?.[2]?.trim() || "";
   const supplied = Buffer.from(token);
   const expected = Buffer.from(expectedApiKey);
-  if (!token || supplied.length !== expected.length || !crypto4.timingSafeEqual(supplied, expected)) {
+  if (!token || supplied.length !== expected.length || !crypto6.timingSafeEqual(supplied, expected)) {
     return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
   }
   const rawPayload = req.rawBody || JSON.stringify(req.body);
@@ -9925,7 +11628,7 @@ async function findSessionWithOwners(sessionId) {
   )).rows[0] || null;
 }
 function canManageSessionMaterials(user, session) {
-  if (user.role === "admin") return true;
+  if (user.role === "admin" || user.role === "manager") return true;
   if (user.role === "teacher") {
     if (session.section_teacher_id === user.id || session.course_teacher_id === user.id) return true;
   }
@@ -9980,19 +11683,76 @@ app.get("/api/sessions/:sessionId/materials", requireAuth, asyncHandler(async (r
   if (!await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
   res.json(await sessionMaterialsRepository.listBySession(pool, session.id));
 }));
-app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
+var MATERIAL_TYPE_ERROR = {
+  slide: "Slide ph\u1EA3i l\xE0 t\u1EC7p .pdf, .ppt ho\u1EB7c .pptx.",
+  document: "T\xE0i li\u1EC7u ph\u1EA3i l\xE0 t\u1EC7p .pdf, .doc ho\u1EB7c .docx. File d\u1EEF li\u1EC7u (Excel, CSV, ZIP...) h\xE3y t\u1EA3i \u1EDF m\u1EE5c File data.",
+  data: "File data ph\u1EA3i l\xE0 t\u1EC7p .xlsx, .xls, .csv, .pbix, .zip, .rar, .json, .txt, .sql, .ipynb, .py ho\u1EB7c .md."
+};
+var NON_PDF_WARNING = "H\u1ECDc vi\xEAn ch\u1EC9 xem \u0111\u01B0\u1EE3c slide v\xE0 t\xE0i li\u1EC7u d\u1EA1ng PDF tr\xEAn LMS (kh\xF4ng \u0111\u01B0\u1EE3c t\u1EA3i v\u1EC1). H\xE3y t\u1EA3i th\xEAm b\u1EA3n PDF c\u1EE7a t\u1EC7p n\xE0y.";
+async function storeMaterialFile(file, requestedType, storageDir, materialId) {
+  const fileName = Buffer.from(file.originalname, "latin1").toString("utf8");
+  const ext = path6.extname(fileName).toLowerCase();
+  const type = resolveUploadType(requestedType, fileName);
+  if (!MATERIAL_EXTENSIONS[type].includes(ext)) return { error: MATERIAL_TYPE_ERROR[type] };
+  const storagePath = `${storageDir}/${materialId}${ext}`;
+  await materialStorage.put(storagePath, file.buffer, MATERIAL_MIME_BY_EXT[ext]);
+  return {
+    type,
+    storagePath,
+    fileName,
+    mimeType: MATERIAL_MIME_BY_EXT[ext],
+    sizeBytes: file.size,
+    defaultTitle: path6.basename(fileName, path6.extname(fileName)),
+    warning: type !== "data" && ext !== ".pdf" ? NON_PDF_WARNING : void 0
+  };
+}
+async function canManageCourseContent(user, courseId2) {
+  if (user.role === "admin" || user.role === "manager") return true;
+  if (user.role !== "teacher") return false;
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM courses c
+     WHERE c.id = $1
+       AND (c.teacher_id = $2 OR EXISTS (SELECT 1 FROM course_sections cs WHERE cs.course_id = c.id AND cs.teacher_id = $2))`,
+    [courseId2, user.id]
+  )).rowCount);
+}
+async function canViewCourseIntro(user, courseId2) {
+  if (await canManageCourseContent(user, courseId2)) return true;
+  if (user.role !== "student") return false;
+  return Boolean((await pool.query(
+    `SELECT 1
+     FROM enrollments e
+     JOIN course_registrations cr ON cr.student_id = e.student_id AND cr.status = 'registered'
+     JOIN course_sections cs ON cs.id = cr.section_id AND cs.course_id = e.course_id
+     WHERE e.student_id = $1 AND e.course_id = $2 AND e.status IN ('active', 'completed')
+     LIMIT 1`,
+    [user.id, courseId2]
+  )).rowCount);
+}
+async function materialRowAccess(user, row) {
+  if (!row.session_id) {
+    const canManage2 = await canManageCourseContent(user, row.course_id);
+    return { canManage: canManage2, canView: canManage2 || await canViewCourseIntro(user, row.course_id) };
+  }
+  const session = await findSessionWithOwners(row.session_id);
+  if (!session) return { canManage: false, canView: false };
+  const canManage = canManageSessionMaterials(user, session);
+  return { canManage, canView: canManage || await canViewSessionMaterials(user, session) };
+}
+app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (!store.sessionMaterials) store.sessionMaterials = [];
-    const type2 = req.body.type;
     const fileName = req.file ? Buffer.from(req.file.originalname, "latin1").toString("utf8") : void 0;
-    const ext = fileName ? path5.extname(fileName).toLowerCase() : "";
+    const ext = fileName ? path6.extname(fileName).toLowerCase() : "";
+    const type = fileName && isFileMaterialType(req.body.type) ? resolveUploadType(req.body.type, fileName) : req.body.type;
     const newMat = {
       id: "mat_" + Date.now(),
       sessionId: req.params.sessionId,
-      type: type2,
-      title: req.body.title || (fileName ? path5.basename(fileName, path5.extname(fileName)) : type2 === "youtube" ? "Video b\xE0i gi\u1EA3ng" : "T\xE0i li\u1EC7u"),
-      url: req.file ? `/uploads/${req.file.filename}` : type2 === "youtube" || type2 === "link" ? resolveMaterialUrl(type2, req.body.url) : req.body.url || "",
+      type,
+      title: req.body.title || (fileName ? path6.basename(fileName, path6.extname(fileName)) : type === "youtube" ? "Video b\xE0i gi\u1EA3ng" : "T\xE0i li\u1EC7u"),
+      url: req.file ? `/uploads/${req.file.filename}` : type === "youtube" || type === "link" ? resolveMaterialUrl(type, req.body.url) : req.body.url || "",
       fileName,
       sizeBytes: req.file ? req.file.size : void 0,
       mimeType: ext ? MATERIAL_MIME_BY_EXT[ext] || "application/octet-stream" : void 0,
@@ -10004,55 +11764,51 @@ app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teache
   const session = await findSessionWithOwners(req.params.sessionId);
   if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
   if (!canManageSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied for this class session." });
-  const type = req.body.type;
+  const requestedType = req.body.type;
   const base = {
     id: sessionMaterialsRepository.newId(),
     sessionId: session.id,
     sectionId: session.section_id,
     courseId: session.course_id,
-    type,
     createdBy: req.user.id
   };
   let material;
-  if (type === "youtube" || type === "link") {
+  let warning;
+  if (requestedType === "youtube" || requestedType === "link") {
     if (req.file) return res.status(400).json({ error: "T\xE0i li\u1EC7u d\u1EA1ng li\xEAn k\u1EBFt kh\xF4ng k\xE8m t\u1EC7p." });
-    const url = resolveMaterialUrl(type, req.body.url);
-    if (!url) return res.status(400).json({ error: materialUrlError(type) });
+    const url = resolveMaterialUrl(requestedType, req.body.url);
+    if (!url) return res.status(400).json({ error: materialUrlError(requestedType) });
     material = await sessionMaterialsRepository.create(pool, {
       ...base,
-      title: req.body.title || (type === "youtube" ? "Video b\xE0i gi\u1EA3ng" : url),
+      type: requestedType,
+      title: req.body.title || (requestedType === "youtube" ? "Video b\xE0i gi\u1EA3ng" : url),
       url
     });
   } else {
     if (!req.file) return res.status(400).json({ error: "Vui l\xF2ng ch\u1ECDn t\u1EC7p t\xE0i li\u1EC7u." });
-    const fileName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
-    const ext = path5.extname(fileName).toLowerCase();
-    if (!MATERIAL_FILE_EXTENSIONS[type].has(ext)) {
-      return res.status(400).json({
-        error: type === "slide" ? "Slide ph\u1EA3i l\xE0 t\u1EC7p .ppt, .pptx ho\u1EB7c .pdf." : "T\xE0i li\u1EC7u/d\u1EEF li\u1EC7u th\u1EF1c h\xE0nh ph\u1EA3i l\xE0 t\u1EC7p .doc, .docx, .pdf, .xlsx, .xls, .csv, .pbix, .zip, .rar."
-      });
-    }
-    const storagePath = `${session.course_id}/${session.section_id || "course"}/${session.id}/${base.id}${ext}`;
-    await materialStorage.put(storagePath, req.file.buffer, MATERIAL_MIME_BY_EXT[ext]);
+    const stored = await storeMaterialFile(req.file, requestedType, `${session.course_id}/${session.section_id || "course"}/${session.id}`, base.id);
+    if ("error" in stored) return res.status(400).json({ error: stored.error });
+    warning = stored.warning;
     try {
       material = await sessionMaterialsRepository.create(pool, {
         ...base,
-        title: req.body.title || path5.basename(fileName, path5.extname(fileName)),
-        storagePath,
-        fileName,
-        mimeType: MATERIAL_MIME_BY_EXT[ext],
-        sizeBytes: req.file.size
+        type: stored.type,
+        title: req.body.title || stored.defaultTitle,
+        storagePath: stored.storagePath,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes
       });
     } catch (error) {
-      await materialStorage.remove([storagePath]).catch(() => void 0);
+      await materialStorage.remove([stored.storagePath]).catch(() => void 0);
       throw error;
     }
   }
   invalidateStoreCache();
-  await audit(req, "create_session_material", material.id, `${type}: ${material.title}`);
-  res.status(201).json(material);
+  await audit(req, "create_session_material", material.id, `${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
 }));
-app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
+app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.reorderSessionMaterials), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const ids = req.body.materialIds || [];
@@ -10074,7 +11830,95 @@ app.put("/api/sessions/:sessionId/materials/order", requireAuth, requireRole(["t
   invalidateStoreCache();
   res.json(materials);
 }));
-app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
+app.put("/api/courses/:id/welcome-letter", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.welcomeLetter), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "Th\u01B0 ch\xFAc m\u1EEBng c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  if (!await canManageCourseContent(req.user, req.params.id)) return res.status(403).json({ error: "Permission denied." });
+  const letter = req.body.welcomeLetter.trim();
+  const row = (await pool.query(
+    "UPDATE courses SET welcome_letter = $1 WHERE id = $2 RETURNING id, welcome_letter",
+    [letter || null, req.params.id]
+  )).rows[0];
+  if (!row) return res.status(404).json({ error: "Course not found." });
+  invalidateStoreCache();
+  await audit(req, "update_welcome_letter", req.params.id, letter ? `${letter.length} k\xFD t\u1EF1` : "D\xF9ng th\u01B0 m\u1EB7c \u0111\u1ECBnh");
+  res.json({ courseId: row.id, welcomeLetter: row.welcome_letter || "" });
+}));
+app.post("/api/courses/:id/welcome-letter/draft", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "So\u1EA1n th\u01B0 b\u1EB1ng AI c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  if (!await canManageCourseContent(req.user, req.params.id)) return res.status(403).json({ error: "Permission denied." });
+  const course = await coursesRepository.findById(pool, req.params.id);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  const lessons = (await pool.query("SELECT title FROM lessons WHERE course_id = $1 ORDER BY lesson_order", [course.id])).rows;
+  const draft = await generateWelcomeLetterDraft({
+    title: course.title,
+    description: course.description,
+    level: course.level,
+    sessionTitles: lessons.map((row) => String(row.title || "")).filter(Boolean)
+  });
+  await audit(req, "draft_welcome_letter", course.id, draft.source);
+  res.json(draft);
+}));
+app.get("/api/courses/:courseId/intro-materials", requireAuth, asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json([]);
+  if (!await canViewCourseIntro(req.user, req.params.courseId)) return res.status(403).json({ error: "Permission denied." });
+  res.json(await sessionMaterialsRepository.listIntroByCourse(pool, req.params.courseId));
+}));
+app.post("/api/courses/:courseId/intro-materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createIntroMaterial), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.status(501).json({ error: "T\xE0i li\u1EC7u m\u1EDF \u0111\u1EA7u c\u1EA7n c\u01A1 s\u1EDF d\u1EEF li\u1EC7u PostgreSQL (kh\xF4ng h\u1ED7 tr\u1EE3 \u1EDF ch\u1EBF \u0111\u1ED9 mock)." });
+  const course = await coursesRepository.findById(pool, req.params.courseId);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  if (!await canManageCourseContent(req.user, course.id)) return res.status(403).json({ error: "Permission denied." });
+  const requestedType = req.body.type;
+  const base = {
+    id: sessionMaterialsRepository.newId(),
+    courseId: course.id,
+    category: req.body.category,
+    createdBy: req.user.id
+  };
+  let material;
+  let warning;
+  if (requestedType === "youtube" || requestedType === "link") {
+    if (req.file) return res.status(400).json({ error: "T\xE0i li\u1EC7u d\u1EA1ng li\xEAn k\u1EBFt kh\xF4ng k\xE8m t\u1EC7p." });
+    const url = resolveMaterialUrl(requestedType, req.body.url);
+    if (!url) return res.status(400).json({ error: materialUrlError(requestedType) });
+    material = await sessionMaterialsRepository.create(pool, {
+      ...base,
+      type: requestedType,
+      title: req.body.title || (requestedType === "youtube" ? "Video gi\u1EDBi thi\u1EC7u" : url),
+      url
+    });
+  } else {
+    if (!req.file) return res.status(400).json({ error: "Vui l\xF2ng ch\u1ECDn t\u1EC7p t\xE0i li\u1EC7u." });
+    const stored = await storeMaterialFile(req.file, requestedType, `${course.id}/intro`, base.id);
+    if ("error" in stored) return res.status(400).json({ error: stored.error });
+    warning = stored.warning;
+    try {
+      material = await sessionMaterialsRepository.create(pool, {
+        ...base,
+        type: stored.type,
+        title: req.body.title || stored.defaultTitle,
+        storagePath: stored.storagePath,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes
+      });
+    } catch (error) {
+      await materialStorage.remove([stored.storagePath]).catch(() => void 0);
+      throw error;
+    }
+  }
+  invalidateStoreCache();
+  await audit(req, "create_intro_material", material.id, `${material.category}/${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
+}));
+app.put("/api/courses/:courseId/intro-materials/order", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.reorderIntroMaterials), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json([]);
+  if (!await canManageCourseContent(req.user, req.params.courseId)) return res.status(403).json({ error: "Permission denied." });
+  const materials = await sessionMaterialsRepository.reorderIntro(pool, req.params.courseId, req.body.category, req.body.materialIds);
+  invalidateStoreCache();
+  res.json(materials);
+}));
+app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     const mat = (store.sessionMaterials || []).find((m) => m.id === req.params.id);
@@ -10085,8 +11929,7 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), 
   }
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\xE0i li\u1EC7u." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !canManageSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+  if (!(await materialRowAccess(req.user, row)).canManage) return res.status(403).json({ error: "Permission denied for this material." });
   let url;
   if (req.body.url !== void 0) {
     if (row.type !== "youtube" && row.type !== "link") return res.status(400).json({ error: "Ch\u1EC9 t\xE0i li\u1EC7u d\u1EA1ng li\xEAn k\u1EBFt m\u1EDBi \u0111\u1ED5i \u0111\u01B0\u1EE3c URL." });
@@ -10098,7 +11941,7 @@ app.patch("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), 
   await audit(req, "update_session_material", row.id, material?.title || row.title);
   res.json(material);
 }));
-app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]), asyncHandler(async (req, res) => {
+app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
     if (store.sessionMaterials) {
@@ -10108,11 +11951,10 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]),
   }
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\xE0i li\u1EC7u." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !canManageSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied for this class session." });
+  if (!(await materialRowAccess(req.user, row)).canManage) return res.status(403).json({ error: "Permission denied for this material." });
   await sessionMaterialsRepository.remove(pool, row.id);
   if (row.storage_path) {
-    await materialStorage.remove([row.storage_path]).catch((err) => {
+    await removeUnreferencedMaterials([row.storage_path]).catch((err) => {
       console.error("[session-materials] failed to remove file:", row.storage_path, err);
     });
   }
@@ -10120,28 +11962,50 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "admin"]),
   await audit(req, "delete_session_material", row.id, row.title);
   res.status(204).send();
 }));
+var contentDisposition = (disposition, fileName) => `${disposition}; filename="${fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+async function sendMaterialForViewing(res, row, fileName) {
+  const download = await materialStorage.getDownload(row.storage_path, fileName, { inline: true });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", contentDisposition("inline", fileName));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (download.kind === "redirect") {
+    const upstream = await fetch(download.url, { signal: AbortSignal.timeout(6e4) });
+    if (!upstream.ok) return res.status(502).json({ error: "Kh\xF4ng t\u1EA3i \u0111\u01B0\u1EE3c t\xE0i li\u1EC7u t\u1EEB kho l\u01B0u tr\u1EEF. Vui l\xF2ng th\u1EED l\u1EA1i." });
+    return res.send(Buffer.from(await upstream.arrayBuffer()));
+  }
+  if (download.kind === "buffer") return res.send(download.buffer);
+  if (!fs5.existsSync(download.absolutePath)) return res.status(404).json({ error: "T\u1EC7p t\xE0i li\u1EC7u kh\xF4ng c\xF2n tr\xEAn m\xE1y ch\u1EE7. Gi\u1EA3ng vi\xEAn vui l\xF2ng t\u1EA3i l\u1EA1i." });
+  return res.sendFile(download.absolutePath);
+}
 app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res) => {
   const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
   if (!row || !row.storage_path) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\u1EC7p t\xE0i li\u1EC7u." });
-  const session = await findSessionWithOwners(row.session_id);
-  if (!session || !await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
-  const isPdf = row.mime_type === "application/pdf" || row.file_name && row.file_name.toLowerCase().endsWith(".pdf");
+  const access = await materialRowAccess(req.user, row);
+  if (!access.canView) return res.status(403).json({ error: "Permission denied." });
+  const fileName = row.file_name || path6.basename(row.storage_path);
+  const isPdf = isPdfFile(row.mime_type, row.file_name);
   const wantsInline = req.query.inline === "true" && isPdf;
-  const download = await materialStorage.getDownload(
-    row.storage_path,
-    row.file_name || path5.basename(row.storage_path),
-    { inline: wantsInline }
-  );
+  if (!access.canManage) {
+    const learnerAccess = learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name });
+    if (learnerAccess === "unavailable") {
+      return res.status(403).json({ error: "T\xE0i li\u1EC7u n\xE0y ch\u1EC9 xem tr\u1EF1c tuy\u1EBFn v\xE0 ch\u01B0a c\xF3 b\u1EA3n PDF \u0111\u1EC3 hi\u1EC3n th\u1ECB. Vui l\xF2ng li\xEAn h\u1EC7 gi\u1EA3ng vi\xEAn.", code: "VIEW_ONLY_NO_PREVIEW" });
+    }
+    if (learnerAccess === "view") {
+      if (!wantsInline || req.get("X-LMS-Viewer") !== "1") {
+        return res.status(403).json({ error: "Slide v\xE0 t\xE0i li\u1EC7u ch\u1EC9 xem tr\u1EF1c tuy\u1EBFn tr\xEAn LMS, kh\xF4ng h\u1ED7 tr\u1EE3 t\u1EA3i v\u1EC1.", code: "VIEW_ONLY" });
+      }
+      return sendMaterialForViewing(res, row, fileName);
+    }
+  }
+  const download = await materialStorage.getDownload(row.storage_path, fileName, { inline: wantsInline });
   if (download.kind === "redirect") return res.redirect(302, download.url);
   res.setHeader("X-Content-Type-Options", "nosniff");
-  const fileName = row.file_name || path5.basename(row.storage_path);
-  const encodedName = encodeURIComponent(fileName);
-  const asciiName = fileName.replace(/[^\x20-\x7E]/g, "_");
   const disposition = wantsInline ? "inline" : "attachment";
   if (download.kind === "buffer") {
     const mime = row.mime_type || download.mimeType || (isPdf ? "application/pdf" : "application/octet-stream");
     res.setHeader("Content-Type", mime);
-    res.setHeader("Content-Disposition", `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    res.setHeader("Content-Disposition", contentDisposition(disposition, fileName));
     return res.send(download.buffer);
   }
   if (!fs5.existsSync(download.absolutePath)) {
@@ -10151,7 +12015,7 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   }
   if (wantsInline) {
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
+    res.setHeader("Content-Disposition", contentDisposition("inline", fileName));
     return res.sendFile(download.absolutePath);
   }
   res.download(download.absolutePath, fileName);
@@ -10161,21 +12025,24 @@ app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHan
   if (!session) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc." });
   if (!await canViewSessionMaterials(req.user, session)) return res.status(403).json({ error: "Permission denied." });
   if (isDevMockDb) return res.status(501).json({ error: "T\u1EA3i g\xF3i t\xE0i li\u1EC7u ch\u01B0a kh\u1EA3 d\u1EE5ng trong mock mode." });
+  const isStaff = canManageSessionMaterials(req.user, session);
   const materials = await sessionMaterialsRepository.listRowsBySession(pool, session.id);
-  const fileMaterials = materials.filter((material) => material.storage_path);
-  const links = materials.filter((material) => !material.storage_path && material.url);
-  if (fileMaterials.length === 0 && links.length === 0) return res.status(404).json({ error: "Bu\u1ED5i h\u1ECDc ch\u01B0a c\xF3 t\xE0i li\u1EC7u \u0111\u1EC3 t\u1EA3i." });
+  const fileMaterials = materials.filter((material) => material.storage_path && (isStaff || material.type === "data"));
+  const links = isStaff ? materials.filter((material) => !material.storage_path && material.url) : [];
+  if (fileMaterials.length === 0 && links.length === 0) {
+    return res.status(404).json({ error: isStaff ? "Bu\u1ED5i h\u1ECDc ch\u01B0a c\xF3 t\xE0i li\u1EC7u \u0111\u1EC3 t\u1EA3i." : "Bu\u1ED5i h\u1ECDc ch\u01B0a c\xF3 file data \u0111\u1EC3 t\u1EA3i." });
+  }
   const maxBundleBytes = 250 * 1024 * 1024;
   const estimatedBytes = fileMaterials.reduce((sum, material) => sum + Number(material.size_bytes || 0), 0);
   if (estimatedBytes > maxBundleBytes) return res.status(413).json({ error: "T\u1ED5ng dung l\u01B0\u1EE3ng t\xE0i li\u1EC7u v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n 250 MB cho m\u1ED9t g\xF3i t\u1EA3i." });
   const usedNames = /* @__PURE__ */ new Set();
   const safeArchiveName = (value, fallback) => {
-    const base = path5.basename(value || fallback).replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_").trim() || fallback;
+    const base = path6.basename(value || fallback).replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_").trim() || fallback;
     let candidate = base;
     let index = 2;
     while (usedNames.has(candidate)) {
-      const ext = path5.extname(base);
-      candidate = `${path5.basename(base, ext)}-${index++}${ext}`;
+      const ext = path6.extname(base);
+      candidate = `${path6.basename(base, ext)}-${index++}${ext}`;
     }
     usedNames.add(candidate);
     return candidate;
@@ -10186,7 +12053,7 @@ app.get("/api/sessions/:sessionId/materials/download-all", requireAuth, asyncHan
     else res.destroy(error);
   });
   res.setHeader("Content-Type", "application/zip");
-  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-materials.zip"`);
+  res.setHeader("Content-Disposition", `attachment; filename="mcna-${session.id}-${isStaff ? "materials" : "data"}.zip"`);
   res.setHeader("X-Content-Type-Options", "nosniff");
   archive.pipe(res);
   for (const material of fileMaterials) {
@@ -10215,17 +12082,17 @@ ${manifest}
   await archive.finalize();
   await audit(req, "download_session_material_bundle", session.id, `files=${fileMaterials.length};links=${links.length}`);
 }));
-app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
-  if (req.user.role === "teacher" && course.teacherId !== req.user.id) return res.status(403).json({ error: "Permission denied." });
+  if (req.user.role === "teacher" && course.teacherId !== req.user.id && !req.body.sectionId) return res.status(403).json({ error: "Permission denied." });
   const sectionValidation = await validateAttendanceSectionAccess(req.body.courseId, req.body.sectionId, req.user);
   if (sectionValidation.error) return res.status(sectionValidation.status).json({ error: sectionValidation.error });
   const session = {
     id: generateId2("ats"),
     courseId: req.body.courseId,
     sectionId: req.body.sectionId,
-    teacherId: req.user.role === "teacher" ? req.user.id : course.teacherId,
+    teacherId: req.user.role === "teacher" ? req.user.id : sectionValidation.section?.teacher_id || course.teacherId,
     date: req.body.date,
     topic: req.body.topic,
     content: req.body.content || void 0,
@@ -10245,7 +12112,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "admin
   await audit(req, "create_attendance_session", session.id, session.courseId);
   res.status(201).json({ session, records });
 }));
-app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
+app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "manager", "admin"]), validateBody(schemas.updateAttendanceSession), asyncHandler(async (req, res) => {
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.params.id])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user.role === "teacher" && session.teacher_id !== req.user.id) return res.status(403).json({ error: "Permission denied." });
@@ -10254,7 +12121,7 @@ app.patch("/api/attendance/sessions/:id", requireAuth, requireRole(["teacher", "
   await audit(req, "update_attendance_session", req.params.id, updated.topic);
   res.json(updated);
 }));
-app.post("/api/store/sync", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req, res) => {
+app.post("/api/store/sync", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     devMockStore = { ...devMockStore || getInitialStore(), ...req.body || {} };
     return res.json({ ok: true, mode: "dev-mock-synchronized" });
@@ -10288,6 +12155,17 @@ async function ensureDatabaseReady() {
   }
   return initDbPromise;
 }
+registerOperationsRoutes(app, { pool, requireAuth, invalidateStoreCache, audit, createUserAccount });
+app.use("/api", (_req, res) => res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y API." }));
+app.use((req, res, next) => {
+  try {
+    const normalized = path6.posix.normalize(decodeURIComponent(req.path)).toLowerCase();
+    if (normalized.startsWith("/uploads/") || normalized === "/uploads") return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\u1EC7p." });
+    next();
+  } catch {
+    res.status(400).json({ error: "\u0110\u01B0\u1EDDng d\u1EABn kh\xF4ng h\u1EE3p l\u1EC7." });
+  }
+});
 app.use((err, _req, res, _next) => {
   console.error("[ErrorHandler]", err);
   if (res.headersSent) return;
@@ -10299,8 +12177,8 @@ app.use((err, _req, res, _next) => {
     res.status(400).json({ error: `L\u1ED7i t\u1EA3i t\u1EC7p: ${err.message}` });
     return;
   }
-  const status = typeof err.status === "number" ? err.status : typeof err.statusCode === "number" ? err.statusCode : 500;
-  const errorMessage = err.message || (status >= 500 ? "L\u1ED7i m\xE1y ch\u1EE7 n\u1ED9i b\u1ED9. Vui l\xF2ng th\u1EED l\u1EA1i sau." : "Y\xEAu c\u1EA7u kh\xF4ng h\u1EE3p l\u1EC7.");
+  const status = err.code === "23505" ? 409 : err.code === "23503" ? 400 : typeof err.status === "number" ? err.status : typeof err.statusCode === "number" ? err.statusCode : 500;
+  const errorMessage = err.code === "23505" ? "D\u1EEF li\u1EC7u \u0111\xE3 t\u1ED3n t\u1EA1i. Vui l\xF2ng t\u1EA3i l\u1EA1i." : err.code === "23503" ? "D\u1EEF li\u1EC7u li\xEAn quan kh\xF4ng c\xF2n t\u1ED3n t\u1EA1i ho\u1EB7c \u0111ang \u0111\u01B0\u1EE3c s\u1EED d\u1EE5ng." : status >= 500 && !exposeDevSecrets() ? "L\u1ED7i m\xE1y ch\u1EE7 n\u1ED9i b\u1ED9. Vui l\xF2ng th\u1EED l\u1EA1i sau." : err.message || "Y\xEAu c\u1EA7u kh\xF4ng h\u1EE3p l\u1EC7.";
   res.status(status).json({ error: errorMessage });
 });
 async function setupServer() {
@@ -10310,9 +12188,9 @@ async function setupServer() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    const distPath = path5.join(process.cwd(), "dist");
+    const distPath = path6.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path5.join(distPath, "index.html")));
+    app.get("*", (_req, res) => res.sendFile(path6.join(distPath, "index.html")));
   }
   const HOST = process.env.HOST || "0.0.0.0";
   const server = app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
