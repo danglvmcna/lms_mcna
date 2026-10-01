@@ -55,6 +55,7 @@ Hướng dẫn vận hành từng bước: [docs/direct-sale-van-hanh.md](docs/d
 * Ngoài production, phản hồi đăng ký trả thêm `devTemporaryPassword` để kiểm thử.
 
 ### Kết nối CRM MCNA
+* **Đọc danh sách đã thanh toán:** cấu hình `CRM_DATABASE_URL` bằng tài khoản chỉ đọc bảng `revenue_records`; Quản lý lớp dùng **Lấy từ CRM → Kiểm tra → Nhập**. Không tự tạo tài khoản khi chỉ lấy danh sách và không ghi vào CRM. Xem cấu hình, phân trang và giới hạn đối soát tại [docs/crm-integration.md](docs/crm-integration.md#nguồn-danh-sách-đã-thanh-toán-chỉ-đọc-từ-database-crm).
 * **LMS → CRM:** `contact.registered`, `enrollment.requested`, `enrollment.status_changed` ghi vào `crm_outbox` cùng transaction nghiệp vụ, gửi mỗi 30 giây tới `CRM_WEBHOOK_URL` kèm chữ ký HMAC, thử lại tối đa 10 lần.
 * **CRM → LMS:** `/api/integrations/crm/courses`, `/students`, `/enrollments`, `/payments/confirm`, xác thực bằng API key + chữ ký HMAC, chống trùng theo `X-CRM-Event-Id`.
 * Hợp đồng chi tiết: [docs/crm-integration.md](docs/crm-integration.md).

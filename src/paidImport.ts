@@ -9,6 +9,8 @@ export type PaidImportRow = {
   amount?: number;
   sectionCode?: string;
   note?: string;
+  // Id of the source revenue record, kept in the payment reference. Not a CRM deal id.
+  crmRef?: string;
 };
 
 export type PaidTableParseResult = {
@@ -17,7 +19,7 @@ export type PaidTableParseResult = {
   headerDetected: boolean;
 };
 
-type ColumnKey = keyof PaidImportRow;
+type ColumnKey = Exclude<keyof PaidImportRow, "crmRef">;
 
 /** Lower-case, without Vietnamese diacritics, with every run of other characters collapsed to one space. */
 export function normalizeText(value: unknown): string {
@@ -168,20 +170,32 @@ export type CourseMatch<T extends MatchableCourse> =
 /** The part of a title before its tagline: "AI for Work: Tối ưu hiệu suất..." -> "AI for Work". */
 const titleHead = (title: string) => title.split(/[:–—|]| - /)[0];
 
+/** Normalised text without its separators: "AI_AGENT", "AI Agent" and "AIAGENT" all give "aiagent". */
+const compact = (value: string) => normalizeText(value).replace(/ /g, "");
+
+// Course codes the CRM writes in a way the rules below cannot derive from the catalogue code or title.
+const COURSE_CODE_ALIASES: Record<string, string> = {
+  ai4work: "aiwork"
+};
+
 /**
  * Finds the course a table row refers to: by id, catalogue code (tag), full title, the title before
- * its tagline, or a unique partial title. Each rule must single out exactly one course.
+ * its tagline, the same code or title written without separators (CRM codes such as "AIAGENT"), or a
+ * unique partial title. Each rule must single out exactly one course.
  */
 export function matchCourse<T extends MatchableCourse>(input: string, courses: T[]): CourseMatch<T> {
   const raw = String(input || "").trim();
   const wanted = normalizeText(raw);
   if (!wanted) return { course: null, candidates: [], reason: "none" };
+  const wantedCompact = COURSE_CODE_ALIASES[compact(raw)] || compact(raw);
 
   const rules: Array<(course: T) => boolean> = [
     course => course.id === raw,
     course => (course.tags || []).some(tag => normalizeText(tag) === wanted && normalizeText(tag) !== "mcna"),
     course => normalizeText(course.title) === wanted,
     course => normalizeText(titleHead(course.title)) === wanted,
+    course => (course.tags || []).some(tag => compact(tag) === wantedCompact && compact(tag) !== "mcna"),
+    course => compact(titleHead(course.title)) === wantedCompact,
     course => ` ${normalizeText(course.title)} `.includes(` ${wanted} `)
   ];
 

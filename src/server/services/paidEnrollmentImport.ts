@@ -59,6 +59,7 @@ async function planRow(input: PaidImportRow, index: number, courses: Course[]): 
     return { ...plan, result: { ...result, message } };
   }
   const course = match.course;
+  if (input.crmRef && input.amount === undefined) result.warnings.push("CRM không phân bổ doanh thu cho từng khóa: khoản ghi nhận LMS dùng giá danh mục, không phải số tiền thực thu từng khóa. Cần đối soát riêng với CRM.");
   result.courseId = course.id;
   result.courseTitle = course.title;
   if (course.status !== "published") return { ...plan, course, result: { ...result, message: `Khóa học "${course.title}" chưa được mở trên LMS.` } };
@@ -172,7 +173,7 @@ async function settleEnrollment(plan: Plan, studentId: string, actorName: string
     const payment = await confirmCoursePayment(
       client,
       enrollmentId!,
-      { amount: plan.input.amount, reference: [plan.input.note, `bảng đã thanh toán, nhập bởi ${actorName}`].filter(Boolean).join(" · ") },
+      { amount: plan.input.amount, reference: [plan.input.crmRef ? `CRM revenue ${plan.input.crmRef}` : "", plan.input.note, `bảng đã thanh toán, nhập bởi ${actorName}`].filter(Boolean).join(" · ") },
       "crm"
     );
     if (isServiceError(payment)) {

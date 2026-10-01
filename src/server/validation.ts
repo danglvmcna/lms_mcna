@@ -274,7 +274,8 @@ export const schemas = {
       course: z.string().trim().max(300),
       amount: z.coerce.number().nonnegative().optional(),
       sectionCode: z.string().trim().max(120).optional(),
-      note: z.string().trim().max(300).optional()
+      note: z.string().trim().max(300).optional(),
+      crmRef: z.string().trim().max(80).optional()
     })).min(1).max(500),
     defaultPassword: z.string().min(8).max(100).optional(),
     sendAccountEmail: z.boolean().default(true),

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardPaste, FileSpreadsheet, UserPlus, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardPaste, DownloadCloud, FileSpreadsheet, UserPlus, X } from "lucide-react";
 import { api } from "../../api";
+import { CrmSkippedRecord } from "../../crmPaidSource";
 import { PaidImportResponse, PaidImportRow, PaidImportRowResult, parsePaidTable } from "../../paidImport";
 import { Course } from "../../types";
 import ModalPortal from "../ModalPortal";
@@ -36,7 +37,10 @@ const inputClass = "w-full px-3 py-2 bg-white text-slate-900 border border-slate
  */
 export default function PaidImportModal({ courses, onClose, onImported, triggerToast }: PaidImportModalProps) {
   const [text, setText] = useState("");
-  const [fileRows, setFileRows] = useState<{ name: string; rows: PaidImportRow[]; errors: Array<{ line: number; reason: string }> } | null>(null);
+  const [fileRows, setFileRows] = useState<{ name: string; rows: PaidImportRow[]; errors: Array<{ line: number; reason: string }>; crm?: { records: number; skipped: CrmSkippedRecord[]; nextCursor?: string; fetchedAt: string } } | null>(null);
+  const [batchIndex, setBatchIndex] = useState(0);
+  // Whether the server can read the paid list straight from the CRM.
+  const [crmSource, setCrmSource] = useState(false);
   const [defaultPassword, setDefaultPassword] = useState("");
   const [sendAccountEmail, setSendAccountEmail] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -58,14 +62,19 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
 
   useEffect(() => {
     api.getPaidImportConfig()
-      .then(config => setDefaultPassword(current => current || config.defaultPassword || ""))
+      .then(config => {
+        setDefaultPassword(current => current || config.defaultPassword || "");
+        setCrmSource(Boolean(config.crmSource));
+      })
       .catch(() => undefined);
   }, []);
 
   const parsed = useMemo(() => (fileRows ? fileRows : parsePaidTable(text)), [text, fileRows]);
-  const rows = parsed.rows;
+  const batchCount = Math.max(1, Math.ceil(parsed.rows.length / 500));
+  const rows = parsed.rows.slice(batchIndex * 500, (batchIndex + 1) * 500);
   const resetChecks = () => {
     setPreview(null);
+    setOutcome(null);
     setError(null);
   };
 
@@ -77,10 +86,27 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
     resetChecks();
     try {
       const result = await api.parsePaidTableFile(file);
+      setBatchIndex(0);
       setFileRows({ name: file.name, rows: result.rows, errors: result.errors });
       if (result.rows.length === 0) setError("Không đọc được dòng hợp lệ nào trong tệp. Hãy kiểm tra các cột Họ tên, Email, Khóa học.");
     } catch (err: any) {
       setError(err.message || "Không đọc được tệp danh sách.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Fills the list from the CRM's revenue records. Like a pasted table, nothing is written until it is checked and confirmed.
+  const handleCrmPull = async (cursor?: string) => {
+    setBusy(true);
+    resetChecks();
+    try {
+      const pull = await api.getCrmPaidRecords(cursor);
+      setBatchIndex(0);
+      setFileRows({ name: "CRM", rows: pull.rows, errors: [], crm: { records: pull.records, skipped: pull.skipped, nextCursor: pull.nextCursor, fetchedAt: pull.fetchedAt } });
+      if (pull.rows.length === 0) setError(pull.records === 0 ? "CRM chưa có bản ghi doanh thu nào." : "CRM chưa có khách nào đã thanh toán đủ để nhập.");
+    } catch (err: any) {
+      setError(err.message || "Không lấy được danh sách từ CRM.");
     } finally {
       setBusy(false);
     }
@@ -95,8 +121,12 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
     }
     const clean = (value: string) => value.replace(/[\t\n\r]+/g, " ").trim();
     const line = [clean(manualName), clean(manualEmail).toLowerCase(), clean(manualPhone), course.title, clean(manualAmount), ""].join("\t");
-    setFileRows(null);
-    setText(current => (current.trim() ? `${current.replace(/\s+$/, "")}\n${line}` : `${HEADER_LINE}\n${line}`));
+    if (fileRows) {
+      setFileRows(current => current ? { ...current, rows: [...current.rows, ...parsePaidTable(`${HEADER_LINE}\n${line}`).rows] } : current);
+    } else {
+      setText(current => (current.trim() ? `${current.replace(/\s+$/, "")}\n${line}` : `${HEADER_LINE}\n${line}`));
+    }
+    setBatchIndex(0);
     setManualName("");
     setManualEmail("");
     setManualPhone("");
@@ -162,16 +192,21 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
 
           <div className="p-5 space-y-4 text-xs">
             {!outcome && (
-              <>
+              <fieldset disabled={busy} className="space-y-4 min-w-0">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label htmlFor="paid-table" className="font-semibold text-slate-700 flex items-center gap-1.5">
                       <ClipboardPaste className="h-4 w-4 text-indigo-600" /> Dán bảng từ Excel / Google Sheets
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => { setFileRows(null); setText(SAMPLE_TABLE); resetChecks(); }} className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer">
+                      <button type="button" onClick={() => { setBatchIndex(0); setFileRows(null); setText(SAMPLE_TABLE); resetChecks(); }} className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer">
                         Dán bảng mẫu
                       </button>
+                      {crmSource && (
+                        <button type="button" onClick={() => { void handleCrmPull(); }} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 font-semibold text-indigo-700 disabled:opacity-50 cursor-pointer">
+                          <DownloadCloud className="h-3.5 w-3.5" /> Lấy từ CRM
+                        </button>
+                      )}
                       <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700 cursor-pointer">
                         <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" /> Chọn tệp .xlsx / .csv
                         <input type="file" accept=".xlsx,.csv,.txt,.tsv" className="hidden" onChange={handleFile} disabled={busy} />
@@ -180,14 +215,16 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
                   </div>
                   {fileRows ? (
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-800">
-                      <span>Đã đọc tệp <strong>{fileRows.name}</strong>: {fileRows.rows.length} dòng hợp lệ.</span>
-                      <button type="button" onClick={() => { setFileRows(null); resetChecks(); }} className="font-semibold underline cursor-pointer">Bỏ tệp, dán bảng</button>
+                      {fileRows.crm
+                        ? <span>Đã lấy từ CRM: <strong>{fileRows.rows.length}</strong> dòng đã thanh toán đủ (từ {fileRows.crm.records} bản ghi doanh thu).</span>
+                        : <span>Đã đọc tệp <strong>{fileRows.name}</strong>: {fileRows.rows.length} dòng hợp lệ.</span>}
+                      <button type="button" onClick={() => { setBatchIndex(0); setFileRows(null); resetChecks(); }} className="font-semibold underline cursor-pointer">{fileRows.crm ? "Bỏ danh sách CRM, dán bảng" : "Bỏ tệp, dán bảng"}</button>
                     </div>
                   ) : (
                     <textarea
                       id="paid-table"
                       value={text}
-                      onChange={event => { setText(event.target.value); resetChecks(); }}
+                      onChange={event => { setBatchIndex(0); setText(event.target.value); resetChecks(); }}
                       placeholder={"Họ tên\tEmail\tSĐT\tKhóa học\tSố tiền\tMã lớp\nNguyễn Văn An\tan@gmail.com\t0912345678\tAI Automation\t3.500.000"}
                       className="w-full h-36 px-3 py-2 bg-white text-slate-900 font-mono border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 text-xs whitespace-pre"
                     />
@@ -196,6 +233,13 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
                     Cột bắt buộc: <strong>Họ tên, Email, Khóa học</strong>. Tùy chọn: SĐT, Số tiền, Mã lớp (lớp mong muốn), Ghi chú. Khóa học ghi theo tên (ví dụ "AI Automation") hoặc mã khóa.
                     {rows.length > 0 && <span className="ml-1 font-semibold text-slate-700">Đang có {rows.length} dòng hợp lệ.</span>}
                   </p>
+                  {fileRows?.crm && fileRows.crm.skipped.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> {fileRows.crm.skipped.length} bản ghi CRM chưa nhập được</div>
+                      {fileRows.crm.skipped.slice(0, 8).map(item => <div key={item.crmRef}>{item.customer || item.crmRef}{item.saleDate ? ` (${item.saleDate})` : ""}: {item.reason}</div>)}
+                      {fileRows.crm.skipped.length > 8 && <div>... và {fileRows.crm.skipped.length - 8} bản ghi khác.</div>}
+                    </div>
+                  )}
                   {parsed.errors.length > 0 && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900 space-y-1">
                       <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> {parsed.errors.length} dòng bị bỏ qua khi đọc bảng</div>
@@ -244,7 +288,7 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
                     </span>
                   </label>
                 </div>
-              </>
+              </fieldset>
             )}
 
             {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-700">{error}</div>}
@@ -309,6 +353,12 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 text-xs">
+            {batchCount > 1 && <div className="flex items-center gap-2 mr-auto">
+              <button type="button" disabled={busy || batchIndex === 0} onClick={() => { setBatchIndex(index => index - 1); resetChecks(); }} className="px-3 py-2 rounded-lg border border-slate-200 disabled:opacity-50">Lô trước</button>
+              <span>Lô {batchIndex + 1}/{batchCount} · tối đa 500 dòng/lô</span>
+              <button type="button" disabled={busy || batchIndex + 1 === batchCount} onClick={() => { setBatchIndex(index => index + 1); resetChecks(); }} className="px-3 py-2 rounded-lg border border-slate-200 disabled:opacity-50">Lô tiếp</button>
+            </div>}
+            {fileRows?.crm?.nextCursor && <button type="button" disabled={busy} onClick={() => { void handleCrmPull(fileRows.crm?.nextCursor); }} className="px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 disabled:opacity-50">Trang CRM cũ hơn (thay danh sách)</button>}
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium cursor-pointer">
               {outcome ? "Đóng" : "Hủy"}
             </button>

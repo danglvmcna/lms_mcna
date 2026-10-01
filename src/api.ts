@@ -1,5 +1,6 @@
 import { CrmOutboxStatus, IntroMaterialCategory, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SystemStatus } from "./types";
 import { PaidImportResponse, PaidImportRow, PaidTableParseResult } from "./paidImport";
+import { CrmPaidPull } from "./crmPaidSource";
 
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "./utils";
 
@@ -188,7 +189,8 @@ export const api = {
   resendPlacementEmail: (items: Array<{ studentId: string; sectionId: string }>) =>
     apiFetch<{ emails: PlacementEmailCounts; notices: PlacementNotice[] }>("/api/admin/placements/resend-email", { method: "POST", body: JSON.stringify({ items }) }),
   // Direct sale: the "paid customers" table becomes learner accounts and paid enrollments.
-  getPaidImportConfig: () => apiFetch<{ defaultPassword: string; supportPhone: string }>("/api/admin/paid-enrollments/config"),
+  getPaidImportConfig: () => apiFetch<{ defaultPassword: string; supportPhone: string; crmSource?: boolean }>("/api/admin/paid-enrollments/config"),
+  getCrmPaidRecords: (cursor?: string) => apiFetch<CrmPaidPull & { fetchedAt: string }>(`/api/admin/paid-enrollments/crm${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
   parsePaidTableFile: (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
