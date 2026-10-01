@@ -459,82 +459,61 @@ export function getInitialStore(): LMSDataStore {
   };
 }
 
+export function createEmptyStore(): LMSDataStore {
+  return {
+    users: [],
+    courses: [],
+    lessons: [],
+    enrollments: [],
+    lessonProgress: [],
+    quizzes: [],
+    questions: [],
+    quizAttempts: [],
+    assignments: [],
+    submissions: [],
+    certificates: [],
+    notifications: [],
+    forumPosts: [],
+    auditLogs: [],
+    transactions: [],
+    attendanceSessions: [],
+    sessionMaterials: [],
+    attendanceRecords: [],
+    courseSections: [],
+    courseRegistrations: [],
+    systemEvents: [],
+    teacherAttendance: []
+  };
+}
+
 export class AppStore {
   private static storeInstance: LMSDataStore | null = null;
+  private static hydrated = false;
   public static syncPromise: Promise<any> | null = null;
 
   public static hydrate(store: LMSDataStore): void {
     normalizeLegacyRoles(store);
     this.storeInstance = store;
+    this.hydrated = true;
     localStorage.removeItem(STORAGE_KEY);
   }
 
+  /** True once the server's data has been loaded for the signed-in user. */
+  public static isHydrated(): boolean {
+    return this.hydrated;
+  }
+
+  /** Forgets the loaded data (sign-out): the next account must not start from the previous one's. */
+  public static reset(): void {
+    this.storeInstance = null;
+    this.hydrated = false;
+  }
+
   public static get(): LMSDataStore {
-    if (!this.storeInstance) {
-      localStorage.removeItem(STORAGE_KEY);
-      const raw = null;
-      if (raw) {
-        try {
-          this.storeInstance = JSON.parse(raw);
-          
-          // Safety backfills for production migration
-          if (!this.storeInstance.transactions) {
-            this.storeInstance.transactions = [];
-          }
-          
-          const initial = getInitialStore();
-          if (!this.storeInstance.users || this.storeInstance.users.length === 0) {
-            this.storeInstance.users = initial.users.map(user => ({
-              ...user,
-              passwordHash: "",
-              passwordSalt: undefined
-            }));
-          }
-          normalizeLegacyRoles(this.storeInstance);
-
-          // Ensure all system-level collection tables are initialized
-          if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
-          if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
-          if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
-          if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
-          if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
-          if (!this.storeInstance.teacherAttendance) this.storeInstance.teacherAttendance = initial.teacherAttendance || [];
-
-          // Ensure new seeded roles are present
-          const rolesToBackfill = ["admin"];
-          const hasAllRoles = rolesToBackfill.every(r => this.storeInstance!.users.some(u => u.role === r));
-          if (!hasAllRoles) {
-            // Append missing users
-            initial.users.forEach(u => {
-              if (!this.storeInstance!.users.some(ex => ex.email === u.email)) {
-                this.storeInstance!.users.push(u);
-              }
-            });
-            // Append course initial price/level/tags if missing
-            this.storeInstance.courses.forEach(c => {
-              const matchedTemplate = initial.courses.find(ic => ic.id === c.id);
-              if (matchedTemplate) {
-                if (c.price === undefined) c.price = matchedTemplate.price;
-                if (!c.level) c.level = matchedTemplate.level;
-                if (!c.tags) c.tags = matchedTemplate.tags;
-              }
-            });
-            // Fill initial transactions if empty
-            if (!this.storeInstance.transactions.length) {
-              this.storeInstance.transactions = initial.transactions;
-            }
-          }
-        } catch (e) {
-          console.error("Failed to parse datastore. Seeding clean database.");
-          this.storeInstance = getInitialStore();
-          normalizeLegacyRoles(this.storeInstance);
-        }
-      } else {
-        this.storeInstance = getInitialStore();
-        normalizeLegacyRoles(this.storeInstance);
-      }
-    }
-    return this.storeInstance!;
+    // Until the server answers, the store is empty. The sample data set above belongs to the server's
+    // mock mode only: shown here it would look like real courses when loading the data had failed.
+    if (!this.storeInstance) this.storeInstance = createEmptyStore();
+    return this.storeInstance;
   }
 
   public static save(store: LMSDataStore, skipSync: boolean = false): Promise<any> {

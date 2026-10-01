@@ -625,9 +625,38 @@ function getInitialStore() {
     teacherAttendance: []
   };
 }
+function createEmptyStore() {
+  return {
+    users: [],
+    courses: [],
+    lessons: [],
+    enrollments: [],
+    lessonProgress: [],
+    quizzes: [],
+    questions: [],
+    quizAttempts: [],
+    assignments: [],
+    submissions: [],
+    certificates: [],
+    notifications: [],
+    forumPosts: [],
+    auditLogs: [],
+    transactions: [],
+    attendanceSessions: [],
+    sessionMaterials: [],
+    attendanceRecords: [],
+    courseSections: [],
+    courseRegistrations: [],
+    systemEvents: [],
+    teacherAttendance: []
+  };
+}
 var AppStore = class {
   static {
     this.storeInstance = null;
+  }
+  static {
+    this.hydrated = false;
   }
   static {
     this.syncPromise = null;
@@ -635,63 +664,20 @@ var AppStore = class {
   static hydrate(store) {
     normalizeLegacyRoles(store);
     this.storeInstance = store;
+    this.hydrated = true;
     localStorage.removeItem(STORAGE_KEY);
   }
+  /** True once the server's data has been loaded for the signed-in user. */
+  static isHydrated() {
+    return this.hydrated;
+  }
+  /** Forgets the loaded data (sign-out): the next account must not start from the previous one's. */
+  static reset() {
+    this.storeInstance = null;
+    this.hydrated = false;
+  }
   static get() {
-    if (!this.storeInstance) {
-      localStorage.removeItem(STORAGE_KEY);
-      const raw = null;
-      if (raw) {
-        try {
-          this.storeInstance = JSON.parse(raw);
-          if (!this.storeInstance.transactions) {
-            this.storeInstance.transactions = [];
-          }
-          const initial = getInitialStore();
-          if (!this.storeInstance.users || this.storeInstance.users.length === 0) {
-            this.storeInstance.users = initial.users.map((user) => ({
-              ...user,
-              passwordHash: "",
-              passwordSalt: void 0
-            }));
-          }
-          normalizeLegacyRoles(this.storeInstance);
-          if (!this.storeInstance.attendanceSessions) this.storeInstance.attendanceSessions = initial.attendanceSessions || [];
-          if (!this.storeInstance.attendanceRecords) this.storeInstance.attendanceRecords = initial.attendanceRecords || [];
-          if (!this.storeInstance.courseSections) this.storeInstance.courseSections = initial.courseSections || [];
-          if (!this.storeInstance.courseRegistrations) this.storeInstance.courseRegistrations = initial.courseRegistrations || [];
-          if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
-          if (!this.storeInstance.teacherAttendance) this.storeInstance.teacherAttendance = initial.teacherAttendance || [];
-          const rolesToBackfill = ["admin"];
-          const hasAllRoles = rolesToBackfill.every((r) => this.storeInstance.users.some((u) => u.role === r));
-          if (!hasAllRoles) {
-            initial.users.forEach((u) => {
-              if (!this.storeInstance.users.some((ex) => ex.email === u.email)) {
-                this.storeInstance.users.push(u);
-              }
-            });
-            this.storeInstance.courses.forEach((c) => {
-              const matchedTemplate = initial.courses.find((ic) => ic.id === c.id);
-              if (matchedTemplate) {
-                if (c.price === void 0) c.price = matchedTemplate.price;
-                if (!c.level) c.level = matchedTemplate.level;
-                if (!c.tags) c.tags = matchedTemplate.tags;
-              }
-            });
-            if (!this.storeInstance.transactions.length) {
-              this.storeInstance.transactions = initial.transactions;
-            }
-          }
-        } catch (e) {
-          console.error("Failed to parse datastore. Seeding clean database.");
-          this.storeInstance = getInitialStore();
-          normalizeLegacyRoles(this.storeInstance);
-        }
-      } else {
-        this.storeInstance = getInitialStore();
-        normalizeLegacyRoles(this.storeInstance);
-      }
-    }
+    if (!this.storeInstance) this.storeInstance = createEmptyStore();
     return this.storeInstance;
   }
   static save(store, skipSync = false) {
