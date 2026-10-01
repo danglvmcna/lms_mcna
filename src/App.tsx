@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Bell, BookOpen, ClipboardList, Compass, GraduationCap, House, LayoutDashboard, ScrollText, Users, Wallet } from "lucide-react";
+import { AlertTriangle, Bell, BookOpen, ClipboardList, Compass, GraduationCap, House, LayoutDashboard, ScrollText, Users, Wallet } from "lucide-react";
 import { User, LMSDataStore } from "./types";
 import { AppStore } from "./store";
 import { api, setCsrfToken } from "./api";
@@ -11,7 +11,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import CertificatePublicPage from "./components/public/CertificatePublicPage";
 import AppShell, { NavItem } from "./components/layout/AppShell";
 import { ChangePasswordDialog, ProfileDialog } from "./components/account/AccountDialogs";
-import { Spinner, ToastProvider, useToast } from "./components/ui";
+import { Button, EmptyState, Spinner, ToastProvider, useToast } from "./components/ui";
 import { useAppConfigQuery } from "./appConfig";
 
 const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
@@ -75,6 +75,33 @@ function readAuthViewFromHash(): AuthView | null {
   return null;
 }
 
+type StoreLoad = { status: "pending" | "ready" } | { status: "error"; message: string };
+
+/** Shown instead of the workspace when the signed-in user's data could not be loaded. */
+function StoreLoadError({ message, supportPhone, onRetry, onLogout }: { message: string; supportPhone: string; onRetry: () => void; onLogout: () => void }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+      <EmptyState
+        icon={<AlertTriangle className="h-7 w-7" />}
+        title="Chưa tải được dữ liệu"
+        description={
+          <>
+            Máy chủ chưa trả được dữ liệu lớp học của bạn, nên LMS dừng ở đây thay vì hiển thị thông tin không đúng.
+            Bạn thử lại sau ít phút; nếu vẫn lỗi, gọi {supportPhone}.
+            <span className="mt-2 block text-xs text-slate-400">Chi tiết: {message}</span>
+          </>
+        }
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={onRetry}>Thử lại</Button>
+            <Button variant="secondary" onClick={onLogout}>Đăng xuất</Button>
+          </div>
+        }
+      />
+    </div>
+  );
+}
+
 function AppRoot() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -82,6 +109,8 @@ function AppRoot() {
   const isDirectSale = appConfig.salesMode === "direct";
   const [storeData, setStoreData] = useState<LMSDataStore>(AppStore.get());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // The workspace is only rendered once the server's data for this user has arrived.
+  const [storeLoad, setStoreLoad] = useState<StoreLoad>({ status: "pending" });
   const [sessionChecked, setSessionChecked] = useState(false);
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("resetToken") || "");
   const [authView, setAuthView] = useState<AuthView>(() => (resetToken ? "login" : readAuthViewFromHash() || "catalog"));
@@ -110,6 +139,7 @@ function AppRoot() {
     AppStore.hydrate(serverStore);
     setStoreData({ ...serverStore });
     queryClient.setQueryData(["store"], serverStore);
+    setStoreLoad({ status: "ready" });
   };
 
   useEffect(() => {
@@ -124,7 +154,8 @@ function AppRoot() {
         sessionStorage.setItem("e16_lms_active_session", "true");
         // Data APIs stay locked until a temporary password is replaced (ForcedPasswordChange loads the store after).
         if (data.user?.mustChangePassword) return;
-        hydrate(await api.getStore());
+        // A failed data load is not an expired session: the user stays signed in and sees the error.
+        await loadStore();
       })
       .catch(() => {
         // The session cookie may be invalid/expired but still present in the browser.
@@ -211,6 +242,16 @@ function AppRoot() {
     }
   };
 
+  /** First data load after sign-in. Never throws: a failure becomes the error screen, not sample or stale data. */
+  const loadStore = async () => {
+    setStoreLoad({ status: "pending" });
+    try {
+      await refreshStoreDataFromServer();
+    } catch (err: any) {
+      setStoreLoad({ status: "error", message: err?.message || "Không kết nối được máy chủ." });
+    }
+  };
+
   const updateStore = (updater: (draft: LMSDataStore) => void) => {
     const currentStore = AppStore.get();
     updater(currentStore);
@@ -224,7 +265,7 @@ function AppRoot() {
     setCsrfToken(data.csrfToken || null);
     sessionStorage.setItem("mcna_lms_active_session", "true");
     sessionStorage.setItem("e16_lms_active_session", "true");
-    if (!data.user.mustChangePassword) await refreshStoreDataFromServer();
+    if (!data.user.mustChangePassword) await loadStore();
     AppStore.log(data.user.id, "authentication_login", "security", `Successfully authenticated into profile desk role: ${data.user.role}`);
   };
 
@@ -238,6 +279,8 @@ function AppRoot() {
     }).catch(() => undefined);
     setCurrentUser(null);
     setCsrfToken(null);
+    AppStore.reset();
+    setStoreLoad({ status: "pending" });
     navigateAuth(isDirectSale ? "login" : "catalog");
     sessionStorage.removeItem("mcna_lms_active_session");
     sessionStorage.removeItem("e16_lms_active_session");
@@ -269,11 +312,18 @@ function AppRoot() {
           const response = await fetch("/api/auth/me", { credentials: "include" });
           const data = await response.json();
           if (!response.ok || !data.user) throw new Error("Phiên đăng nhập đã hết hạn.");
-          hydrate(await api.getStore());
           setCurrentUser(data.user);
+          await loadStore();
         }}
       />
     );
+  }
+
+  if (currentUser && storeLoad.status !== "ready") {
+    if (storeLoad.status === "error") {
+      return <StoreLoadError message={storeLoad.message} supportPhone={appConfig.supportPhone} onRetry={loadStore} onLogout={handleLogout} />;
+    }
+    return <div className="flex min-h-dvh items-center justify-center bg-canvas"><Spinner /></div>;
   }
 
   if (currentUser) {
