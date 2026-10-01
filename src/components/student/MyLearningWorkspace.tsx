@@ -4,7 +4,12 @@ import { AppStore } from "../../store";
 import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import SessionMaterialsList from "../SessionMaterialsList";
+import SessionHomeworkList from "./SessionHomeworkList";
 import LinkedText from "../LinkedText";
+import { useAppConfig } from "../../appConfig";
+import { formatDateVi, formatScheduleSummary } from "../../scheduleText";
+import { renderWelcomeLetter } from "../../welcomeLetter";
+import LearnerSolution from "../operations/LearnerSolution";
 import { ZoomLogo } from "../icons/BrandLogos";
 import { extractYoutubeVideoId, youtubeEmbedUrl } from "../../utils";
 import { instructorName } from "./studentDisplay";
@@ -76,6 +81,11 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
+  // Direct sale: a class only appears once the class manager has placed the learner in it.
+  const appConfig = useAppConfig();
+  const isDirectSale = appConfig.salesMode === "direct";
+  const [showIntro, setShowIntro] = React.useState(false);
+
   // Local state for the selected course session
   const [activePresentationSessionNumber, setActivePresentationSessionNumber] = React.useState<number | null>(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<"study" | "discussion">("study");
@@ -92,6 +102,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     setActivePresentationSessionNumber(null);
     setActiveWorkspaceTab("study");
     setOpenVideoUrl(null);
+    setShowIntro(false);
   }, [learningCourseId]);
 
   React.useEffect(() => {
@@ -152,6 +163,9 @@ export default function MyLearningWorkspace(props: ComponentProps) {
         sessionId: attendanceSession?.id,
         materials: attendanceSession
           ? (store.sessionMaterials || []).filter((material: any) => material.sessionId === attendanceSession.id)
+          : [],
+        assignments: attendanceSession
+          ? (store.assignments || []).filter((assignment: any) => assignment.sessionId === attendanceSession.id)
           : [],
         title: `Buổi học ${sessionNum}`,
         date: attendanceSession?.date,
@@ -215,7 +229,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     const currentSection = (store.courseSections || []).find((s: any) => s.id === (session.sectionId || activeLearningSectionId))
       || (store.courseSections || []).find((s: any) => s.courseId === learningCourseId);
     const zoomUrl = currentSection?.meetingUrl;
-    const itemCount = (session.materials?.length || 0) + (session.lessons?.length || 0);
+    const itemCount = (session.materials?.length || 0) + (session.lessons?.length || 0) + (session.assignments?.length || 0);
+    // Slides, documents and links are read online; data files are the ones learners may download.
+    const readingMaterials = (session.materials || []).filter((material: any) => material.type !== "data");
+    const dataMaterials = (session.materials || []).filter((material: any) => material.type === "data");
 
     return (
       <div className="space-y-4">
@@ -322,21 +339,55 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           )}
         </div>
 
-        {/* SECTION 1: MATERIALS & SLIDES */}
+        {/* SECTION 1: MATERIALS & SLIDES (read online only) */}
         <div className="border-t border-slate-200 pt-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-3">
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <FileText className="h-4.5 w-4.5 text-indigo-600" />
-              Tài liệu & slide bài giảng ({session.materials.length})
+              Tài liệu & slide bài giảng ({readingMaterials.length})
             </h4>
-            <span className="text-[11px] text-slate-500">Xem trực tiếp PDF hoặc tải về máy</span>
+            <span className="text-[11px] text-slate-500">Xem trực tuyến trên LMS, không tải về</span>
           </div>
 
-          {session.materials.length > 0 ? (
-            <SessionMaterialsList materials={session.materials} sessionId={session.sessionId} />
+          {readingMaterials.length > 0 ? (
+            <SessionMaterialsList materials={readingMaterials} />
           ) : (
-            <p className="py-2 text-sm text-slate-500">Buổi học này chưa có tài liệu đính kèm.</p>
+            <p className="py-2 text-sm text-slate-500">Buổi học này chưa có slide hay tài liệu.</p>
           )}
+        </div>
+
+        {/* SECTION 2: DATA FILES (downloadable) */}
+        <div className="border-t border-slate-200 pt-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-3">
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <FileSpreadsheet className="h-4.5 w-4.5 text-emerald-600" />
+              File data thực hành ({dataMaterials.length})
+            </h4>
+            <span className="text-[11px] text-slate-500">Tải về máy để thực hành</span>
+          </div>
+
+          {dataMaterials.length > 0 ? (
+            <SessionMaterialsList materials={dataMaterials} sessionId={session.sessionId} />
+          ) : (
+            <p className="py-2 text-sm text-slate-500">Buổi học này chưa có file data.</p>
+          )}
+        </div>
+
+        {/* SECTION 3: HOMEWORK */}
+        <div className="border-t border-slate-200 pt-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-3">
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <FileCheck className="h-4.5 w-4.5 text-indigo-600" />
+              Bài tập về nhà ({session.assignments.length})
+            </h4>
+          </div>
+          <SessionHomeworkList
+            assignments={session.assignments}
+            submissions={(store.submissions || []).filter((submission: any) => submission.studentId === currentUser.id)}
+            allowDownload={appConfig.allowHomeworkDownload}
+            onChanged={onRefreshData}
+          />
+          {session.sessionId && <LearnerSolution key={session.sessionId} sessionId={session.sessionId} allowDownload={appConfig.allowHomeworkDownload}/>}
         </div>
 
         {/* SECTION 2: THEORY LESSONS */}
@@ -399,8 +450,64 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     );
   };
 
+  const renderIntro = () => {
+    const course = currentLearningCourse;
+    const section = (store.courseSections || []).find((s: any) => s.id === activeLearningSectionId);
+    if (!course || !section) return null;
+    const teacher = store.users.find((u: any) => u.id === section.teacherId);
+    const introMaterials = (store.sessionMaterials || []).filter((material: any) => !material.sessionId && material.courseId === course.id);
+    const references = introMaterials.filter((material: any) => material.category === "reference");
+    const practice = introMaterials.filter((material: any) => material.category === "practice");
+    const letter = renderWelcomeLetter(course.welcomeLetter, {
+      studentName: currentUser.name,
+      courseTitle: course.title,
+      sectionCode: section.sectionCode,
+      teacherName: instructorName(teacher),
+      openingDate: formatDateVi(section.openingDate),
+      schedule: formatScheduleSummary(section.schedule),
+      supportPhone: appConfig.supportPhone
+    });
+
+    return (
+      <section className="rounded-xl border border-indigo-200 bg-indigo-50/40">
+        <button
+          type="button"
+          onClick={() => setShowIntro(current => !current)}
+          aria-expanded={showIntro}
+          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left cursor-pointer"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 border border-indigo-200"><Bookmark className="h-5 w-5" /></span>
+            <span className="min-w-0">
+              <span className="block font-display font-bold text-slate-900 text-base">Tài liệu mở đầu</span>
+              <span className="block text-sm text-slate-500">Thư chúc mừng · {references.length} sách & tài liệu tham khảo · {practice.length} bài luyện tập</span>
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-indigo-600">{showIntro ? "Thu gọn" : "Mở xem"}</span>
+        </button>
+
+        {showIntro && (
+          <div className="space-y-5 border-t border-indigo-200 px-5 py-5">
+            <div className="whitespace-pre-line rounded-xl border border-slate-200 bg-white p-5 text-sm leading-relaxed text-slate-800">{letter}</div>
+
+            <div className="space-y-3">
+              <h5 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><BookOpen className="h-4 w-4 text-indigo-600" /> Sách & tài liệu tham khảo</h5>
+              {references.length > 0 ? <SessionMaterialsList materials={references} /> : <p className="text-sm text-slate-500">Giảng viên sẽ bổ sung tài liệu tham khảo.</p>}
+            </div>
+
+            <div className="space-y-3">
+              <h5 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2"><FileCheck className="h-4 w-4 text-indigo-600" /> Bài luyện tập</h5>
+              {practice.length > 0 ? <SessionMaterialsList materials={practice} /> : <p className="text-sm text-slate-500">Chưa có bài luyện tập.</p>}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  };
+
   const renderAllFoldersGrid = () => (
     <div className="space-y-5">
+      {renderIntro()}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
           <h4 className="text-lg font-display font-bold text-slate-900 flex items-center gap-2">
@@ -408,14 +515,14 @@ export default function MyLearningWorkspace(props: ComponentProps) {
             Tổng quan chương trình
           </h4>
           <p className="text-sm text-slate-500 mt-1">
-            {courseSessions.length} buổi học · Chọn một buổi để xem nội dung, tài liệu và video xem lại.
+            {courseSessions.length} buổi học · Chọn một buổi để xem slide, file data, bài tập và video xem lại.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         {courseSessions.map((session) => {
-          const itemCount = session.materials.length + session.lessons.length;
+          const itemCount = session.materials.length + session.lessons.length + session.assignments.length;
 
           return (
             <button
@@ -457,6 +564,11 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                   {session.lessons.length > 0 && (
                     <span className="inline-flex items-center gap-1">
                       <BookOpen className="h-3 w-3" /> {session.lessons.length} bài học
+                    </span>
+                  )}
+                  {session.assignments.length > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <FileCheck className="h-3 w-3" /> {session.assignments.length} bài tập
                     </span>
                   )}
                   {session.videoUrl && (
@@ -516,7 +628,10 @@ export default function MyLearningWorkspace(props: ComponentProps) {
     }
     return true;
   };
-  const filteredMyEnrollments = myEnrollments.filter((enroll: any) => {
+  const listedEnrollments = isDirectSale
+    ? myEnrollments.filter((enroll: any) => hasWorkspaceAccess(enroll, getEnrollmentSection(enroll)))
+    : myEnrollments;
+  const filteredMyEnrollments = listedEnrollments.filter((enroll: any) => {
     const query = myClassSearch.trim().toLowerCase();
     if (!query) return true;
     const course = store.courses.find((c: any) => c.id === enroll.courseId);
@@ -533,7 +648,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
           <div className="space-y-6">
             <h4 className="text-xl font-display font-bold text-slate-900">Lớp học của tôi</h4>
 
-            <div className="relative">
+            {listedEnrollments.length > 0 && <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 value={myClassSearch}
@@ -541,7 +656,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                 placeholder="Tìm lớp học theo tên môn, mã lớp, trạng thái..."
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-xs"
               />
-            </div>
+            </div>}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {filteredMyEnrollments.map(enroll => {
@@ -604,7 +719,7 @@ export default function MyLearningWorkspace(props: ComponentProps) {
                         <div className="space-y-2 pt-2">
                           <div className="flex justify-between gap-2 text-xs text-slate-500">
                             <span>Tiến độ học tập</span>
-                            <span>{completedProgress}/{totalLessonsCount} bài đã đạt ({percentage}%)</span>
+                            <span>{completedProgress}/{totalLessonsCount} bài đã đánh dấu ({percentage}%)</span>
                           </div>
                           <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                             <div 
@@ -686,8 +801,19 @@ export default function MyLearningWorkspace(props: ComponentProps) {
               })}
 
               {filteredMyEnrollments.length === 0 && (
-                <div className="col-span-full text-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
-                  {myEnrollments.length === 0 ? "Bạn chưa đăng ký lớp học nào." : "Không tìm thấy lớp học phù hợp với từ khóa."}
+                <div className="col-span-full text-center py-16 px-6 bg-white border border-dashed border-slate-200 rounded-2xl text-sm text-slate-500 space-y-2">
+                  {listedEnrollments.length > 0 ? (
+                    <p>Không tìm thấy lớp học phù hợp với từ khóa.</p>
+                  ) : isDirectSale ? (
+                    <>
+                      <p className="font-semibold text-slate-700">Bạn chưa có lớp học nào.</p>
+                      <p className="max-w-md mx-auto leading-relaxed">
+                        Lớp học sẽ hiển thị tại đây ngay khi MCNA xếp lớp xong, và bạn sẽ nhận email kèm lịch học, nhóm Zalo và giảng viên phụ trách. Cần hỗ trợ, gọi {appConfig.supportPhone}.
+                      </p>
+                    </>
+                  ) : (
+                    <p>Bạn chưa đăng ký lớp học nào.</p>
+                  )}
                 </div>
               )}
             </div>

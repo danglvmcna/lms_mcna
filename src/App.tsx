@@ -35,6 +35,7 @@ import { clearEnrollIntent, EnrollIntent, readEnrollIntent, saveEnrollIntent } f
 import { ForcedPasswordChange, ForgotPasswordForm, SignUpForm } from "./components/public/AccountForms";
 import ErrorBoundary from "./components/ErrorBoundary";
 import CertificatePublicPage from "./components/public/CertificatePublicPage";
+import { phoneDigits, useAppConfigQuery } from "./appConfig";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,9 @@ const queryClient = new QueryClient({
 function AppShell() {
   console.log("APP: AppShell function executing...");
   const queryClient = useQueryClient();
+  // Direct sale: accounts are issued by MCNA, so the sign-up and self-enrollment entry points are hidden.
+  const { config: appConfig, isLoading: appConfigLoading } = useAppConfigQuery();
+  const isDirectSale = appConfig.salesMode === "direct";
   // Store instance reactivity state
   console.log("APP: Initializing storeData state...");
   const [storeData, setStoreData] = useState<LMSDataStore>(AppStore.get());
@@ -115,6 +119,7 @@ function AppShell() {
 
   const roleLabel = (role: User["role"]) => {
     if (role === "admin") return "Quản Trị Viên";
+    if (role === "manager") return "Quản Lý Lớp";
     if (role === "teacher") return "Giảng Viên";
     if (role === "student") return "Học Viên";
     return role;
@@ -151,12 +156,15 @@ function AppShell() {
       });
   }, []);
 
+  const directSaleRef = React.useRef(isDirectSale);
+  directSaleRef.current = isDirectSale;
+
   // Synchronize browser history and hash navigation (back/forward buttons)
   useEffect(() => {
     const handleLocationChange = () => {
       const hash = window.location.hash.replace("#", "").toLowerCase();
       if (hash === "login" || hash === "register" || hash === "forgot") {
-        setAuthView(hash);
+        setAuthView(hash === "register" && directSaleRef.current ? "login" : hash);
       } else if (!hash || hash === "catalog") {
         setAuthView("catalog");
       }
@@ -179,6 +187,17 @@ function AppShell() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    if (appConfigLoading || !isDirectSale) return;
+    clearEnrollIntent();
+    setPendingIntent(null);
+    setAuthView(current => {
+      if (current === "register") return "login";
+      const hash = window.location.hash.replace("#", "").toLowerCase();
+      return current === "catalog" && !initialCourseId && !hash ? "login" : current;
+    });
+  }, [appConfigLoading, isDirectSale]);
+
   // Submit the class a visitor picked in the public catalog once they are signed in as a student.
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
@@ -186,7 +205,7 @@ function AppShell() {
     if (!intent) return;
     clearEnrollIntent();
     setPendingIntent(null);
-    if (currentUser.role !== "student") return;
+    if (currentUser.role !== "student" || isDirectSale) return;
     api.registerEnrollment(intent.courseId, intent.sectionId)
       .then(async () => {
         const target = [intent.sectionCode ? `lớp ${intent.sectionCode}` : "", intent.courseTitle || ""].filter(Boolean).join(" – ") || "khóa học";
@@ -303,7 +322,7 @@ function AppShell() {
     setCurrentUser(null);
     setUserDropdownOpen(false);
     setCsrfToken(null);
-    navigateAuth("catalog");
+    navigateAuth(isDirectSale ? "login" : "catalog");
     sessionStorage.removeItem("mcna_lms_active_session");
     sessionStorage.removeItem("e16_lms_active_session");
   };
@@ -734,14 +753,14 @@ function AppShell() {
             </header>
 
             {/* Inner responsive Padding page body */}
-            <div className={`mx-auto w-full pt-4 pb-6 md:pt-6 lg:pt-8 px-4 md:px-6 ${currentUser.role === "admin" ? "max-w-[1600px]" : "max-w-[1440px]"}`}>
+            <div className={`mx-auto w-full pt-4 pb-6 md:pt-6 lg:pt-8 px-4 md:px-6 ${currentUser.role === "admin" || currentUser.role === "manager" ? "max-w-[1600px]" : "max-w-[1440px]"}`}>
               <React.Suspense fallback={
                 <div className="flex flex-col items-center justify-center p-16 space-y-4">
                   <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
                   <span className="text-xs text-indigo-300 font-mono tracking-widest uppercase">Đang tải phân hệ học vụ...</span>
                 </div>
               }>
-                {currentUser.role === "admin" && (
+                {(currentUser.role === "admin" || currentUser.role === "manager") && (
                   <AdminPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
@@ -769,10 +788,16 @@ function AppShell() {
           </main>
 
         </div>
+      ) : appConfigLoading && !resetToken ? (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" aria-label="Đang tải" />
+        </div>
       ) : authView === "catalog" && !resetToken ? (
         <ErrorBoundary fallbackTitle="Không thể tải danh mục khóa học">
           <PublicCourseCatalog
             initialCourseId={initialCourseId}
+            salesMode={appConfig.salesMode}
+            supportPhone={appConfig.supportPhone}
             onLogin={() => navigateAuth("login")}
             onRegister={intent => {
               if (intent) {
@@ -832,7 +857,7 @@ function AppShell() {
                 <h3 className="text-xl font-display font-bold text-slate-900 tracking-tight">
                   {resetToken
                     ? "Đặt lại mật khẩu"
-                    : authView === "register"
+                    : authView === "register" && !isDirectSale
                       ? "Tạo tài khoản học viên"
                       : authView === "forgot"
                         ? "Quên mật khẩu"
@@ -841,11 +866,13 @@ function AppShell() {
                 <p className="text-xs text-slate-500">
                   {resetToken
                     ? "Thiết lập mật khẩu mới bằng liên kết một lần được gửi qua email."
-                    : authView === "register"
+                    : authView === "register" && !isDirectSale
                       ? "Đăng ký bằng email cá nhân – mật khẩu tạm thời sẽ được gửi qua email."
                       : authView === "forgot"
                         ? "Nhập email đăng nhập để nhận liên kết đặt lại mật khẩu."
-                        : "Xác thực để truy cập phân hệ học vụ hoặc lớp học tương ứng."}
+                        : isDirectSale
+                          ? "Học viên đăng nhập bằng email đã đăng ký khóa học và mật khẩu MCNA gửi qua email."
+                          : "Xác thực để truy cập phân hệ học vụ hoặc lớp học tương ứng."}
                 </p>
               </div>
 
@@ -949,7 +976,7 @@ function AppShell() {
                     Quay lại đăng nhập
                   </button>
                 </form>
-              ) : authView === "register" ? (
+              ) : authView === "register" && !isDirectSale ? (
                 <SignUpForm
                   intent={pendingIntent}
                   onGoToLogin={email => {
@@ -970,7 +997,7 @@ function AppShell() {
                         name="email"
                         type="email"
                         required
-                        placeholder="Ví dụ: admin@mcna.local"
+                        placeholder={isDirectSale ? "Ví dụ: ban@gmail.com" : "Ví dụ: admin@mcna.local"}
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
                         className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500/20 placeholder-slate-400 h-10"
@@ -1008,17 +1035,25 @@ function AppShell() {
                       >
                         Quên mật khẩu?
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthError(null);
-                          navigateAuth("register");
-                        }}
-                        className="text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer transition"
-                      >
-                        Chưa có tài khoản? Tạo tài khoản
-                      </button>
+                      {!isDirectSale && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthError(null);
+                            navigateAuth("register");
+                          }}
+                          className="text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer transition"
+                        >
+                          Chưa có tài khoản? Tạo tài khoản
+                        </button>
+                      )}
                     </div>
+                    {isDirectSale && (
+                      <p className="text-[11px] text-slate-500 leading-relaxed border-t border-slate-100 pt-3">
+                        Tài khoản học viên do MCNA cấp sau khi bạn đăng ký khóa học. Chưa nhận được thông tin đăng nhập? Gọi hoặc nhắn Zalo{" "}
+                        <a href={`https://zalo.me/${phoneDigits(appConfig.supportPhone)}`} target="_blank" rel="noreferrer" className="font-semibold text-indigo-600 hover:text-indigo-700">{appConfig.supportPhone}</a>.
+                      </p>
+                    )}
                   </form>
 
                 </>

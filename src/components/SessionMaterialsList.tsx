@@ -1,18 +1,15 @@
 import React, { useState } from "react";
-import { Archive, BarChart3, Clock, Download, ExternalLink, Eye, FileSpreadsheet, FileText, Link2, Play, Presentation, X } from "lucide-react";
+import { Archive, BarChart3, Clock, Database, Download, ExternalLink, Eye, EyeOff, FileText, Link2, X } from "lucide-react";
 import { api } from "../api";
+import { fileExtension, isFileMaterialType, isPdfFile, learnerMaterialAccess, MATERIAL_TYPE_LABEL } from "../materialAccess";
 import { SessionMaterial } from "../types";
 import ModalPortal from "./ModalPortal";
+import PdfViewer from "./common/PdfViewer";
 import { PowerPointLogo, WordLogo, ExcelLogo, YouTubeLogo, PdfLogo } from "./icons/BrandLogos";
 
-export const MATERIAL_TYPE_LABEL: Record<SessionMaterial["type"], string> = {
-  slide: "Slide",
-  document: "Tài liệu",
-  youtube: "YouTube",
-  link: "Liên kết"
-};
+export { MATERIAL_TYPE_LABEL };
 
-export type MaterialFileType = "pptx" | "docx" | "pdf" | "xlsx" | "pbix" | "zip" | "youtube" | "link";
+export type MaterialFileType = "pptx" | "docx" | "pdf" | "xlsx" | "pbix" | "zip" | "data" | "youtube" | "link";
 
 export interface MaterialVisualMeta {
   key: MaterialFileType;
@@ -42,8 +39,8 @@ export function formatUploadTime(dateStr?: string) {
 }
 
 export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMeta {
-  const ext = (material.fileName ? material.fileName.split(".").pop()?.toLowerCase() : "") || "";
-  const isPdf = material.mimeType === "application/pdf" || ext === "pdf";
+  const ext = fileExtension(material.fileName).replace(".", "");
+  const isPdf = isPdfFile(material.mimeType, material.fileName);
 
   if (isPdf) {
     return {
@@ -101,6 +98,21 @@ export function getMaterialTypeMeta(material: SessionMaterial): MaterialVisualMe
       badgeStyle: "bg-purple-100/80 text-purple-800 border-purple-300 font-bold",
       hoverBorder: "hover:border-purple-400",
       actionButton: "bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/80"
+    };
+  }
+
+  // Other practice files: JSON workflows, notebooks, scripts, text
+  if (material.type === "data") {
+    return {
+      key: "data",
+      badge: ext.toUpperCase() || "DATA",
+      label: "File data thực hành",
+      Icon: Database,
+      iconColor: "text-teal-700",
+      iconBg: "bg-teal-50 border-teal-200/90 text-teal-700",
+      badgeStyle: "bg-teal-50 text-teal-800 border-teal-200 font-bold",
+      hoverBorder: "hover:border-teal-300",
+      actionButton: "bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80"
     };
   }
 
@@ -168,37 +180,92 @@ export function MaterialIcon({ material, type, className }: { material?: Session
   }
   if (type === "slide") return <PowerPointLogo className={className || "h-5 w-5"} />;
   if (type === "document") return <WordLogo className={className || "h-5 w-5"} />;
+  if (type === "data") return <Database className={className || "h-5 w-5"} />;
   if (type === "youtube") return <YouTubeLogo className={className || "h-5 w-5"} />;
   return <Link2 className={className || "h-5 w-5"} />;
 }
 
-export const isFileMaterial = (material: SessionMaterial) => material.type === "slide" || material.type === "document";
+export const isFileMaterial = (material: SessionMaterial) => isFileMaterialType(material.type);
 
-export const isPdfMaterial = (material: SessionMaterial) =>
-  material.mimeType === "application/pdf" || Boolean(material.fileName && material.fileName.toLowerCase().endsWith(".pdf"));
+export const isPdfMaterial = (material: SessionMaterial) => isPdfFile(material.mimeType, material.fileName);
 
 export const materialHref = (material: SessionMaterial) =>
   isFileMaterial(material) ? api.materialDownloadUrl(material.id) : material.url || "#";
 
-/** Read-only view of a session's materials for learners. Video links stay compact until opened. */
-export default function SessionMaterialsList({ materials, sessionId }: { materials: SessionMaterial[]; sessionId?: string }) {
+/** A PDF opened in the read-only viewer; staff additionally get the download button. */
+export function MaterialPdfModal({ material, allowDownload, onClose }: { material: SessionMaterial; allowDownload: boolean; onClose: () => void }) {
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-2 md:p-6 animate-in fade-in duration-150">
+        <div className="bg-white border border-slate-200 w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden text-left animate-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 shrink-0">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
+                <h4 className="font-bold text-slate-900 text-sm truncate">{material.title}</h4>
+                <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-mono uppercase font-bold shrink-0 border border-indigo-200/60">PDF</span>
+              </div>
+              <p className="text-[11px] text-slate-400 truncate font-mono mt-0.5">
+                {material.fileName} {material.sizeBytes ? `(${formatFileSize(material.sizeBytes)})` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {allowDownload && (
+                <a
+                  href={api.materialDownloadUrl(material.id)}
+                  download={material.fileName || true}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Download className="h-3.5 w-3.5" /> Tải về
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Đóng"
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            <PdfViewer url={api.materialViewUrl(material.id)} title={material.title} />
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+interface SessionMaterialsListProps {
+  materials: SessionMaterial[];
+  sessionId?: string;
+  // learner (default): slides and documents are read online only, data files can be downloaded.
+  viewer?: "learner" | "staff";
+}
+
+/** Read-only view of a session's materials. Video links stay compact until opened. */
+export default function SessionMaterialsList({ materials, sessionId, viewer = "learner" }: SessionMaterialsListProps) {
   const [previewPdf, setPreviewPdf] = useState<SessionMaterial | null>(null);
+  const isStaff = viewer === "staff";
 
   if (materials.length === 0) return null;
   const videos = materials.filter(material => material.type === "youtube");
   const others = materials.filter(material => material.type !== "youtube");
+  const bundleFiles = materials.filter(material => (isStaff ? isFileMaterial(material) : material.type === "data"));
 
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <span className="text-sm font-semibold text-slate-700">{materials.length} mục tài liệu</span>
-        {sessionId && (materials.some(material => isFileMaterial(material)) || materials.some(material => material.url)) && (
+        <span className="text-sm font-semibold text-slate-700">{materials.length} mục</span>
+        {sessionId && bundleFiles.length > 1 && (
           <a
             href={api.sessionMaterialsBundleUrl(sessionId)}
             download
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
           >
-            <Archive className="h-3.5 w-3.5" /> Tải toàn bộ (.ZIP)
+            <Archive className="h-3.5 w-3.5" /> {isStaff ? "Tải toàn bộ (.ZIP)" : "Tải tất cả file data (.ZIP)"}
           </a>
         )}
       </div>
@@ -214,9 +281,10 @@ export default function SessionMaterialsList({ materials, sessionId }: { materia
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {others.map(material => {
             const meta = getMaterialTypeMeta(material);
-            const isFile = isFileMaterial(material);
-            const isPdf = isPdfMaterial(material);
             const uploadTime = formatUploadTime(material.createdAt);
+            const access = learnerMaterialAccess(material);
+            const canView = access === "view" || (isStaff && isPdfMaterial(material));
+            const canDownload = access === "download" || (isStaff && isFileMaterial(material));
 
             return (
               <div
@@ -224,18 +292,16 @@ export default function SessionMaterialsList({ materials, sessionId }: { materia
                 className={`flex items-center justify-between gap-3 p-3 rounded-lg bg-white hover:bg-slate-50/70 border border-slate-200/80 ${meta.hoverBorder} transition-colors text-left min-w-0 group`}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  {/* Colorful Icon Box */}
                   <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border ${meta.iconBg} ${meta.iconColor} transition-colors`}>
                     <meta.Icon className="h-5 w-5" />
                   </div>
 
-                  {/* Information */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="block text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition truncate">
+                    <div className="flex items-start gap-1.5 mb-0.5">
+                      <span title={material.title} className="block min-w-0 text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition line-clamp-2 break-words">
                         {material.title}
                       </span>
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider shrink-0 border ${meta.badgeStyle}`}>
+                      <span className={`mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider shrink-0 border ${meta.badgeStyle}`}>
                         {meta.badge}
                       </span>
                     </div>
@@ -256,28 +322,18 @@ export default function SessionMaterialsList({ materials, sessionId }: { materia
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {isPdf ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewPdf(material)}
-                        title="Xem trực tiếp PDF"
-                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition cursor-pointer text-xs font-semibold flex items-center gap-1 border border-rose-200/80 active:scale-95 shadow-2xs"
-                      >
-                        <Eye className="h-3.5 w-3.5" /> Xem
-                      </button>
-                      <a
-                        href={materialHref(material)}
-                        download={material.fileName || true}
-                        title="Tải về máy"
-                        className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition cursor-pointer border border-slate-200/70"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </a>
-                    </>
-                  ) : isFile ? (
+                  {canView && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPdf(material)}
+                      title="Xem trực tuyến"
+                      className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition cursor-pointer text-xs font-semibold flex items-center gap-1 border border-rose-200/80 active:scale-95 shadow-2xs"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Xem
+                    </button>
+                  )}
+                  {canDownload && (
                     <a
                       href={materialHref(material)}
                       download={material.fileName || true}
@@ -286,7 +342,16 @@ export default function SessionMaterialsList({ materials, sessionId }: { materia
                     >
                       <Download className="h-3.5 w-3.5" /> Tải về
                     </a>
-                  ) : (
+                  )}
+                  {access === "unavailable" && !isStaff && (
+                    <span
+                      title="Tài liệu này chỉ xem trực tuyến và giảng viên chưa cung cấp bản PDF để hiển thị."
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium flex items-center gap-1 border border-slate-200"
+                    >
+                      <EyeOff className="h-3.5 w-3.5" /> Chưa có bản xem
+                    </span>
+                  )}
+                  {access === "link" && (
                     <a
                       href={materialHref(material)}
                       target="_blank"
@@ -304,60 +369,7 @@ export default function SessionMaterialsList({ materials, sessionId }: { materia
         </div>
       )}
 
-      {/* Inline PDF Preview Modal */}
-      {previewPdf && (
-        <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-150">
-            <div className="bg-white border border-slate-200 w-full max-w-5xl h-[88vh] rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left animate-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-                <div className="min-w-0 flex-1 pr-3">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
-                    <h4 className="font-bold text-slate-900 text-sm truncate">{previewPdf.title}</h4>
-                    <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-mono uppercase font-bold shrink-0 border border-indigo-200/60">PDF</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 truncate font-mono mt-0.5">
-                    {previewPdf.fileName} {previewPdf.sizeBytes ? `(${formatFileSize(previewPdf.sizeBytes)})` : ""}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={`${api.materialDownloadUrl(previewPdf.id)}?inline=true`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border border-slate-200"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" /> Mở tab mới
-                  </a>
-                  <a
-                    href={api.materialDownloadUrl(previewPdf.id)}
-                    download={previewPdf.fileName || true}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Tải về
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewPdf(null)}
-                    className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 w-full h-full min-h-0 bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                <iframe
-                  src={`${api.materialDownloadUrl(previewPdf.id)}?inline=true`}
-                  title={previewPdf.title}
-                  className="w-full h-full border-0 bg-white"
-                />
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+      {previewPdf && <MaterialPdfModal material={previewPdf} allowDownload={isStaff} onClose={() => setPreviewPdf(null)} />}
     </div>
   );
 }

@@ -398,3 +398,10 @@ tr:hover > .mcna-td {
 }
 
 
+
+/* View-only materials (slides, documents) are not printed along with the page. */
+@media print {
+  .lms-view-only {
+    display: none !important;
+  }
+}

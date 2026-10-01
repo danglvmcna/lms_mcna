@@ -30,7 +30,9 @@ import {
   Radio,
   RefreshCw,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck,
+  FolderOpen
 } from "lucide-react";
 import { CrmOutboxStatus, User } from "../types";
 import { useApiStore } from "../hooks/apiHooks";
@@ -42,6 +44,16 @@ import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
 import CourseSectionManager from "./CourseSectionManager";
 import SendNotificationModal from "./admin/SendNotificationModal";
+import ClassPlacementManager from "./admin/ClassPlacementManager";
+import OperationsWorkspace from "./operations/OperationsWorkspace";
+import SalesWorkspace from "./operations/SalesWorkspace";
+import { useAppConfig } from "../appConfig";
+
+// Session content (materials, data, homework, opening materials) reuses the teacher workspace for every course.
+const ClassContentManager = React.lazy(() => import("./TeacherPanel"));
+
+type AdminTab = "overview" | "placement" | "orders" | "course_section_mgmt" | "content" | "users" | "audit" | "notifications" | "operations" | "sales";
+type StaffRole = "student" | "teacher" | "manager" | "admin";
 
 interface AdminPanelProps {
   currentUser: User;
@@ -64,28 +76,27 @@ function generateClientTemporaryPassword() {
 
 export default function AdminPanel({ currentUser, onLogout, onRefreshData, activeSystem = "SIS", updateStore }: AdminPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
+  const appConfig = useAppConfig();
+  // The class manager runs courses, classes and placements; accounts and the audit trail stay with the system admin.
+  const isSystemAdmin = currentUser.role === "admin";
+  const isDirectSale = appConfig.salesMode === "direct";
+  // Where "enrollment needs attention" leads: the placement screen (direct sale) or the QR order queue (self-service).
+  const enrollmentTab: AdminTab = isDirectSale || !isSystemAdmin ? "placement" : "orders";
 
-  // Navigation tab states
-  // Groupings: ACADEMIC, STUDENTS, LEARNING, REPORTS
-  const [activeSubTab, setActiveSubTab] = useState<
-    | "overview"
-    | "orders"
-    | "course_section_mgmt"
-    | "users"
-    | "audit"
-    | "notifications"
-  >("overview");
+  const [activeSubTab, setActiveSubTab] = useState<AdminTab>(isSystemAdmin ? "overview" : "placement");
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["overview", "orders", "course_section_mgmt", "users", "audit", "notifications"];
-    if (!allowed.includes(activeSubTab)) {
-      setActiveSubTab("overview");
+    const allowed: AdminTab[] = isSystemAdmin
+      ? ["overview", "placement", "orders", "course_section_mgmt", "content", "users", "audit", "notifications", "operations", "sales"]
+      : ["overview", "placement", "course_section_mgmt", "content", "notifications", "operations", "sales"];
+    if (!allowed.includes(activeSubTab) || (activeSubTab === "orders" && isDirectSale)) {
+      setActiveSubTab(isSystemAdmin ? "overview" : "placement");
     }
-  }, [currentUser.role]);
+  }, [currentUser.role, isDirectSale]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -101,11 +112,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         text.includes("đăng ký khóa học") ||
         text.includes("thanh toán")
       ) {
-        setActiveSubTab("orders");
+        setActiveSubTab(enrollmentTab);
       } else if (
-        relatedEntityType === "user" ||
-        text.includes("tài khoản") ||
-        text.includes("học viên mới")
+        isSystemAdmin && (
+          relatedEntityType === "user" ||
+          text.includes("tài khoản") ||
+          text.includes("học viên mới")
+        )
       ) {
         setActiveSubTab("users");
       } else if (
@@ -115,7 +128,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
         text.includes("mở thêm lớp")
       ) {
         setActiveSubTab("course_section_mgmt");
-      } else if (relatedEntityType === "audit") {
+      } else if (relatedEntityType === "audit" && isSystemAdmin) {
         setActiveSubTab("audit");
       } else {
         setActiveSubTab("notifications");
@@ -123,7 +136,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, []);
+  }, [enrollmentTab, isSystemAdmin]);
 
   // Existing User modals states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -132,7 +145,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin">("student");
+  const [newUserRole, setNewUserRole] = useState<StaffRole>("student");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showSendNotifModal, setShowSendNotifModal] = useState(false);
 
@@ -142,7 +155,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
   // Search & Filter flags for users registry
   const [userSearch, setUserSearch] = useState("");
-  const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "admin">("student");
+  const [userDirTab, setUserDirTab] = useState<StaffRole>("student");
   const [auditSearch, setAuditSearch] = useState("");
   const [auditFilterAction, setAuditFilterAction] = useState("all");
   const [userPage, setUserPage] = useState(1);
@@ -288,7 +301,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
     const usersToImport: Array<{
       name: string;
       email: string;
-      role: "student" | "teacher" | "admin";
+      role: StaffRole;
     }> = [];
     const seenEmails = new Set<string>();
     let localErrorCount = 0;
@@ -307,7 +320,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       const [name, email, role] = columns;
       const cleanEmail = email.toLowerCase().trim();
       const cleanRole = role.toLowerCase().trim();
-      const roleValidated = ["student", "teacher", "admin"].includes(cleanRole);
+      const roleValidated = ["student", "teacher", "manager", "admin"].includes(cleanRole);
       const emailUnique = !seenEmails.has(cleanEmail) && !store.users.some(u => u.email.toLowerCase() === cleanEmail);
 
       if (!name.trim() || !cleanEmail.includes("@") || !roleValidated || !emailUnique) {
@@ -319,7 +332,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       usersToImport.push({
         name: name.trim(),
         email: cleanEmail,
-        role: cleanRole as "student" | "teacher" | "admin"
+        role: cleanRole as StaffRole
       });
     });
 
@@ -367,7 +380,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   };
 
   const handleUpdateUserRole = (userId: string, newRole: User["role"]) => {
-    const allowedRoles: User["role"][] = ["student", "teacher", "admin"];
+    const allowedRoles: User["role"][] = ["student", "teacher", "manager", "admin"];
     if (!allowedRoles.includes(newRole)) return;
     
     api.setUserRole(userId, newRole)
@@ -428,23 +441,35 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = filteredUsers.slice((userPage - 1) * itemsPerPage, userPage * itemsPerPage);
   const pendingEnrollmentsCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending_payment" || enrollment.status === "pending").length;
+  const waitingPlacementCount = (store.enrollments || []).filter((enrollment: any) => enrollment.status === "pending").length;
   const filteredAuditLogs = (store.auditLogs || []).filter(log => {
     const query = auditSearch.toLowerCase();
     const matchesSearch = !query || [log.action, log.userId, log.target, log.detail].some(value => value.toLowerCase().includes(query));
     return matchesSearch && (auditFilterAction === "all" || log.action === auditFilterAction);
   });
-  const adminNavGroups = [
-    { label: "Vận hành", items: [
-      { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
-      { id: "orders", label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount },
-      { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
-    ] },
-    { label: "Hệ thống & tài khoản", items: [
-      { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
-      { id: "audit", label: "Nhật ký hệ thống", icon: Database, count: 0 },
-      { id: "notifications", label: "Thông báo hệ thống", icon: Bell, count: unreadAdminNotificationsCount }
-    ] }
-  ] as const;
+  type NavItem = { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }>; count: number };
+  const operationItems: NavItem[] = [
+    { id: "overview", label: "Tổng quan", icon: Activity, count: 0 },
+    { id: "placement", label: "Học viên & Xếp lớp", icon: UserCheck, count: waitingPlacementCount },
+    // The QR self-registration queue only exists while the LMS runs in self-service mode.
+    ...(isSystemAdmin && !isDirectSale ? [{ id: "orders" as AdminTab, label: "Đơn hàng & Ghi danh", icon: ShoppingBag, count: pendingEnrollmentsCount }] : []),
+    { id: "course_section_mgmt", label: "Khóa học & Lớp học", icon: BookOpen, count: 0 },
+    { id: "content", label: "Nội dung lớp học", icon: FolderOpen, count: 0 },
+    { id: "operations", label: "Vận hành lớp học", icon: Users, count: 0 },
+    { id: "sales", label: "Tư vấn & Ưu đãi", icon: ShoppingBag, count: 0 }
+  ];
+  const adminNavGroups: Array<{ label: string; items: NavItem[] }> = isSystemAdmin
+    ? [
+        { label: "Vận hành", items: operationItems },
+        { label: "Hệ thống & tài khoản", items: [
+          { id: "users", label: "Quản lý người dùng", icon: Users, count: 0 },
+          { id: "audit", label: "Nhật ký hệ thống", icon: Database, count: 0 },
+          { id: "notifications", label: "Thông báo hệ thống", icon: Bell, count: unreadAdminNotificationsCount }
+        ] }
+      ]
+    : [
+        { label: "Quản lý lớp", items: [...operationItems, { id: "notifications", label: "Thông báo", icon: Bell, count: unreadAdminNotificationsCount }] }
+      ];
 
   return (
     <div className="space-y-6">
@@ -465,8 +490,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
       {/* Main Administrative Header Area */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Quản trị học viện</h2>
-          <p className="text-sm text-slate-500 mt-1">Theo dõi việc cần xử lý và quản lý vận hành LMS.</p>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">{isSystemAdmin ? "Quản trị học viện" : "Quản lý lớp"}</h2>
+          <p className="text-sm text-slate-500 mt-1">{isSystemAdmin ? "Theo dõi việc cần xử lý và quản lý vận hành LMS." : "Tạo lớp, xếp học viên vào lớp và quản lý nội dung từng buổi học."}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -482,7 +507,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
           >
             <Download className="h-4 w-4 text-slate-500" /> Sao lưu JSON
           </button>}
-          {activeSubTab === "notifications" && <button
+          {activeSubTab === "notifications" && isSystemAdmin && <button
             onClick={() => setShowSendNotifModal(true)}
             className="mcna-btn-secondary !h-9 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
           >
@@ -502,13 +527,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
 
         <div className="lg:hidden w-full">
           <label htmlFor="admin-section" className="sr-only">Mục quản trị</label>
-          <select id="admin-section" value={activeSubTab} onChange={event => setActiveSubTab(event.target.value as typeof activeSubTab)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900">
-            <option value="overview">Tổng quan</option>
-            <option value="orders">Đơn hàng & Ghi danh</option>
-            <option value="course_section_mgmt">Khóa học & Lớp học</option>
-            <option value="users">Quản lý người dùng</option>
-            <option value="audit">Nhật ký hệ thống</option>
-            <option value="notifications">Thông báo hệ thống</option>
+          <select id="admin-section" value={activeSubTab} onChange={event => setActiveSubTab(event.target.value as AdminTab)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900">
+            {adminNavGroups.flatMap(group => group.items).map(item => (
+              <option key={item.id} value={item.id}>{item.label}{item.count > 0 ? ` (${item.count})` : ""}</option>
+            ))}
           </select>
         </div>
         
@@ -557,18 +579,38 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="text-base font-semibold text-slate-900">Việc cần theo dõi</h4><p className="mt-1 text-sm text-slate-500">Tổng hợp từ LMS và CRM.</p></div><button type="button" onClick={() => api.getOperationsSummary().then(setOperationsSummary).catch(() => undefined)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Làm mới</button></div>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    ["Ghi danh chờ xử lý", operationsSummary.pendingEnrollments],
+                    [isDirectSale ? "Học viên chờ xếp lớp" : "Ghi danh chờ xử lý", isDirectSale ? waitingPlacementCount : operationsSummary.pendingEnrollments],
                     ["CRM giao thất bại", operationsSummary.crmFailures]
                   ].map(([label, value]) => <div key={String(label)} className="border-l-2 border-indigo-300 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}
                 </div>
               </section>}
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setActiveSubTab("orders")} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Xử lý ghi danh</button>
-                <button type="button" onClick={() => setActiveSubTab("users")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Quản lý người dùng</button>
+                <button type="button" onClick={() => setActiveSubTab(enrollmentTab)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">{enrollmentTab === "placement" ? "Xếp lớp cho học viên" : "Xử lý ghi danh"}</button>
+                <button type="button" onClick={() => setActiveSubTab("course_section_mgmt")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Khóa học & Lớp học</button>
+                {isSystemAdmin && <button type="button" onClick={() => setActiveSubTab("users")} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Quản lý người dùng</button>}
               </div>
             </div>
           )}
           
+          {/* DIRECT SALE: PAID LEARNERS AND CLASS PLACEMENT */}
+          {activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData}/>}
+          {activeSubTab === "sales" && <SalesWorkspace store={store} onChanged={onRefreshData}/>}
+          {activeSubTab === "placement" && (
+            <ClassPlacementManager
+              store={store}
+              currentUser={currentUser}
+              onRefreshData={onRefreshData}
+              triggerToast={triggerToast}
+            />
+          )}
+
+          {/* SESSION CONTENT OF EVERY CLASS */}
+          {activeSubTab === "content" && (
+            <React.Suspense fallback={<div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Đang tải nội dung lớp học...</div>}>
+              <ClassContentManager currentUser={currentUser} onLogout={onLogout} onRefreshData={onRefreshData} updateStore={updateStore} embedded />
+            </React.Suspense>
+          )}
+
           {/* ORDERS & ENROLLMENTS GROUP */}
           {activeSubTab === "orders" && (
             <AdminOrdersManager
@@ -622,11 +664,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 {[
                   { id: "student", label: "Học Viên" },
                   { id: "teacher", label: "Giảng Viên" },
+                  { id: "manager", label: "Quản Lý Lớp" },
                   { id: "admin", label: "Quản Trị Viên" }
                 ].map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => { setUserDirTab(tab.id as "student" | "teacher" | "admin"); setUserPage(1); }}
+                    onClick={() => { setUserDirTab(tab.id as StaffRole); setUserPage(1); }}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${userDirTab === tab.id ? "bg-indigo-600 text-white border-indigo-600 shadow-xs" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"}`}
                   >
                     {tab.label}
@@ -642,7 +685,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                   </div>
                   {userDirTab === "student" && <p className="text-sm text-slate-600">{usr.phone || "Chưa có số điện thoại"}</p>}
                   <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <label className="text-xs text-slate-500">Vai trò <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800 disabled:opacity-50"><option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option></select></label>
+                    <label className="text-xs text-slate-500">Vai trò <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800 disabled:opacity-50"><option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="manager">Quản lý lớp</option><option value="admin">Quản trị viên</option></select></label>
                     {usr.id !== currentUser.id && <button type="button" onClick={() => handleToggleUserStatus(usr.id)} className="text-sm font-medium text-indigo-700">{usr.isActive ? "Khóa" : "Kích hoạt"}</button>}
                   </div>
                 </article>)}
@@ -694,6 +737,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                               >
                                 <option value="student">Học viên</option>
                                 <option value="teacher">Giảng viên</option>
+                                <option value="manager">Quản lý lớp</option>
                                 <option value="admin">Quản trị viên</option>
                               </select>
                             </td>
@@ -983,6 +1027,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData, activ
                 >
                   <option value="student">Học Viên (Student)</option>
                   <option value="teacher">Giảng Viên (Teacher)</option>
+                  <option value="manager">Quản Lý Lớp (Class manager)</option>
                   <option value="admin">Quản Trị Viên (Admin)</option>
                 </select>
               </div>

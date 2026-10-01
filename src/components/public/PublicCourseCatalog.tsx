@@ -2,12 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Calendar, Check, ChevronDown, Clock, MapPin, Search, Share2, User as UserIcon, Users } from "lucide-react";
 import { api } from "../../api";
 import { EnrollIntent } from "../../enrollIntent";
-import { PublicCourseDetail, PublicCourseSummary } from "../../types";
+import { PublicCourseDetail, PublicCourseSummary, SalesMode } from "../../types";
+import { phoneDigits } from "../../appConfig";
 import LinkedText from "../LinkedText";
 import { instructorName } from "../student/studentDisplay";
 
 interface PublicCourseCatalogProps {
   initialCourseId?: string;
+  // direct: the catalogue is a showcase and enrollment goes through MCNA's advisers; self_service: visitors sign up here.
+  salesMode?: SalesMode;
+  supportPhone?: string;
   onLogin: () => void;
   onRegister: (intent?: EnrollIntent) => void;
 }
@@ -29,7 +33,9 @@ function syncCourseParam(courseId: string | null) {
 }
 
 /** Landing page for visitors: published courses, their open classes and session schedule. */
-export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegister }: PublicCourseCatalogProps) {
+export default function PublicCourseCatalog({ initialCourseId, salesMode = "self_service", supportPhone = "", onLogin, onRegister }: PublicCourseCatalogProps) {
+  const isDirectSale = salesMode === "direct";
+  const adviserUrl = `https://zalo.me/${phoneDigits(supportPhone)}`;
   const [courses, setCourses] = useState<PublicCourseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,9 +118,11 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
   const renderCourseList = () => (
     <>
       <section className="space-y-2">
-        <h1 className="text-2xl md:text-3xl font-display font-extrabold leading-tight text-slate-900">Khóa học đang mở đăng ký</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-extrabold leading-tight text-slate-900">{isDirectSale ? "Khóa học tại MCNA" : "Khóa học đang mở đăng ký"}</h1>
         <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
-          Chọn một khóa học để xem các lớp, lịch từng buổi học và đăng ký. Tài khoản học viên được tạo bằng email cá nhân; mật khẩu đăng nhập được gửi về email của bạn.
+          {isDirectSale
+            ? `Chọn một khóa học để xem các lớp và lịch từng buổi học. Để đăng ký, liên hệ tư vấn viên MCNA qua số ${supportPhone}; sau khi đăng ký bạn nhận tài khoản LMS qua email và được xếp lớp.`
+            : "Chọn một khóa học để xem các lớp, lịch từng buổi học và đăng ký. Tài khoản học viên được tạo bằng email cá nhân; mật khẩu đăng nhập được gửi về email của bạn."}
         </p>
       </section>
 
@@ -326,8 +334,20 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
               <span className="font-semibold text-slate-800">{sections.length}</span>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed pt-2 border-t border-slate-100">
-              Chọn một lớp bên dưới để đăng ký. Sau khi đăng ký, học viện sẽ xác nhận{course.price && course.price > 0 ? " thanh toán và" : ""} xếp lớp rồi kích hoạt khóa học ngay.
+              {isDirectSale
+                ? `Đăng ký khóa học qua tư vấn viên MCNA (${supportPhone}). Sau khi đăng ký, bạn nhận tài khoản LMS qua email và được xếp vào lớp phù hợp.`
+                : `Chọn một lớp bên dưới để đăng ký. Sau khi đăng ký, học viện sẽ xác nhận${course.price && course.price > 0 ? " thanh toán và" : ""} xếp lớp rồi kích hoạt khóa học ngay.`}
             </p>
+            {isDirectSale && (
+              <a
+                href={adviserUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+              >
+                Liên hệ tư vấn qua Zalo {supportPhone}
+              </a>
+            )}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -354,7 +374,7 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
           <h2 className="text-lg font-bold text-slate-900">Các lớp đang mở ({sections.length})</h2>
           {sections.length === 0 ? (
             <div className="py-10 text-center text-sm text-slate-500 bg-white border border-dashed border-slate-200 rounded-2xl shadow-xs">
-              Khóa học chưa có lớp mở đăng ký. Vui lòng quay lại sau.
+              {isDirectSale ? "Khóa học chưa công bố lớp mới. Liên hệ tư vấn viên để biết lịch khai giảng." : "Khóa học chưa có lớp mở đăng ký. Vui lòng quay lại sau."}
             </div>
           ) : (
             sections.map(section => {
@@ -380,14 +400,25 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
                         </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      disabled={isFull}
-                      onClick={() => onRegister({ courseId: course.id, sectionId: section.id, courseTitle: course.title, sectionCode: section.sectionCode })}
-                      className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-xs transition"
-                    >
-                      {isFull ? "Lớp đã đầy" : <>Đăng ký lớp này <ArrowRight className="h-4 w-4" /></>}
-                    </button>
+                    {isDirectSale ? (
+                      <a
+                        href={adviserUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 border border-indigo-200 text-indigo-700 cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-xs transition"
+                      >
+                        {isFull ? "Lớp đã đầy · hỏi lớp khác" : <>Liên hệ tư vấn <ArrowRight className="h-4 w-4" /></>}
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isFull}
+                        onClick={() => onRegister({ courseId: course.id, sectionId: section.id, courseTitle: course.title, sectionCode: section.sectionCode })}
+                        className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-xs transition"
+                      >
+                        {isFull ? "Lớp đã đầy" : <>Đăng ký lớp này <ArrowRight className="h-4 w-4" /></>}
+                      </button>
+                    )}
                   </div>
 
                   {scheduleList.length > 0 && (
@@ -449,9 +480,11 @@ export default function PublicCourseCatalog({ initialCourseId, onLogin, onRegist
             <button type="button" onClick={onLogin} className="px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 cursor-pointer transition shadow-2xs">
               Đăng nhập
             </button>
-            <button type="button" onClick={() => onRegister()} className="px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer transition">
-              Tạo tài khoản
-            </button>
+            {!isDirectSale && (
+              <button type="button" onClick={() => onRegister()} className="px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer transition">
+                Tạo tài khoản
+              </button>
+            )}
           </div>
         </div>
       </header>

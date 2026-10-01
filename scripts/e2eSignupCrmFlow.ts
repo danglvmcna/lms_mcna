@@ -6,8 +6,9 @@ dotenv.config();
 
 // End-to-end check of: public catalog -> self sign-up -> forced password change -> class registration
 // -> CRM outbox + CRM API (payment confirmation, student upsert, enrollment) -> session materials.
-// Needs a running server (E2E_BASE_URL) started with CRM_API_KEY / CRM_INBOUND_SECRET in a non-production
-// NODE_ENV, and DATABASE_URL pointing at the same database (to inspect the CRM outbox).
+// Needs a running server (E2E_BASE_URL) started with SALES_MODE=self_service (the default, direct sale, closes
+// self sign-up) and CRM_API_KEY / CRM_INBOUND_SECRET in a non-production NODE_ENV, and DATABASE_URL pointing
+// at the same database (to inspect the CRM outbox). The direct-sale flow is covered by e2eDirectSaleFlow.ts.
 
 type Session = { cookie: string; csrfToken: string; user: any };
 type CallResult = { status: number; headers: Headers; data: any };
@@ -263,6 +264,12 @@ async function main() {
   const doc = expectStatus("teacher uploads docx", await call(`/api/sessions/${firstSession.id}/materials`, { session: teacher, body: docForm }), 201);
   assert(doc.fileName === "Bài đọc buổi 1.docx", `file name not preserved: ${doc.fileName}`);
 
+  const dataForm = new FormData();
+  dataForm.append("type", "data");
+  dataForm.append("file", new Blob([Buffer.from("ma_don,so_tien\nDH01,3500000\n")], { type: "text/csv" }), "don-hang.csv");
+  const dataFile = expectStatus("teacher uploads a data file", await call(`/api/sessions/${firstSession.id}/materials`, { session: teacher, body: dataForm }), 201);
+  assert(dataFile.type === "data", `data file stored with the wrong type: ${dataFile.type}`);
+
   const badForm = new FormData();
   badForm.append("type", "slide");
   badForm.append("file", new Blob([Buffer.from("MZ")], { type: "application/octet-stream" }), "slides.exe");
@@ -275,12 +282,15 @@ async function main() {
 
   const learnerStore = expectStatus("learner store", await call("/api/store", { session: learner }), 200);
   const visibleMaterials = (learnerStore.sessionMaterials || []).filter((item: any) => item.sessionId === firstSession.id);
-  assert(visibleMaterials.length === 2 && visibleMaterials.every((item: any) => !("storagePath" in item)), "learner should see both session 1 materials, without storage paths");
-  const download = await call(`/api/materials/${doc.id}/download`, { session: learner, redirect: "manual" });
-  assert([200, 302].includes(download.status), `learner download failed: ${download.status}`);
-  console.log("  ✓ placed learner can download");
+  assert(visibleMaterials.length === 3 && visibleMaterials.every((item: any) => !("storagePath" in item)), "learner should see the three session 1 materials, without storage paths");
+  // Learners only download data files; slides and documents are view-only (and need a PDF version to be shown).
+  const download = await call(`/api/materials/${dataFile.id}/download`, { session: learner, redirect: "manual" });
+  assert([200, 302].includes(download.status), `learner data download failed: ${download.status}`);
+  console.log("  ✓ placed learner can download the data file");
+  const viewOnly = expectStatus("placed learner cannot download the document", await call(`/api/materials/${doc.id}/download`, { session: learner, redirect: "manual" }), 403);
+  assert(viewOnly.code === "VIEW_ONLY_NO_PREVIEW", `expected VIEW_ONLY_NO_PREVIEW, got ${viewOnly.code}`);
   const outsider = await login("student@mcna.local", "studente16");
-  expectStatus("student outside the class cannot download", await call(`/api/materials/${doc.id}/download`, { session: outsider, redirect: "manual" }), 403);
+  expectStatus("student outside the class cannot download", await call(`/api/materials/${dataFile.id}/download`, { session: outsider, redirect: "manual" }), 403);
   const learnerSection = (learnerStore.courseSections || []).find((item: any) => item.id === section.id);
   assert(learnerSection?.meetingUrl && learnerSection?.groupChatUrl, "placed learner should see the class meeting and group links");
   const outsiderStore = expectStatus("outsider store", await call("/api/store", { session: outsider }), 200);

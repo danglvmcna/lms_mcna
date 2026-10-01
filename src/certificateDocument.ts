@@ -1,0 +1,9 @@
+const escape=(value:unknown)=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+export function certificateSvg(certificate:{student_name:string;course_title:string;certificate_code:string;issued_at:string},origin:string) {
+  const verify=`${origin}/verify/certificate/${encodeURIComponent(certificate.certificate_code)}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1123" height="794" viewBox="0 0 1123 794"><rect width="1123" height="794" fill="#fff"/><rect x="30" y="30" width="1063" height="734" fill="none" stroke="#4338ca" stroke-width="3"/><g font-family="Arial,sans-serif" text-anchor="middle" fill="#0f172a"><text x="561" y="130" font-size="24">MCNA TECHNOLOGY SCHOOL</text><text x="561" y="230" font-size="40">CHỨNG NHẬN HOÀN THÀNH</text><text x="561" y="300" font-size="22">Chứng nhận học viên</text><text x="561" y="365" font-size="34">${escape(certificate.student_name)}</text><text x="561" y="425" font-size="22">Đã hoàn thành khóa học</text><foreignObject x="100" y="455" width="923" height="100"><div xmlns="http://www.w3.org/1999/xhtml" style="font:28px Arial;text-align:center;color:#0f172a">${escape(certificate.course_title)}</div></foreignObject><text x="561" y="600" font-size="18">Ngày cấp: ${escape(new Date(certificate.issued_at).toLocaleDateString('vi-VN'))} · Mã: ${escape(certificate.certificate_code)}</text><text x="561" y="645" font-size="14">${escape(verify)}</text><text x="561" y="715" font-size="14" fill="#64748b">Chứng chỉ điện tử — xác minh trực tuyến bằng mã trên LMS MCNA</text></g></svg>`;
+}
+export function downloadCertificate(certificate:any) {
+  const url=URL.createObjectURL(new Blob([certificateSvg(certificate,window.location.origin)],{type:'image/svg+xml;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=`MCNA-${certificate.certificate_code}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}

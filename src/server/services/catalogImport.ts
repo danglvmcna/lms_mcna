@@ -19,7 +19,7 @@ type CatalogCourse = {
   sessions: CatalogSession[];
 };
 type CatalogClass = { course: string; openingDate: string; days: string[]; startTime: string; endTime: string; room?: string };
-type Catalog = { defaultPrice: number; defaultMaxStudents: number; courses: CatalogCourse[]; classes: CatalogClass[] };
+type Catalog = { source?: string; scrapedAt?: string; defaultPrice: number; defaultMaxStudents: number; courses: CatalogCourse[]; classes: CatalogClass[] };
 
 export const mcnaCatalog = catalogJson as Catalog;
 
@@ -59,7 +59,8 @@ async function resolveTeacher(db: any, teacherEmail: string) {
 /** Writes the catalogue into the database. Runs inside the caller's transaction. */
 export async function importMcnaCatalog(
   db: any,
-  options: { teacherEmail?: string; hideOtherCourses?: boolean; log?: (message: string) => void } = {}
+  // skipClasses: only courses and their syllabus; classes are then created by the class manager.
+  options: { teacherEmail?: string; hideOtherCourses?: boolean; skipClasses?: boolean; log?: (message: string) => void } = {}
 ): Promise<CatalogImportSummary> {
   const log = options.log || (() => undefined);
   const summary: CatalogImportSummary = { coursesCreated: 0, coursesUpdated: 0, lessons: 0, classesCreated: 0, classesSkipped: 0, otherCoursesHidden: 0 };
@@ -126,7 +127,7 @@ export async function importMcnaCatalog(
     }
   }
 
-  for (const cls of mcnaCatalog.classes) {
+  for (const cls of options.skipClasses ? [] : mcnaCatalog.classes) {
     const course = courseByKey.get(cls.course)!;
     const [, month, day] = cls.openingDate.split("-");
     const sectionId = `section_mcna_${cls.course}_${cls.openingDate.replace(/-/g, "")}`;

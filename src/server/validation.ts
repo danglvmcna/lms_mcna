@@ -25,14 +25,14 @@ export const schemas = {
     email: z.email().trim().toLowerCase(),
     password: z.string().min(8),
     name: z.string().trim().min(1),
-    role: z.enum(["admin", "teacher", "student"]),
+    role: z.enum(["admin", "manager", "teacher", "student"]),
     phone: z.string().trim().optional()
   }),
   bulkCreateUsers: z.object({
     users: z.array(z.object({
       email: z.email().trim().toLowerCase(),
       name: z.string().trim().min(1),
-      role: z.enum(["admin", "teacher", "student"]),
+      role: z.enum(["admin", "manager", "teacher", "student"]),
       phone: z.string().trim().optional()
     })).min(1).max(5000),
     defaultPassword: z.string().min(8).optional()
@@ -44,7 +44,7 @@ export const schemas = {
     idempotencyKey: z.uuid(),
     message: z.string().trim().min(1).max(2000),
     type: z.enum(["info", "success", "warning", "danger"]).default("info"),
-    role: z.enum(["all", "student", "teacher", "admin"]).optional(),
+    role: z.enum(["all", "student", "teacher", "manager", "admin"]).optional(),
     userIds: z.array(z.string().trim().min(1)).min(1).max(100).optional()
   }).refine(value => Boolean(value.role) !== Boolean(value.userIds), {
     message: "Provide exactly one audience: role or userIds."
@@ -121,7 +121,8 @@ export const schemas = {
     sectionId: z.string().trim().min(1).optional()
   }),
   issueCertificate: z.object({
-    enrollmentId: z.string().trim().min(1)
+    enrollmentId: z.string().trim().min(1),
+    overrideReason: z.string().trim().min(10).max(2000).optional()
   }),
   toggleProgress: z.object({
     enrollmentId: z.string().trim().min(1),
@@ -137,7 +138,8 @@ export const schemas = {
     sessionId: z.string().trim().optional(),
     title: z.string().trim().min(1),
     description: z.string().trim().min(1),
-    deadline: z.string().trim().min(1),
+    deadline: z.string().trim().refine(value => Number.isFinite(Date.parse(value)), 'Hạn nộp không hợp lệ.'),
+    allowLate: z.boolean().default(false),
     maxScore: z.coerce.number().min(1),
     attachmentUrl: z.string().trim().optional(),
     lessonId: z.string().trim().optional(),
@@ -146,7 +148,8 @@ export const schemas = {
   updateAssignment: z.object({
     title: z.string().trim().min(1).optional(),
     description: z.string().trim().min(1).optional(),
-    deadline: z.string().trim().min(1).optional(),
+    deadline: z.string().trim().refine(value => Number.isFinite(Date.parse(value)), 'Hạn nộp không hợp lệ.').optional(),
+    allowLate: z.boolean().optional(),
     maxScore: z.coerce.number().min(1).optional(),
     attachmentUrl: z.string().trim().optional().nullable(),
     lessonId: z.string().trim().optional().nullable(),
@@ -156,13 +159,14 @@ export const schemas = {
 
   submitAssignment: z.object({
     assignmentId: z.string().trim().min(1),
-    content: z.string().trim().min(1),
+    content: z.string().trim().min(1).max(20000),
     attachmentUrl: z.string().trim().optional()
   }),
   gradeAssignment: z.object({
     submissionId: z.string().trim().min(1),
     score: z.coerce.number().min(0),
-    feedback: z.string().trim().default("")
+    feedback: z.string().trim().max(20000).default(""),
+    expectedSubmittedAt: z.string().refine(v=>Number.isFinite(Date.parse(v))).optional()
   }),
   reviewTransaction: z.object({
     status: z.enum(["approved", "rejected"]),
@@ -241,11 +245,46 @@ export const schemas = {
     recordingUrl: z.string().trim().optional().nullable(),
     content: z.string().trim().optional().nullable()
   }),
-  // Multipart for slide/document (fields arrive as strings), JSON for youtube/link.
+  // Multipart for slide/document/data (fields arrive as strings), JSON for youtube/link.
   createSessionMaterial: z.object({
-    type: z.enum(["slide", "document", "youtube", "link"]),
+    type: z.enum(["slide", "document", "data", "youtube", "link"]),
     title: z.string().trim().max(200).optional().transform(value => value || undefined),
     url: z.string().trim().max(2000).optional()
+  }),
+  // A course's opening materials: reference reading or practice exercises.
+  createIntroMaterial: z.object({
+    category: z.enum(["reference", "practice"]),
+    type: z.enum(["document", "data", "youtube", "link"]),
+    title: z.string().trim().max(200).optional().transform(value => value || undefined),
+    url: z.string().trim().max(2000).optional()
+  }),
+  reorderIntroMaterials: z.object({
+    category: z.enum(["reference", "practice"]),
+    materialIds: z.array(z.string().trim().min(1)).min(1).max(200)
+  }),
+  welcomeLetter: z.object({
+    welcomeLetter: z.string().max(8000)
+  }),
+  // Rows are checked one by one in the import service, so a bad email does not reject the whole table.
+  paidImport: z.object({
+    rows: z.array(z.object({
+      name: z.string().trim().max(160),
+      email: z.string().trim().toLowerCase().max(200),
+      phone: z.string().trim().max(40).optional(),
+      course: z.string().trim().max(300),
+      amount: z.coerce.number().nonnegative().optional(),
+      sectionCode: z.string().trim().max(120).optional(),
+      note: z.string().trim().max(300).optional()
+    })).min(1).max(500),
+    defaultPassword: z.string().min(8).max(100).optional(),
+    sendAccountEmail: z.boolean().default(true),
+    dryRun: z.boolean().default(false)
+  }),
+  resendPlacementEmail: z.object({
+    items: z.array(z.object({
+      studentId: z.string().trim().min(1),
+      sectionId: z.string().trim().min(1)
+    })).min(1).max(200)
   }),
   updateSessionMaterial: z.object({
     title: z.string().trim().min(1).max(200).optional(),

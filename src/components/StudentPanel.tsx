@@ -36,6 +36,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import NotificationInbox from "./NotificationInbox";
+import StudentExtras from "./operations/StudentExtras";
 import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceSession } from "../types";
 import { AppStore } from "../store";
 import CourseCatalog from "./student/CourseCatalog";
@@ -47,6 +48,7 @@ import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
 import ModalPortal from "./ModalPortal";
 import PaymentQrModal from "./student/PaymentQrModal";
+import { useAppConfig } from "../appConfig";
 
 interface StudentPanelProps {
   currentUser: UserType;
@@ -58,6 +60,8 @@ interface StudentPanelProps {
 export default function StudentPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS" }: StudentPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
   const queryClient = useQueryClient();
+  // Direct sale: no catalogue to self-enroll from and no QR orders; the learner only sees the classes MCNA placed them in.
+  const isDirectSale = useAppConfig().salesMode === "direct";
 
 
   // Local navigation states
@@ -66,7 +70,12 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     | "learning"
     | "orders"
     | "notifications"
-  >("catalog");
+    | "extras"
+  >(isDirectSale ? "learning" : "catalog");
+
+  useEffect(() => {
+    if (isDirectSale && (activeSubTab === "catalog" || activeSubTab === "orders")) setActiveSubTab("learning");
+  }, [isDirectSale, activeSubTab]);
 
   // Auto-refresh store data whenever the notifications tab is opened
   useEffect(() => {
@@ -88,7 +97,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
         text.includes("học phí") ||
         text.includes("đơn hàng")
       ) {
-        setActiveSubTab("orders");
+        setActiveSubTab(isDirectSale ? "notifications" : "orders");
         setLearningCourseId(null);
       } else if (
         relatedEntityType === "enrollment" ||
@@ -110,7 +119,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
           }
         }
       } else if (relatedEntityType === "course") {
-        setActiveSubTab("catalog");
+        setActiveSubTab(isDirectSale ? "learning" : "catalog");
         setLearningCourseId(null);
       } else {
         setActiveSubTab("notifications");
@@ -119,7 +128,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     };
     window.addEventListener("mcna:notification_click", handler as EventListener);
     return () => window.removeEventListener("mcna:notification_click", handler as EventListener);
-  }, [store?.courses, store?.enrollments]);
+  }, [store?.courses, store?.enrollments, isDirectSale]);
 
   // Periodic polling every 30s while on the notifications tab to refresh notifications
   useEffect(() => {
@@ -696,6 +705,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
                 learning: "Lớp học của tôi",
                 orders: "Đơn hàng & Thanh toán",
                 notifications: "Hộp thư thông báo",
+                extras: "Chứng chỉ & Tư vấn",
               }[activeSubTab] || activeSubTab}</span>
               <span className="text-slate-400">Đổi mục</span>
             </span>
@@ -709,7 +719,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             <span className="text-xs text-slate-500 px-3 py-2 font-semibold">
               Học viên
             </span>
-            <button
+            {!isDirectSale && <button
               onClick={() => { setActiveSubTab("catalog"); setLearningCourseId(null); setShowSidebar(false); }}
               className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "catalog" 
@@ -719,7 +729,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             >
               <Search className={`h-4 w-4 ${activeSubTab === "catalog" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Khám phá Khóa học</span>
-            </button>
+            </button>}
             <button
               onClick={() => { setActiveSubTab("learning"); setShowSidebar(false); }}
               className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
@@ -731,7 +741,23 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <BookOpen className={`h-4 w-4 ${activeSubTab === "learning" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Lớp học của tôi</span>
             </button>
-            <button
+            {isDirectSale && (
+              <button onClick={() => { setActiveSubTab("extras"); setLearningCourseId(null); setShowSidebar(false); }} className={`w-full text-left px-3 py-2.5 font-medium rounded-lg flex items-center gap-2.5 ${activeSubTab === "extras" ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><Award className="h-4 w-4"/><span>Chứng chỉ & Tư vấn</span></button>
+            )}
+            {isDirectSale && (
+              <button
+                onClick={() => { setActiveSubTab("notifications"); setLearningCourseId(null); setShowSidebar(false); }}
+                className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+                  activeSubTab === "notifications"
+                    ? "bg-indigo-50 text-indigo-700 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                <Bell className={`h-4 w-4 ${activeSubTab === "notifications" ? "text-indigo-600" : "text-slate-400"}`} />
+                <span>Hộp thư thông báo</span>
+              </button>
+            )}
+            {!isDirectSale && <button
               onClick={() => { setActiveSubTab("orders"); setShowSidebar(false); }}
               className={`w-full text-left px-3 py-2.5 font-medium rounded-lg transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "orders"
@@ -741,15 +767,16 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
             >
               <CreditCard className={`h-4 w-4 ${activeSubTab === "orders" ? "text-indigo-600" : "text-slate-400"}`} />
               <span>Đơn hàng & Thanh toán</span>
-            </button>
+            </button>}
           </div>
         </div>
 
         {/* Right Canvas workspace content bodies */}
         <div ref={contentRef} className="relative flex-1 w-full min-w-0 scroll-mt-4">
 
-        <CourseCatalog {...studentPanelProps} />
+        {!isDirectSale && <CourseCatalog {...studentPanelProps} />}
         <MyLearningWorkspace {...studentPanelProps} />
+        {activeSubTab === "extras" && <StudentExtras/>}
 
         {/* Tab 5: alerts and Notifications list panel */}
         {activeSubTab === "notifications" && (
@@ -761,9 +788,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
           />
         )}
 
-        <StudentOrders {...studentPanelProps} />
+        {!isDirectSale && <StudentOrders {...studentPanelProps} />}
 
-        {paymentGuideTx && (
+        {paymentGuideTx && !isDirectSale && (
           <PaymentQrModal
             transaction={paymentGuideTx}
             course={store.courses.find(c => c.id === paymentGuideTx.courseId)}

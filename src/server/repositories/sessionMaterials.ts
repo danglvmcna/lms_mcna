@@ -1,14 +1,18 @@
-import { SessionMaterial } from "../../types";
+import { IntroMaterialCategory, SessionMaterial } from "../../types";
 import { Queryable } from "../db";
 import { generateId } from "../ids";
 import { sessionMaterialFromRow } from "../mappers";
 
+// A material belongs either to one session of a class, or (session_id NULL) to the opening materials
+// of a course, grouped by category: reference reading or practice exercises.
+
 export type NewSessionMaterial = {
   id?: string;
-  sessionId: string;
+  sessionId?: string | null;
   sectionId?: string | null;
   courseId: string;
   type: SessionMaterial["type"];
+  category?: IntroMaterialCategory | null;
   title: string;
   url?: string | null;
   storagePath?: string | null;
@@ -37,6 +41,16 @@ export const sessionMaterialsRepository = {
     )).rows;
   },
 
+  /** Opening materials of a course, optionally one category. */
+  async listIntroByCourse(db: Queryable, courseId: string, category?: IntroMaterialCategory) {
+    return (await db.query(
+      `SELECT * FROM session_materials
+       WHERE session_id IS NULL AND course_id = $1 AND ($2::text IS NULL OR category = $2)
+       ORDER BY category, sort_order, created_at`,
+      [courseId, category || null]
+    )).rows.map(sessionMaterialFromRow);
+  },
+
   /** Raw row including storage_path; server-side use only. */
   async findRowById(db: Queryable, id: string) {
     return (await db.query("SELECT * FROM session_materials WHERE id = $1", [id])).rows[0] || null;
@@ -44,17 +58,20 @@ export const sessionMaterialsRepository = {
 
   async create(db: Queryable, input: NewSessionMaterial) {
     const row = (await db.query(
-      `INSERT INTO session_materials (id, session_id, section_id, course_id, type, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM session_materials WHERE session_id = $2),
-               $12)
+      `INSERT INTO session_materials (id, session_id, section_id, course_id, type, category, title, url, storage_path, file_name, mime_type, size_bytes, sort_order, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM session_materials
+                WHERE ($2::text IS NOT NULL AND session_id = $2)
+                   OR ($2::text IS NULL AND session_id IS NULL AND course_id = $4 AND category = $6)),
+               $13)
        RETURNING *`,
       [
         input.id || generateId("mat"),
-        input.sessionId,
+        input.sessionId || null,
         input.sectionId || null,
         input.courseId,
         input.type,
+        input.sessionId ? null : input.category || null,
         input.title,
         input.url || null,
         input.storagePath || null,
@@ -87,6 +104,16 @@ export const sessionMaterialsRepository = {
       );
     }
     return this.listBySession(db, sessionId);
+  },
+
+  async reorderIntro(db: Queryable, courseId: string, category: IntroMaterialCategory, orderedIds: string[]) {
+    for (const [index, id] of orderedIds.entries()) {
+      await db.query(
+        "UPDATE session_materials SET sort_order = $1 WHERE id = $2 AND session_id IS NULL AND course_id = $3 AND category = $4",
+        [index + 1, id, courseId, category]
+      );
+    }
+    return this.listIntroByCourse(db, courseId, category);
   },
 
   /** Storage objects of every uploaded file in a class, so they can be removed with the class. */

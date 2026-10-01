@@ -8,6 +8,8 @@ import ModalPortal from "../ModalPortal";
 import { AppStore } from "../../store";
 import { ZoomLogo } from "../icons/BrandLogos";
 import SessionMaterialsEditor from "../SessionMaterialsEditor";
+import CourseIntroEditor from "./CourseIntroEditor";
+import SessionHomeworkEditor from "./SessionHomeworkEditor";
 import { api } from "../../api";
 import ForumDiscussion from "../ForumDiscussion";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
@@ -123,10 +125,14 @@ export default function CourseBuilder(props: ComponentProps) {
     myAssignments,
     studentSubmissionsRaw,
     onRefreshData,
-    triggerToast
+    triggerToast,
+    // contentOnly: opened from the admin / class-manager panel, where courses and classes are managed elsewhere.
+    contentOnly
   } = props;
 
   const [preselectedSessionId, setPreselectedSessionId] = React.useState("");
+  // The course whose class was already pre-selected, so the user's own choice ("all classes") is kept afterwards.
+  const autoSelectedCourseRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     setSelectedClassSectionId(null);
@@ -134,6 +140,7 @@ export default function CourseBuilder(props: ComponentProps) {
     setSelectedFolderSessionNumber(null);
     setPreselectedSessionId("");
     setClassDetailTab("lessons");
+    if (!selectedCourseId) autoSelectedCourseRef.current = null;
   }, [selectedCourseId]);
 
   // Session Edit State for Teacher
@@ -228,6 +235,14 @@ export default function CourseBuilder(props: ComponentProps) {
     setIsSavingZoom(true);
     try {
       await api.updateCourseSection(editingZoomSection.id, {
+        courseId: editingZoomSection.courseId,
+        teacherId: editingZoomSection.teacherId,
+        sectionCode: editingZoomSection.sectionCode,
+        maxStudents: editingZoomSection.maxStudents,
+        numberOfSessions: editingZoomSection.numberOfSessions,
+        schedule: editingZoomSection.schedule || [],
+        status: editingZoomSection.status,
+        openingDate: editingZoomSection.openingDate,
         meetingUrl: zoomUrlInput.trim() || null
       });
       if (triggerToast) triggerToast("Đã cập nhật link Zoom cho lớp học thành công!");
@@ -505,6 +520,20 @@ export default function CourseBuilder(props: ComponentProps) {
   const selectedClassSection = selectedClassSectionId
     ? courseSections.find((section: any) => section.id === selectedClassSectionId)
     : null;
+
+  // Session materials and homework belong to one class, so opening a course starts on its newest class.
+  React.useEffect(() => {
+    if (!activeCourse || courseSections.length === 0 || autoSelectedCourseRef.current === activeCourse.id) return;
+    autoSelectedCourseRef.current = activeCourse.id;
+    const newest = [...courseSections].sort((a: any, b: any) => String(b.openingDate || "").localeCompare(String(a.openingDate || "")))[0];
+    setSelectedClassSectionId(newest.id);
+  }, [activeCourse?.id, courseSections.length]);
+
+  // With classes present but none chosen, a "session" would silently point at some class's session.
+  const needsClassChoice = !selectedClassSectionId && courseSections.length > 0;
+  const introMaterials = activeCourse
+    ? (store.sessionMaterials || []).filter((material: any) => !material.sessionId && material.courseId === activeCourse.id)
+    : [];
   const selectedClassLesson = lessons.find((lesson: any) => lesson.id === selectedClassLessonId) || lessons[0] || null;
   const selectedClassAttendanceSessions = selectedClassSection
     ? courseAttendanceSessions.filter((session: any) => session.sectionId === selectedClassSection.id)
@@ -713,10 +742,10 @@ export default function CourseBuilder(props: ComponentProps) {
               <div>
                 <h4 className="text-xl font-display font-bold text-slate-900 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-indigo-600" />
-                  Khóa học Phụ trách ({myCourses.length})
+                  {contentOnly ? "Khóa học" : "Khóa học Phụ trách"} ({myCourses.length})
                 </h4>
                 <p className="text-sm text-slate-500 mt-1">
-                  Quản lý giáo án, thư mục buổi học, tài liệu, bài tập và chấm điểm học viên theo từng khóa học.
+                  Quản lý tài liệu mở đầu, slide, file data và bài tập của từng buổi học theo từng khóa và lớp.
                 </p>
               </div>
 
@@ -731,7 +760,7 @@ export default function CourseBuilder(props: ComponentProps) {
                     className="w-full sm:w-64 pl-8 pr-3 py-2 bg-white text-slate-900 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm"
                   />
                 </div>
-                {currentUser.role !== "teacher" && (
+                {currentUser.role !== "teacher" && !contentOnly && (
                   <button
                     onClick={handleOpenCreateCourse}
                     className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1 shrink-0 cursor-pointer"
@@ -780,7 +809,7 @@ export default function CourseBuilder(props: ComponentProps) {
 
                     <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end text-sm">
                       <div className="flex gap-2">
-                        {currentUser.role !== "teacher" && (
+                        {currentUser.role !== "teacher" && !contentOnly && (
                           <button
                             onClick={() => handleOpenEditCourse(course)}
                             className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-sm rounded-lg border border-slate-200 text-slate-700 font-semibold cursor-pointer flex items-center gap-1 transition"
@@ -807,9 +836,9 @@ export default function CourseBuilder(props: ComponentProps) {
                 <div className="col-span-full text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 shadow-sm">
                   <BookOpen className="h-10 w-10 mx-auto text-slate-300 mb-2" />
                   <p className="text-xs text-slate-500 mb-3">
-                    {myCourses.length === 0 ? "Chưa có khóa học nào được phân công cho tài khoản này." : "Không tìm thấy khóa học nào phù hợp với từ khóa tìm kiếm."}
+                    {myCourses.length === 0 ? (contentOnly ? "Chưa có khóa học nào. Hãy tạo hoặc nạp khóa học ở mục Khóa học & Lớp học." : "Chưa có khóa học hoặc lớp nào được phân công cho tài khoản này.") : "Không tìm thấy khóa học nào phù hợp với từ khóa tìm kiếm."}
                   </p>
-                  {myCourses.length === 0 && currentUser.role !== "teacher" && (
+                  {myCourses.length === 0 && currentUser.role !== "teacher" && !contentOnly && (
                     <button 
                       onClick={handleOpenCreateCourse}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
@@ -875,7 +904,7 @@ export default function CourseBuilder(props: ComponentProps) {
                   >
                     <Plus className="h-3.5 w-3.5" /> Tạo buổi học
                   </button>
-                  {activeCourse.status === "published" && currentUser.role !== "teacher" && (
+                  {activeCourse.status === "published" && currentUser.role !== "teacher" && !contentOnly && (
                     <button
                       type="button"
                       onClick={handleOpenCreateSection}
@@ -924,7 +953,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       <span className={`text-[9px] px-1.5 py-0.2 rounded-md ${
                         selectedClassSectionId === sec.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
                       }`}>
-                        {getSectionRegisteredCount(sec.id)} HS
+                        {getSectionRegisteredCount(sec.id)} HV
                       </span>
                     </button>
                   ))}
@@ -983,14 +1012,25 @@ export default function CourseBuilder(props: ComponentProps) {
             {!selectedFolderSessionNumber ? (
               /* LEVEL 2: LƯỚI TẤT CẢ CÁC THƯ MỤC BUỔI HỌC (FOLDER CARDS GRID) */
               <div className="space-y-5">
+                <CourseIntroEditor
+                  course={activeCourse}
+                  introMaterials={introMaterials}
+                  triggerToast={triggerToast || props.triggerToast || (() => {})}
+                  onChanged={onRefreshData}
+                />
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
                   <div>
-                    <h4 className="text-lg font-display font-semibold text-slate-900">Buổi học</h4>
+                    <h4 className="text-lg font-display font-semibold text-slate-900">Buổi học{selectedClassSection ? ` của lớp ${selectedClassSection.sectionCode}` : ""}</h4>
                     <p className="text-sm text-slate-500 mt-1">
-                      {courseSessions.length} buổi · Chọn một buổi để quản lý tài liệu và video.
+                      {courseSessions.length} buổi · Chọn một buổi để quản lý slide, file data, bài tập và video.
                     </p>
                   </div>
                 </div>
+                {needsClassChoice && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    Tài liệu và bài tập thuộc từng lớp. Hãy chọn một lớp ở thanh "Lớp học phần" phía trên trước khi tải nội dung cho buổi học.
+                  </p>
+                )}
 
                 {/* Grid các thư mục buổi học */}
                 {courseSessions.length === 0 ? (
@@ -1015,7 +1055,7 @@ export default function CourseBuilder(props: ComponentProps) {
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">{session.number}</span>
                           <div className="min-w-0">
                             <h5 className="truncate text-sm font-semibold text-slate-900 group-hover:text-indigo-700">{session.topic}</h5>
-                            <p className="mt-0.5 text-xs text-slate-500">{session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Theo thời khóa biểu"} · {session.materials.length} tài liệu{(session.videoUrl || session.recordingUrl) ? " · Video" : ""}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Theo thời khóa biểu"} · {session.materials.length} tài liệu{session.assignments.length ? ` · ${session.assignments.length} bài tập` : ""}{(session.videoUrl || session.recordingUrl) ? " · Video" : ""}</p>
                           </div>
                         </div>
                         <ArrowRight className="hidden h-4 w-4 shrink-0 text-slate-400 sm:block" />
@@ -1125,12 +1165,16 @@ export default function CourseBuilder(props: ComponentProps) {
                         Tài liệu buổi học ({currentFolderSession.materials.length})
                       </h4>
                       <p className="text-sm text-slate-500 mt-1">
-                        Tải lên slide, tài liệu hoặc đính kèm video cho học viên.
+                        Slide và tài liệu để học viên xem trực tuyến, file data để học viên tải về thực hành.
                       </p>
                     </div>
                   </div>
 
-                  {currentFolderSession.sessionId ? (
+                  {needsClassChoice ? (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      Tài liệu và bài tập thuộc từng lớp. Hãy chọn một lớp ở thanh "Lớp học phần" phía trên để quản lý nội dung buổi học này.
+                    </p>
+                  ) : currentFolderSession.sessionId ? (
                     <SessionMaterialsEditor
                       sessionId={currentFolderSession.sessionId}
                       triggerToast={triggerToast || props.triggerToast || (() => {})}
@@ -1150,6 +1194,20 @@ export default function CourseBuilder(props: ComponentProps) {
                     </div>
                   )}
                 </section>
+
+                {!needsClassChoice && currentFolderSession.sessionId && (
+                  <div className="border-t border-slate-200 pt-6">
+                    <SessionHomeworkEditor
+                      courseId={activeCourse.id}
+                      sessionId={currentFolderSession.sessionId}
+                      sessionDate={currentFolderSession.date}
+                      assignments={(courseAssignments || []).filter((assignment: any) => assignment.sessionId === currentFolderSession.sessionId)}
+                      submissions={store.submissions || []}
+                      triggerToast={triggerToast || props.triggerToast || (() => {})}
+                      onChanged={onRefreshData}
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

@@ -17,10 +17,11 @@ import {
   MessageSquare,
   Video,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  DownloadCloud
 } from "lucide-react";
 import { Course, CourseSection, User } from "../types";
-import { api } from "../api";
+import { api, operationsApi } from "../api";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../utils";
 import ModalPortal from "./ModalPortal";
 import ForumDiscussion from "./ForumDiscussion";
@@ -33,6 +34,19 @@ interface CourseSectionManagerProps {
 }
 
 const DAYS_OF_WEEK = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
+
+// MCNA classes run on Zoom; an online "room" can host any number of classes at the same time.
+const DEFAULT_ROOM = "Online (Zoom)";
+const isOnlineRoom = (room: string) => /online|zoom|meet|teams|trực tuyến|truc tuyen/i.test(room);
+const DEFAULT_SLOT = { dayOfWeek: "Thứ Hai", startTime: "19:30", endTime: "21:30", room: DEFAULT_ROOM };
+const DEFAULT_CATEGORIES = ["Web Development", "Mobile App", "Data Science", "UI/UX Design", "General"];
+const CATEGORY_LABEL: Record<string, string> = {
+  "Web Development": "Lập trình Web",
+  "Mobile App": "Lập trình Di động",
+  "Data Science": "Khoa học Dữ liệu",
+  "UI/UX Design": "Thiết kế UI/UX",
+  General: "Đại cương"
+};
 
 export default function CourseSectionManager({ store, currentUser, onRefreshData }: CourseSectionManagerProps) {
   const [activeTab, setActiveTab] = useState<"courses" | "sections">("courses");
@@ -93,10 +107,29 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
   const [sectionMeetingUrl, setSectionMeetingUrl] = useState("");
   const [sectionGroupChatUrl, setSectionGroupChatUrl] = useState("");
   const [sectionSlots, setSectionSlots] = useState<Array<{ dayOfWeek: string; startTime: string; endTime: string; room: string }>>([
-    { dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }
+    { ...DEFAULT_SLOT }
   ]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [importingCatalog, setImportingCatalog] = useState(false);
+  // Deleting a course is reserved for the system admin.
+  const canDeleteCourse = currentUser.role === "admin";
+  const categoryOptions = Array.from(new Set<string>([...DEFAULT_CATEGORIES, ...(store.courses || []).map((course: Course) => course.category).filter(Boolean)]));
+
+  // Loads the MCNA course catalogue (courses and syllabus from mcna.vn) so courses are entered only once.
+  const handleImportCatalog = async () => {
+    if (!window.confirm("Nạp danh mục khóa học MCNA (lấy từ mcna.vn)?\n\nKhóa mới sẽ được tạo; khóa đã có được cập nhật lại tên, mô tả và đề cương theo danh mục. Học phí bạn đã sửa, các lớp và học viên được giữ nguyên.")) return;
+    setImportingCatalog(true);
+    try {
+      const result = await api.importMcnaCatalog();
+      showToast(`Đã nạp danh mục MCNA: ${result.coursesCreated} khóa mới, ${result.coursesUpdated} khóa cập nhật.`);
+      onRefreshData();
+    } catch (err: any) {
+      showToast(`Không nạp được danh mục: ${err.message || "lỗi máy chủ"}`);
+    } finally {
+      setImportingCatalog(false);
+    }
+  };
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [formConflicts, setFormConflicts] = useState<string[]>([]);
 
@@ -128,6 +161,11 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
 
   // Get teacher lists
   const teachers = (store.users || []).filter((u: any) => u.role === "teacher");
+  const [teacherSubjects, setTeacherSubjects] = useState<Record<string,string[]>>({});
+  useEffect(() => {
+    if (currentUser.role === 'teacher') return;
+    operationsApi('/teachers').then(rows=>setTeacherSubjects(Object.fromEntries(rows.map((row:any)=>[row.id,row.course_ids])))).catch(()=>setTeacherSubjects({}));
+  }, [store.users]);
 
   // Sync section course ID if a course is already selected
   useEffect(() => {
@@ -167,19 +205,23 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     setShowCourseModal(true);
   };
 
+  // A new class starts with the number of sessions of its course (e.g. 5 for AI Automation).
+  const sessionsOfCourse = (courseId: string) =>
+    (store.courses || []).find((course: Course) => course.id === courseId)?.numberOfLessons || 10;
+
   // Open Section Modals
-  const handleOpenCreateSection = () => {
+  const handleOpenCreateSection = (courseId: string = sectionCourseId) => {
     setSectionModalMode("create");
     setEditingSectionId(null);
     setSectionTeacherId(teachers[0]?.id || "");
     setSectionCode("");
     setSectionMaxStudents(50);
-    setSectionSessionsCount(10);
+    setSectionSessionsCount(sessionsOfCourse(courseId));
     setSectionOpeningDate("");
     setSectionStatus("open");
     setSectionMeetingUrl("");
     setSectionGroupChatUrl("");
-    setSectionSlots([{ dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }]);
+    setSectionSlots([{ ...DEFAULT_SLOT }]);
     setFormConflicts([]);
     setShowSectionModal(true);
   };
@@ -244,7 +286,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   `Giảng viên ${tName} đã bị trùng lịch dạy lớp "${sec.sectionCode}" (${cTitle}) tại khung giờ ${secSlot.startTime} - ${secSlot.endTime} vào ${slot.dayOfWeek}.`
                 );
               }
-              if (secSlot.room.trim().toLowerCase() === slot.room.trim().toLowerCase() && slot.room.trim()) {
+              if (String(secSlot.room || "").trim().toLowerCase() === slot.room.trim().toLowerCase() && slot.room.trim() && !isOnlineRoom(slot.room)) {
                 const cTitle = (store.courses || []).find((c: any) => c.id === sec.courseId)?.title || "Môn học";
                 conflicts.push(
                   `Phòng học "${slot.room}" đã bị trùng lịch bởi lớp "${sec.sectionCode}" (${cTitle}) tại khung giờ ${secSlot.startTime} - ${secSlot.endTime} vào ${slot.dayOfWeek}.`
@@ -321,14 +363,14 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
     const payload = {
       courseId: sectionCourseId,
       teacherId: sectionTeacherId || undefined,
-      sectionCode: sectionCode.trim().toUpperCase(),
+      sectionCode: sectionCode.trim().replace(/\s+/g, " "),
       maxStudents: Number(sectionMaxStudents),
       numberOfSessions: Number(sectionSessionsCount),
       schedule: sectionSlots,
       status: sectionStatus,
       openingDate: sectionOpeningDate || undefined,
-      meetingUrl: sectionMeetingUrl.trim() || undefined,
-      groupChatUrl: sectionGroupChatUrl.trim() || undefined
+      meetingUrl: sectionMeetingUrl.trim() || null,
+      groupChatUrl: sectionGroupChatUrl.trim() || null
     };
 
     try {
@@ -481,7 +523,15 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
           <p className="text-xs text-slate-500 mt-0.5">Khởi tạo và thiết lập giáo trình khóa học, lên lịch thời khóa biểu cho từng lớp học phần.</p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={handleImportCatalog}
+            disabled={importingCatalog}
+            title="Tạo/cập nhật các khóa học theo danh mục trên mcna.vn"
+            className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+          >
+            <DownloadCloud className="h-4 w-4 text-indigo-600" /> {importingCatalog ? "Đang nạp..." : "Nạp khóa học từ mcna.vn"}
+          </button>
           <button
             onClick={handleOpenCreateCourse}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
@@ -489,7 +539,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
             <Plus className="h-4 w-4" /> Khởi tạo Khóa học
           </button>
           <button
-            onClick={handleOpenCreateSection}
+            onClick={() => handleOpenCreateSection()}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="h-4 w-4" /> Thêm Lớp học phần
@@ -617,13 +667,15 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteCourse(c.id, c.title)}
-                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
-                          title="Xóa khóa học"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canDeleteCourse && (
+                          <button
+                            onClick={() => handleDeleteCourse(c.id, c.title)}
+                            className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer transition"
+                            title="Xóa khóa học"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -828,11 +880,9 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         onChange={(e) => setCourseCategory(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                       >
-                        <option value="Web Development">Lập trình Web</option>
-                        <option value="Mobile App">Lập trình Di động</option>
-                        <option value="Data Science">Khoa học Dữ liệu</option>
-                        <option value="UI/UX Design">Thiết kế UI/UX</option>
-                        <option value="General">Đại cương</option>
+                        {categoryOptions.map(category => (
+                          <option key={category} value={category}>{CATEGORY_LABEL[category] || category}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -949,7 +999,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         type="button"
                         onClick={() => {
                           setSectionCourseId(editingCourseId);
-                          handleOpenCreateSection();
+                          handleOpenCreateSection(editingCourseId);
                         }}
                         className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] rounded-lg transition cursor-pointer flex items-center gap-1 font-sans shadow-xs"
                       >
@@ -1073,7 +1123,10 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <select
                       required
                       value={sectionCourseId}
-                      onChange={(e) => setSectionCourseId(e.target.value)}
+                      onChange={(e) => {
+                        setSectionCourseId(e.target.value);
+                        setSectionSessionsCount(sessionsOfCourse(e.target.value));
+                      }}
                       className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     >
                       <option value="" disabled>-- Chọn môn học --</option>
@@ -1096,7 +1149,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   <input
                     type="text"
                     required
-                    placeholder="ví dụ: AI01-01"
+                    placeholder="ví dụ: AI for Work 89"
                     value={sectionCode}
                     onChange={(e) => setSectionCode(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs text-xs"
@@ -1112,7 +1165,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                       className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans shadow-xs text-xs"
                     >
                       <option value="">-- Chưa phân công --</option>
-                      {teachers.map((t: any) => (
+                      {teachers.filter((t:any)=>!teacherSubjects[t.id]?.length || teacherSubjects[t.id].includes(sectionCourseId) || t.id===sectionTeacherId).map((t: any) => (
                         <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
                     </select>
@@ -1184,7 +1237,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700">Link nhóm thảo luận (Zalo / Discord)</label>
+                    <label className="text-xs font-semibold text-slate-700">Link nhóm Zalo của lớp (gửi kèm email xếp lớp)</label>
                     <input
                       type="url"
                       placeholder="https://zalo.me/g/... hoặc https://discord.gg/..."
@@ -1201,7 +1254,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                     <span className="text-xs font-semibold text-slate-700">Thời khóa biểu ca học</span>
                     <button
                       type="button"
-                      onClick={() => setSectionSlots([...sectionSlots, { dayOfWeek: "Thứ Hai", startTime: "08:00", endTime: "10:00", room: "Phòng A101" }])}
+                      onClick={() => setSectionSlots([...sectionSlots, { ...DEFAULT_SLOT }])}
                       className="text-[11px] text-indigo-600 font-semibold hover:underline cursor-pointer"
                     >
                       + Thêm ca học
@@ -1255,7 +1308,7 @@ export default function CourseSectionManager({ store, currentUser, onRefreshData
                         <div className="col-span-4">
                           <input
                             type="text"
-                            placeholder="Phòng A101"
+                            placeholder="Online (Zoom) hoặc phòng học"
                             value={slot.room}
                             onChange={(e) => {
                               const newSlots = [...sectionSlots];

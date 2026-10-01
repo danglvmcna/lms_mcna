@@ -9,6 +9,10 @@ Có hai chiều:
 | LMS → CRM | Webhook `POST` tới URL của CRM, ký HMAC, tự thử lại | Người học tự tạo tài khoản; ghi danh; chuyên cần; hoàn thành khóa; cấp chứng chỉ |
 | CRM → LMS | API `/api/integrations/crm/*`, API key + chữ ký HMAC | Tra cứu khóa/lớp; tạo tài khoản học viên; ghi danh/xếp lớp; xác nhận thanh toán |
 
+> **Mô hình direct sale (`SALES_MODE=direct`, mặc định).** LMS không còn mở tự đăng ký: `POST /api/auth/register` và các API tự ghi danh trả `403`. Khi CRM chưa gọi được API, Quản lý lớp nhập bảng "khách đã thanh toán" (xem [direct-sale-van-hanh.md](direct-sale-van-hanh.md)); tài khoản và ghi danh mang nguồn `crm`. Các API tích hợp dùng ở cả hai chế độ. **Trong direct sale, `payments/confirm` không tự xếp/kích hoạt lớp, kể cả gửi `sectionId`**: ghi danh chuyển sang `pending`, `placedSectionId=null`; Quản lý lớp quyết định xếp và gửi email sau. Trong `self_service` mới giữ hành vi tự xếp lớp sau xác nhận có lớp hợp lệ. Tài khoản CRM mới trong direct sale dùng `DEFAULT_STUDENT_PASSWORD` nếu có, nếu không dùng mật khẩu ngẫu nhiên; đều buộc đổi lần đầu.
+
+> **Bổ sung vận hành (migration 040):** các sự kiện `consultation.requested`, `upsell.requested`, `upsell.payment_confirmed` dùng cùng vỏ sự kiện/header/chữ ký ở mục 3. Request tư vấn gồm `requestId,lmsUserId,courseId,message`; yêu cầu upsell gồm `orderId,lmsUserId,courseId,amount,source,policy`; xác nhận gồm `orderId,enrollmentId,lmsUserId,amount,reference`. CRM phải xử lý theo `X-LMS-Event-Id` để chống trùng. QR hiển thị không phải bằng chứng đã nhận tiền; xác nhận upsell hiện là thủ công. Chưa kích hoạt/kiểm chứng tích hợp CRM thật.
+
 ## 1. Cấu hình
 
 Biến môi trường phía LMS:
@@ -244,7 +248,7 @@ Cách xử lý:
 1. Đã có tài khoản gắn `crmContactId` này (nếu có truyền): trả tài khoản đó.
 2. Tìm kiếm theo `email`: nếu đã có tài khoản học viên, liên kết `crmContactId` và cập nhật `phone` (nếu chưa có), trả về tài khoản đó.
 3. Tìm kiếm theo `phone` (đã chuẩn hóa các đầu số `+84` / `0`): nếu đã có tài khoản học viên, liên kết `crmContactId`, trả về tài khoản đó.
-4. Chưa có: tạo tài khoản mới với mật khẩu ngẫu nhiên tạm thời gửi về email, kích hoạt bắt buộc đổi mật khẩu lần đầu. Phát sự kiện `contact.registered` với `origin = "crm"`.
+4. Chưa có: direct sale dùng `DEFAULT_STUDENT_PASSWORD` nếu đã cấu hình, các trường hợp còn lại dùng mật khẩu ngẫu nhiên tạm thời gửi về email. Bắt buộc đổi mật khẩu lần đầu. Phát sự kiện `contact.registered` với `origin = "crm"`.
 
 Phản hồi `201` (tạo mới) hoặc `200` (đã có):
 
@@ -283,7 +287,7 @@ Lỗi riêng:
 
 ### 4.4. `POST /api/integrations/crm/payments/confirm`
 
-CRM báo học viên đã thanh toán. LMS duyệt giao dịch; nếu biết lớp thì xếp lớp và mở quyền học luôn.
+CRM báo học viên đã thanh toán. LMS duyệt giao dịch. Trong direct sale chỉ chuyển sang chờ Quản lý lớp xếp; trong self-service mới có thể xếp/mở quyền học theo lớp hợp lệ.
 
 Request (cần một trong `enrollmentId` hoặc `crmDealId`):
 
@@ -291,10 +295,10 @@ Request (cần một trong `enrollmentId` hoặc `crmDealId`):
 { "crmDealId": "D-5520", "amount": 3500000, "reference": "VCB-20260914-778", "paidAt": "2026-09-14T09:00:00.000Z", "sectionId": "section_ab12cd34ef56" }
 ```
 
-- `sectionId` không bắt buộc. Không gửi thì LMS dùng lớp học viên đã chọn khi đăng ký (`requestedSection`). Không có lớp nào thì ghi danh ở trạng thái `pending` để phòng đào tạo xếp lớp.
+- `sectionId` không bắt buộc. Direct sale không tự xếp kể cả gửi trường này. Self-service: không gửi thì dùng lớp đã chọn (`requestedSection`), chưa có lớp thì giữ `pending`.
 - Gọi lại cho ghi danh đã thanh toán thì không tạo thêm giao dịch.
 
-Phản hồi `200`:
+Phản hồi `200` trong self-service khi đã xếp lớp:
 
 ```json
 {
@@ -306,7 +310,7 @@ Phản hồi `200`:
 }
 ```
 
-Thanh toán thành công nhưng xếp lớp thất bại (ví dụ lớp đã đầy): thanh toán **vẫn được ghi nhận**, `status = "pending"` và `placementError` mô tả lý do.
+Direct sale mặc định trả `status = "pending"`, `placedSectionId = null`. Trong self-service, thanh toán thành công nhưng xếp lớp thất bại (ví dụ lớp đã đầy): tiền **vẫn được ghi nhận**, `status = "pending"` và `placementError` mô tả lý do.
 
 ## 5. Mã lỗi chung
 

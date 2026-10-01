@@ -22,6 +22,7 @@ export type DbUserRow = {
 export function normalizeRole(role: string): UserRole {
   if (role === "teacher" || role === "advisor") return "teacher";
   if (role === "student" || role === "parent") return "student";
+  if (role === "manager") return "manager";
   return "admin";
 }
 
@@ -65,7 +66,8 @@ export function courseFromRow(row: any): Course {
     rejectionReason: row.rejection_reason || undefined,
     createdAt: row.created_at,
     openingDate: row.opening_date || undefined,
-    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === undefined ? undefined : Number(row.number_of_lessons)
+    numberOfLessons: row.number_of_lessons === null || row.number_of_lessons === undefined ? undefined : Number(row.number_of_lessons),
+    welcomeLetter: row.welcome_letter || undefined
   };
 }
 
@@ -129,10 +131,11 @@ export function enrollmentFromRow(row: any): Enrollment {
 export function sessionMaterialFromRow(row: any): SessionMaterial {
   return {
     id: row.id,
-    sessionId: row.session_id,
+    sessionId: row.session_id || undefined,
     sectionId: row.section_id || undefined,
     courseId: row.course_id,
     type: row.type,
+    category: row.category || undefined,
     title: row.title,
     url: row.url || undefined,
     fileName: row.file_name || undefined,
@@ -203,6 +206,7 @@ export function assignmentFromRow(row: any): Assignment {
     description: row.description,
     deadline: row.deadline,
     maxScore: Number(row.max_score),
+    allowLate: Boolean(row.allow_late),
     attachmentUrl: row.attachment_url || undefined,
     lessonId: row.lesson_id || undefined,
     type: row.type || undefined

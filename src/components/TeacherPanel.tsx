@@ -30,6 +30,7 @@ import { AppStore } from "../store";
 import CourseBuilder from "./teacher/CourseBuilder";
 import ModalPortal from "./ModalPortal";
 import NotificationInbox from "./NotificationInbox";
+import OperationsWorkspace from "./operations/OperationsWorkspace";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
@@ -40,9 +41,11 @@ interface TeacherPanelProps {
   onRefreshData: () => void;
   activeSystem?: "SIS" | "LMS";
   updateStore?: (updater: (draft: LMSDataStore) => void) => void;
+  // Embedded in the admin / class-manager panel: every course, content management only.
+  embedded?: boolean;
 }
 
-export default function TeacherPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS", updateStore }: TeacherPanelProps) {
+export default function TeacherPanel({ currentUser, onLogout, onRefreshData, activeSystem = "LMS", updateStore, embedded = false }: TeacherPanelProps) {
   const { store, isLoading, isError, refetch } = useApiStore();
 
   // Local active sub-module state
@@ -59,7 +62,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
   }, [activeSubTab]);
 
   useEffect(() => {
-    const allowed = ["courses", "notifications"];
+    const allowed = ["courses", "notifications", "operations"];
     if (!allowed.includes(activeSubTab)) {
       setActiveSubTab("courses");
     }
@@ -168,8 +171,9 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Get active teacher datasets
-  const myCourses = store.courses.filter(c => c.teacherId === currentUser.id);
+  // A teacher's store is already scoped to the courses they own and the classes assigned to them;
+  // staff opening this panel from the admin side work on every course.
+  const myCourses = embedded || currentUser.role === "teacher" ? store.courses : store.courses.filter(c => c.teacherId === currentUser.id);
   const myCourseIds = myCourses.map(c => c.id);
 
   useEffect(() => {
@@ -565,8 +569,25 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
     store, currentUser, myCourses, myCourseIds, handleOpenCreateCourse, handleOpenEditCourse, handleSaveCourse,
     handleSubmitCourseForApproval, handleAddLessonSubmit, handleAddQuizSubmit, handleAddQuestionSubmit, handleAddAssignmentSubmit,
     handleGradeSubmission, activeCourse, lessons, courseQuizzes, courseAssignments, myAssignments, studentSubmissionsRaw, updateStore,
-    triggerToast, onRefreshData
+    triggerToast, onRefreshData, contentOnly: embedded
   };
+
+  if (embedded) {
+    return (
+      <div className="space-y-5">
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white font-medium text-xs px-4 py-3 rounded-xl shadow-xl animate-in fade-in duration-150">
+            {toastMessage}
+          </div>
+        )}
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-slate-900">Nội dung lớp học</h3>
+          <p className="text-sm text-slate-500 mt-1">Chọn khóa học, rồi chọn lớp và buổi học để tải slide, file data và giao bài tập. Tài liệu mở đầu đặt ở cấp khóa học.</p>
+        </div>
+        <CourseBuilder {...teacherPanelProps} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -603,6 +624,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
               <span className="font-semibold">{{
                 courses: "Khóa học & Tài liệu",
                 notifications: "Hộp thư Thông báo",
+                operations: "Vận hành lớp học",
               }[activeSubTab] || activeSubTab}</span>
               <span className="text-slate-400">Đổi mục</span>
             </span>
@@ -616,6 +638,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
             <span className="px-3 py-2 text-xs font-semibold text-slate-500">Giảng viên</span>
             {[
               { id: "courses", label: "Khóa học & Tài liệu", Icon: BookOpen },
+              { id: "operations", label: "Vận hành lớp học", Icon: Users },
               { id: "notifications", label: "Hộp thư Thông báo", Icon: Bell }
             ].map(({ id, label, Icon }) => (
               <button key={id} type="button" onClick={() => { handleNavClick(id); if (id === "courses") setSelectedCourseId(null); }} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left font-medium transition-colors ${activeSubTab === id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
@@ -629,6 +652,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData, act
         {/* Active Panel View Canvas */}
         <div className="flex-1 min-w-0 w-full">
           <CourseBuilder {...teacherPanelProps} />
+          {activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData}/>}
 
           {activeSubTab === "notifications" && (
             <NotificationInbox
