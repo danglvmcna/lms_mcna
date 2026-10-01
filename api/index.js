@@ -3093,18 +3093,18 @@ import nodemailer from "nodemailer";
 import fs2 from "fs";
 import path2 from "path";
 var getSmtpConfig = () => ({
-  host: process.env.SMTP_HOST || "",
+  host: (process.env.SMTP_HOST || "").trim(),
   port: Number(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || "",
-  pass: process.env.SMTP_PASS || "",
-  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <noreply@mcna.vn>`,
-  testReceiver: process.env.TEST_RECEIVER_EMAIL || "",
-  appUrl: process.env.APP_URL || "https://lms-mcna.vercel.app"
+  user: (process.env.SMTP_USER || "").trim(),
+  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
+  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
+  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
+  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
 });
 var BANK_ACCOUNT_NUMBER = "099162438104";
 var BANK_NAME = "MB Bank (Ng\xE2n h\xE0ng Qu\xE2n \u0110\u1ED9i)";
 var ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
-var getAppUrl = () => process.env.APP_URL || "https://lms-mcna.vercel.app";
+var getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
 var isPlaceholderSmtp = () => {
   const config = getSmtpConfig();
   return !config.user || config.user.includes("your_email") || config.user.includes("example.com") || config.pass.includes("your_app_password");
@@ -3114,15 +3114,24 @@ async function getTransporter() {
   const config = getSmtpConfig();
   if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
     if (!transporter) {
-      transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.port === 465,
-        auth: {
-          user: config.user,
-          pass: config.pass
+      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
+      transporter = nodemailer.createTransport(
+        isGmail ? {
+          service: "gmail",
+          auth: {
+            user: config.user,
+            pass: config.pass
+          }
+        } : {
+          host: config.host,
+          port: config.port,
+          secure: config.port === 465,
+          auth: {
+            user: config.user,
+            pass: config.pass
+          }
         }
-      });
+      );
     }
     return transporter;
   }
@@ -3659,14 +3668,14 @@ function wrapHtmlBody(title, contentHtml) {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>LMS E16-MCNA</h1>
+        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
       </div>
       <div class="content">
         ${contentHtml}
       </div>
       <div class="footer">
-        <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} E16 LMS. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
-        <p>\u0110\xE2y l\xE0 email th\xF4ng b\xE1o t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng qu\u1EA3n l\xFD h\u1ECDc t\u1EADp E16. Vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y.</p>
+        <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
+        <p>\u0110\xE2y l\xE0 email th\xF4ng b\xE1o t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng qu\u1EA3n l\xFD h\u1ECDc t\u1EADp MCNA LMS. Vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y.</p>
       </div>
     </div>
   </div>
@@ -3675,12 +3684,12 @@ function wrapHtmlBody(title, contentHtml) {
   `;
 }
 async function sendWelcomeEmail(pool2, userId, params) {
-  const subject = `[LMS E16] Ch\xE0o m\u1EEBng t\xE2n sinh vi\xEAn - C\u1EA5p t\xE0i kho\u1EA3n Email tr\u01B0\u1EDDng`;
+  const subject = `[MCNA LMS] Ch\xE0o m\u1EEBng t\xE2n sinh vi\xEAn - C\u1EA5p t\xE0i kho\u1EA3n Email tr\u01B0\u1EDDng`;
   const htmlContent = wrapHtmlBody(
     "Ch\xE0o m\u1EEBng t\xE2n sinh vi\xEAn",
     `
       <p class="greeting">Ch\xE0o b\u1EA1n ${params.name},</p>
-      <p>Ch\xFAc m\u1EEBng b\u1EA1n \u0111\xE3 gia nh\u1EADp tr\u01B0\u1EDDng h\u1ECDc E16-MCNA! T\xE0i kho\u1EA3n Email ch\xEDnh th\u1EE9c c\u1EE7a b\u1EA1n t\u1EA1i tr\u01B0\u1EDDng \u0111\xE3 \u0111\u01B0\u1EE3c t\u1EA1o th\xE0nh c\xF4ng:</p>
+      <p>Ch\xFAc m\u1EEBng b\u1EA1n \u0111\xE3 gia nh\u1EADp H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA! T\xE0i kho\u1EA3n Email ch\xEDnh th\u1EE9c c\u1EE7a b\u1EA1n t\u1EA1i tr\u01B0\u1EDDng \u0111\xE3 \u0111\u01B0\u1EE3c t\u1EA1o th\xE0nh c\xF4ng:</p>
       <div class="message-box">
         <strong>Email tr\u01B0\u1EDDng:</strong> ${params.schoolEmail}<br/>
         ${params.tempPassword ? `<strong>M\u1EADt kh\u1EA9u t\u1EA1m th\u1EDDi:</strong> ${params.tempPassword}<br/>` : ""}
@@ -3745,7 +3754,7 @@ async function sendLmsNotification(pool2, userId, params) {
     info: "[Th\xF4ng b\xE1o]",
     success: "[Th\xE0nh c\xF4ng]"
   };
-  const prefix = prefixMap[params.type] || "[LMS E16]";
+  const prefix = prefixMap[params.type] || "[MCNA LMS]";
   const finalSubject = `${prefix} ${params.subject}`;
   const htmlContent = wrapHtmlBody(
     params.subject,
@@ -3789,7 +3798,7 @@ async function sendLmsNotification(pool2, userId, params) {
   }
 }
 async function sendPasswordResetLinkEmail(pool2, userId, params) {
-  const subject = `[LMS E16] Li\xEAn k\u1EBFt \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u`;
+  const subject = `[MCNA LMS] Li\xEAn k\u1EBFt \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u`;
   const safeName = escapeHtml(params.name);
   const safeResetUrl = escapeHtml(params.resetUrl);
   const expiresAt = new Date(params.expiresAt).toLocaleString("vi-VN");
@@ -3926,7 +3935,7 @@ Email n\xE0y \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS. H\xE3y \u0111\u0103ng nh\u1
 }
 
 // src/server/emailProvisioning/provisioningService.ts
-var LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || "http://localhost:3000";
+var LMS_LOGIN_URL = process.env.LMS_LOGIN_URL || process.env.APP_URL || "https://lms.mcna.vn";
 var provisioningService = {
   /**
    * Provision a Google Workspace email account for a student user
@@ -9278,6 +9287,69 @@ app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["ma
   } catch (err) {
     console.error("[reprovision-email] failed:", err);
     res.status(500).json({ error: `Provisioning failed: ${err.message || err}` });
+  }
+}));
+app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  const targetEmail = (req.body?.targetEmail || req.user?.email || "").trim();
+  if (!targetEmail || !targetEmail.includes("@")) {
+    return res.status(400).json({ error: "\u0110\u1ECBa ch\u1EC9 email nh\u1EADn th\u1EED nghi\u1EC7m kh\xF4ng h\u1EE3p l\u1EC7." });
+  }
+  const configured = hasSmtpConfig();
+  if (!configured) {
+    return res.status(400).json({
+      error: "H\u1EC7 th\u1ED1ng ch\u01B0a \u0111\u01B0\u1EE3c c\u1EA5u h\xECnh bi\u1EBFn m\xF4i tr\u01B0\u1EDDng SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      details: {
+        configured: false,
+        smtpHost: process.env.SMTP_HOST || "Ch\u01B0a c\u1EA5u h\xECnh",
+        smtpUser: process.env.SMTP_USER || "Ch\u01B0a c\u1EA5u h\xECnh",
+        smtpPort: process.env.SMTP_PORT || "465",
+        appUrl: lmsBaseUrl(req)
+      }
+    });
+  }
+  try {
+    const transporter2 = getTransporter2();
+    const info = await transporter2.sendMail({
+      from: getSmtpFrom(),
+      to: targetEmail,
+      subject: `[MCNA LMS] Th\u1EED nghi\u1EC7m g\u1EEDi email h\u1EC7 th\u1ED1ng`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+          <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ki\u1EC3m tra k\u1EBFt n\u1ED1i g\u1EEDi email h\u1EC7 th\u1ED1ng</p>
+          </div>
+          <p style="font-size: 14px; color: #1e293b;">Xin ch\xE0o <strong>${escapeHtml(req.user?.name || "Qu\u1EA3n tr\u1ECB vi\xEAn")}</strong>,</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+            Email n\xE0y \u0111\u01B0\u1EE3c g\u1EEDi th\u1EED nghi\u1EC7m t\u1EEB h\u1EC7 th\u1ED1ng LMS MCNA t\u1EA1i domain: <a href="${lmsBaseUrl(req)}" style="color: #4f46e5; font-weight: 600;">${lmsBaseUrl(req)}</a>.
+          </p>
+          <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 6px 0;"><strong>Th\u1EDDi gian g\u1EEDi:</strong> ${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
+            <p style="margin: 0 0 6px 0;"><strong>T\xE0i kho\u1EA3n g\u1EEDi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0;"><strong>\u0110\u1ECBa ch\u1EC9 nh\u1EADn:</strong> ${escapeHtml(targetEmail)}</p>
+          </div>
+          <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
+            \u2713 M\xE1y ch\u1EE7 SMTP ho\u1EA1t \u0111\u1ED9ng b\xECnh th\u01B0\u1EDDng v\xE0 s\u1EB5n s\xE0ng g\u1EEDi email t\u1EDBi h\u1ECDc vi\xEAn.
+          </p>
+        </div>
+      `,
+      text: `MCNA LMS: Email th\u1EED nghi\u1EC7m g\u1EEDi th\xE0nh c\xF4ng t\u1EEB ${lmsBaseUrl(req)} t\u1EDBi ${targetEmail} l\xFAc ${(/* @__PURE__ */ new Date()).toISOString()}`
+    });
+    res.json({
+      ok: true,
+      message: `\u0110\xE3 g\u1EEDi th\xE0nh c\xF4ng email th\u1EED nghi\u1EC7m t\u1EDBi ${targetEmail}!`,
+      messageId: info.messageId,
+      sender: getSmtpFrom(),
+      targetEmail
+    });
+  } catch (err) {
+    console.error("[admin/email/test] SMTP send error:", err);
+    res.status(500).json({
+      ok: false,
+      error: `G\u1EEDi mail th\u1EA5t b\u1EA1i: ${err.message || String(err)}`,
+      code: err.code || "SMTP_ERROR",
+      tip: "Vui l\xF2ng ki\u1EC3m tra l\u1EA1i SMTP_USER v\xE0 SMTP_PASS (App Password), ho\u1EB7c c\u1EA5u h\xECnh b\u1EA3o m\u1EADt 2FA c\u1EE7a t\xE0i kho\u1EA3n g\u1EEDi."
+    });
   }
 }));
 app.patch("/api/admin/users/:id/role", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {

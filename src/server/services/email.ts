@@ -4,19 +4,19 @@ import fs from "fs";
 import path from "path";
 
 const getSmtpConfig = () => ({
-  host: process.env.SMTP_HOST || "",
+  host: (process.env.SMTP_HOST || "").trim(),
   port: Number(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || "",
-  pass: process.env.SMTP_PASS || "",
-  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <noreply@mcna.vn>`,
-  testReceiver: process.env.TEST_RECEIVER_EMAIL || "",
-  appUrl: process.env.APP_URL || "https://lms-mcna.vercel.app"
+  user: (process.env.SMTP_USER || "").trim(),
+  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
+  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
+  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
+  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
 });
 
 const BANK_ACCOUNT_NUMBER = "099162438104";
 const BANK_NAME = "MB Bank (Ngân hàng Quân Đội)";
 const ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
-const getAppUrl = () => process.env.APP_URL || "https://lms-mcna.vercel.app";
+const getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
 
 export const isPlaceholderSmtp = () => {
   const config = getSmtpConfig();
@@ -34,15 +34,26 @@ async function getTransporter(): Promise<nodemailer.Transporter | null> {
   const config = getSmtpConfig();
   if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
     if (!transporter) {
-      transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.port === 465,
-        auth: {
-          user: config.user,
-          pass: config.pass,
-        },
-      });
+      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
+      transporter = nodemailer.createTransport(
+        isGmail
+          ? {
+              service: "gmail",
+              auth: {
+                user: config.user,
+                pass: config.pass,
+              },
+            }
+          : {
+              host: config.host,
+              port: config.port,
+              secure: config.port === 465,
+              auth: {
+                user: config.user,
+                pass: config.pass,
+              },
+            }
+      );
     }
     return transporter;
   }

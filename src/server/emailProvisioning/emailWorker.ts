@@ -130,7 +130,7 @@ ${htmlContent}
   console.log(`[Email Mock] Dispatched to ${to}: ${subject}`);
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -262,14 +262,14 @@ function wrapHtmlBody(title: string, contentHtml: string): string {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>LMS E16-MCNA</h1>
+        <h1>HỌC VIỆN CÔNG NGHỆ MCNA</h1>
       </div>
       <div class="content">
         ${contentHtml}
       </div>
       <div class="footer">
-        <p>© ${new Date().getFullYear()} E16 LMS. Mọi quyền được bảo lưu.</p>
-        <p>Đây là email thông báo tự động từ hệ thống quản lý học tập E16. Vui lòng không trả lời thư này.</p>
+        <p>© ${new Date().getFullYear()} MCNA Technology School. Mọi quyền được bảo lưu.</p>
+        <p>Đây là email thông báo tự động từ hệ thống quản lý học tập MCNA LMS. Vui lòng không trả lời thư này.</p>
       </div>
     </div>
   </div>
@@ -292,13 +292,13 @@ export async function sendWelcomeEmail(
     lmsLoginUrl: string;
   }
 ): Promise<void> {
-  const subject = `[LMS E16] Chào mừng tân sinh viên - Cấp tài khoản Email trường`;
+  const subject = `[MCNA LMS] Chào mừng tân sinh viên - Cấp tài khoản Email trường`;
 
   const htmlContent = wrapHtmlBody(
     "Chào mừng tân sinh viên",
     `
       <p class="greeting">Chào bạn ${params.name},</p>
-      <p>Chúc mừng bạn đã gia nhập trường học E16-MCNA! Tài khoản Email chính thức của bạn tại trường đã được tạo thành công:</p>
+      <p>Chúc mừng bạn đã gia nhập Học Viện Công Nghệ MCNA! Tài khoản Email chính thức của bạn tại trường đã được tạo thành công:</p>
       <div class="message-box">
         <strong>Email trường:</strong> ${params.schoolEmail}<br/>
         ${params.tempPassword ? `<strong>Mật khẩu tạm thời:</strong> ${params.tempPassword}<br/>` : ""}
@@ -373,7 +373,7 @@ export async function sendLmsNotification(
     success: "[Thành công]",
   };
 
-  const prefix = prefixMap[params.type] || "[LMS E16]";
+  const prefix = prefixMap[params.type] || "[MCNA LMS]";
   const finalSubject = `${prefix} ${params.subject}`;
 
   const htmlContent = wrapHtmlBody(
@@ -433,7 +433,7 @@ export async function sendPasswordResetLinkEmail(
     expiresAt: string;
   }
 ): Promise<void> {
-  const subject = `[LMS E16] Liên kết đặt lại mật khẩu`;
+  const subject = `[MCNA LMS] Liên kết đặt lại mật khẩu`;
   const safeName = escapeHtml(params.name);
   const safeResetUrl = escapeHtml(params.resetUrl);
   const expiresAt = new Date(params.expiresAt).toLocaleString("vi-VN");

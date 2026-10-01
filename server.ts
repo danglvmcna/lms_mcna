@@ -172,7 +172,7 @@ import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src
 
 import { provisioningService } from "./src/server/emailProvisioning/provisioningService";
 import { deleteSchoolEmail } from "./src/server/emailProvisioning/googleWorkspaceClient";
-import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail, hasSmtpConfig, getSmtpUser, getSmtpPass, getSmtpFrom, getTransporter } from "./src/server/emailProvisioning/emailWorker";
+import { sendAccountExistsEmail, sendPasswordResetLinkEmail, sendTemporaryPasswordEmail, hasSmtpConfig, getSmtpUser, getSmtpPass, getSmtpFrom, getTransporter, escapeHtml } from "./src/server/emailProvisioning/emailWorker";
 
 dotenv.config();
 
@@ -3483,6 +3483,73 @@ app.post("/api/admin/users/:id/reprovision-email", requireAuth, requireRole(["ma
   } catch (err: any) {
     console.error("[reprovision-email] failed:", err);
     res.status(500).json({ error: `Provisioning failed: ${err.message || err}` });
+  }
+}));
+
+app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+  const targetEmail = (req.body?.targetEmail || req.user?.email || "").trim();
+  if (!targetEmail || !targetEmail.includes("@")) {
+    return res.status(400).json({ error: "Địa chỉ email nhận thử nghiệm không hợp lệ." });
+  }
+
+  const configured = hasSmtpConfig();
+  if (!configured) {
+    return res.status(400).json({
+      error: "Hệ thống chưa được cấu hình biến môi trường SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      details: {
+        configured: false,
+        smtpHost: process.env.SMTP_HOST || "Chưa cấu hình",
+        smtpUser: process.env.SMTP_USER || "Chưa cấu hình",
+        smtpPort: process.env.SMTP_PORT || "465",
+        appUrl: lmsBaseUrl(req)
+      }
+    });
+  }
+
+  try {
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
+      from: getSmtpFrom(),
+      to: targetEmail,
+      subject: `[MCNA LMS] Thử nghiệm gửi email hệ thống`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+          <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">HỌC VIỆN CÔNG NGHỆ MCNA</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Kiểm tra kết nối gửi email hệ thống</p>
+          </div>
+          <p style="font-size: 14px; color: #1e293b;">Xin chào <strong>${escapeHtml(req.user?.name || "Quản trị viên")}</strong>,</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+            Email này được gửi thử nghiệm từ hệ thống LMS MCNA tại domain: <a href="${lmsBaseUrl(req)}" style="color: #4f46e5; font-weight: 600;">${lmsBaseUrl(req)}</a>.
+          </p>
+          <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 6px 0;"><strong>Thời gian gửi:</strong> ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Tài khoản gửi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0;"><strong>Địa chỉ nhận:</strong> ${escapeHtml(targetEmail)}</p>
+          </div>
+          <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
+            ✓ Máy chủ SMTP hoạt động bình thường và sẵn sàng gửi email tới học viên.
+          </p>
+        </div>
+      `,
+      text: `MCNA LMS: Email thử nghiệm gửi thành công từ ${lmsBaseUrl(req)} tới ${targetEmail} lúc ${new Date().toISOString()}`
+    });
+
+    res.json({
+      ok: true,
+      message: `Đã gửi thành công email thử nghiệm tới ${targetEmail}!`,
+      messageId: info.messageId,
+      sender: getSmtpFrom(),
+      targetEmail
+    });
+  } catch (err: any) {
+    console.error("[admin/email/test] SMTP send error:", err);
+    res.status(500).json({
+      ok: false,
+      error: `Gửi mail thất bại: ${err.message || String(err)}`,
+      code: err.code || "SMTP_ERROR",
+      tip: "Vui lòng kiểm tra lại SMTP_USER và SMTP_PASS (App Password), hoặc cấu hình bảo mật 2FA của tài khoản gửi."
+    });
   }
 }));
 
