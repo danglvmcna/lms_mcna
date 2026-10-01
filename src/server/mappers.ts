@@ -17,6 +17,7 @@ export type DbUserRow = {
   must_change_password?: boolean | null;
   signup_source?: User["signupSource"] | null;
   crm_contact_id?: string | null;
+  can_manage_sales?: boolean | null;
 };
 
 export function normalizeRole(role: string): UserRole {
@@ -46,7 +47,8 @@ export function toPublicUser(row: DbUserRow): User {
     emailProvisionedAt: row.email_provisioned_at || undefined,
     mustChangePassword: Boolean(row.must_change_password),
     signupSource: row.signup_source || "admin",
-    crmContactId: row.crm_contact_id || undefined
+    crmContactId: row.crm_contact_id || undefined,
+    canManageSales: Boolean(row.can_manage_sales)
   };
 }
 

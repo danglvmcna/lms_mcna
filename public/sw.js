@@ -1,5 +1,5 @@
-const CACHE_NAME = "mcna-lms-shell-v1";
-const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/mcna-logo.png"];
+const CACHE_NAME = "mcna-lms-shell-v2";
+const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/brand/app-icon-192.png", "/brand/mcna-mark.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

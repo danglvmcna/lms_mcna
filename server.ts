@@ -122,7 +122,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
-import { IntroMaterialCategory, LMSDataStore, SessionMaterial, User } from "./src/types";
+import { IntroMaterialCategory, LMSDataStore, SessionMaterial, User, SystemStatus } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
@@ -769,6 +769,23 @@ async function generateCertificateCode(db: Queryable) {
     if (existing.rowCount === 0) return code;
   }
   return `MCNA-${Date.now().toString(36).toUpperCase()}`;
+}
+
+/** What the learner reads (in the LMS and by email) once MCNA confirms their fee or places them in a class. */
+async function learnerPlacementSummary(db: Queryable, enrollmentId: string, sectionId: string | null | undefined, feeConfirmed: boolean) {
+  const row = (await db.query(
+    `SELECT c.title, cs.section_code
+       FROM enrollments e
+       JOIN courses c ON c.id = e.course_id
+       LEFT JOIN course_sections cs ON cs.id = $2
+      WHERE e.id = $1`,
+    [enrollmentId, sectionId || null]
+  )).rows[0];
+  const course = row?.title ? `khóa "${row.title}"` : "khóa học";
+  const intro = feeConfirmed ? "MCNA đã xác nhận học phí" : "MCNA đã duyệt đăng ký";
+  return row?.section_code
+    ? `${intro} và xếp bạn vào lớp ${row.section_code} của ${course}. Vào mục Lớp học của tôi để xem lịch học, link Zoom và tài liệu.`
+    : `${intro} ${course} của bạn. Bạn sẽ nhận thông báo ngay khi được xếp lớp.`;
 }
 
 async function maybePostFinalCourseGrade(db: Queryable, studentId: string, courseId: string) {
@@ -2504,7 +2521,10 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["manager", "
     await notificationsRepository.create(pool, {
       userId: studentId,
       type: "success",
-      message: "Đơn đăng ký khóa học của bạn đã được kích hoạt."
+      message: await learnerPlacementSummary(pool, enrollmentId, targetSectionId, true),
+      relatedEntityType: "enrollment",
+      relatedEntityId: enrollmentId,
+      skipEmail: Boolean(studentUser?.email)
     });
   }
 
@@ -2580,7 +2600,10 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     await notificationsRepository.create(pool, {
       userId: enrollment.student_id,
       type: "success",
-      message: "Yêu cầu đăng ký môn học của bạn đã được duyệt."
+      message: await learnerPlacementSummary(pool, req.params.id, sectionId, false),
+      relatedEntityType: "enrollment",
+      relatedEntityId: req.params.id,
+      emailFallback: true
     });
   }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
@@ -3463,7 +3486,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+          message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: post.id
         });
       }
     }
@@ -3472,7 +3497,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã đăng bài thảo luận mới: "${title}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: post.id
       });
     }
   }
@@ -3550,7 +3577,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: postAuthorId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`
+        message: `Diễn đàn lớp ${secCode}: ${authorName} đã bình luận vào bài viết "${postTitle}" của bạn.`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
 
@@ -3563,7 +3592,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+          message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: postId
         });
       }
     }
@@ -3572,7 +3603,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`
+        message: `Diễn đàn lớp ${secCode}: có phản hồi mới từ ${authorName} trong chủ đề "${postTitle}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
   }
@@ -3962,6 +3995,31 @@ app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), valida
   } finally {
     client.release();
   }
+}));
+
+// Which integrations this deployment has settings for, so admins can check a new environment.
+// Reports only whether each setting is present, never its value.
+app.get("/api/admin/system/status", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {
+  const has = (name: string) => Boolean((process.env[name] || "").trim());
+  let googleWorkspace = false;
+  try {
+    const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "");
+    googleWorkspace = Boolean(creds?.client_email && creds?.private_key) && has("SCHOOL_EMAIL_DOMAIN");
+  } catch {
+    googleWorkspace = false;
+  }
+  const status: SystemStatus = {
+    environment: process.env.NODE_ENV || "development",
+    sepay: has("SEPAY_API_KEY"),
+    email: hasSmtpConfig(),
+    appUrl: has("LMS_LOGIN_URL") || has("APP_URL"),
+    storage: has("SUPABASE_URL") && has("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "database",
+    crmOutbound: has("CRM_WEBHOOK_URL") && has("CRM_WEBHOOK_SECRET"),
+    crmInbound: has("CRM_API_KEY") && has("CRM_INBOUND_SECRET"),
+    cron: has("CRON_SECRET"),
+    googleWorkspace
+  };
+  res.json(status);
 }));
 
 app.get("/api/admin/crm/outbox", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {

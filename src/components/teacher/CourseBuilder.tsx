@@ -2,16 +2,17 @@ import React from "react";
 import { 
   BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, 
   ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus, 
-  MapPin, Calendar, Trash2, AlertCircle, Layers, Folder, FolderOpen, Video, ArrowRight, ArrowLeft, Upload, ExternalLink, Play, CheckCircle2
+  MapPin, Calendar, CalendarDays, Trash2, AlertCircle, Layers, Folder, FolderOpen, Video, ArrowRight, ArrowLeft, Upload, ExternalLink, Play, CheckCircle2
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
+import { Badge, Button, buttonClass, Callout, Card, CourseCover, cx, EmptyState, PageHeader, SearchField, SectionTitle, Segmented } from "../ui";
 import { AppStore } from "../../store";
 import { ZoomLogo } from "../icons/BrandLogos";
 import SessionMaterialsEditor from "../SessionMaterialsEditor";
 import CourseIntroEditor from "./CourseIntroEditor";
 import SessionHomeworkEditor from "./SessionHomeworkEditor";
 import { api } from "../../api";
-import ForumDiscussion from "../ForumDiscussion";
+import ForumDiscussion, { needsReply } from "../ForumDiscussion";
 import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_LABEL } from "../../utils";
 
 const DAYS_OF_WEEK = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
@@ -131,17 +132,54 @@ export default function CourseBuilder(props: ComponentProps) {
   } = props;
 
   const [preselectedSessionId, setPreselectedSessionId] = React.useState("");
-  // The course whose class was already pre-selected, so the user's own choice ("all classes") is kept afterwards.
+  const [forumPostId, setForumPostId] = React.useState<string | null>(null);
+  // Where to land once the course opens, when arriving from a notification or a course card.
+  const pendingForum = React.useRef<{ courseId: string; sectionId: string | null; postId: string | null } | null>(null);
   const autoSelectedCourseRef = React.useRef<string | null>(null);
 
-  React.useEffect(() => {
-    setSelectedClassSectionId(null);
-    setSelectedClassLessonId("");
+  const showForum = (sectionId: string | null, postId: string | null) => {
+    setSelectedClassSectionId(sectionId);
     setSelectedFolderSessionNumber(null);
+    setClassDetailTab("forum");
+    setForumPostId(postId);
+  };
+
+  React.useEffect(() => {
+    setSelectedClassLessonId("");
     setPreselectedSessionId("");
+    const pending = pendingForum.current;
+    if (pending && pending.courseId === selectedCourseId) {
+      pendingForum.current = null;
+      autoSelectedCourseRef.current = selectedCourseId;
+      showForum(pending.sectionId, pending.postId);
+      return;
+    }
+    setSelectedClassSectionId(null);
+    setSelectedFolderSessionNumber(null);
     setClassDetailTab("lessons");
-    if (!selectedCourseId) autoSelectedCourseRef.current = null;
+    setForumPostId(null);
   }, [selectedCourseId]);
+
+  const openForum = (courseId: string, sectionId: string | null = null, postId: string | null = null) => {
+    // A course with a single class opens straight into that class's discussion.
+    const classes = (store.courseSections || []).filter((section: any) => section.courseId === courseId);
+    const target = sectionId || (classes.length === 1 ? classes[0].id : null);
+    if (courseId === selectedCourseId) {
+      showForum(target, postId);
+    } else {
+      pendingForum.current = { courseId, sectionId: target, postId };
+      setSelectedCourseId(courseId);
+    }
+  };
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const { courseId, sectionId, postId } = (event as CustomEvent).detail || {};
+      if (courseId) openForum(courseId, sectionId || null, postId || null);
+    };
+    window.addEventListener("mcna:open_forum", handler);
+    return () => window.removeEventListener("mcna:open_forum", handler);
+  });
 
   // Session Edit State for Teacher
   const [showEditSessionModal, setShowEditSessionModal] = React.useState(false);
@@ -513,6 +551,9 @@ export default function CourseBuilder(props: ComponentProps) {
   };
 
   const courseSections = (store.courseSections || []).filter((s: any) => s.courseId === activeCourse?.id);
+  const forumPosts: any[] = store.forumPosts || [];
+  const unansweredCount = (courseId: string, sectionId?: string | null) =>
+    forumPosts.filter(post => post.courseId === courseId && (!sectionId || post.sectionId === sectionId) && needsReply(post)).length;
   const courseAttendanceSessions = (store.attendanceSessions || [])
     .filter((session: any) => session.courseId === activeCourse?.id)
     .sort((a: any, b: any) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -733,448 +774,313 @@ export default function CourseBuilder(props: ComponentProps) {
       course.description.toLowerCase().includes(courseSearch.toLowerCase());
   });
 
+  const COURSE_STATUS: Record<string, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
+    published: { label: "Đang mở", tone: "success" },
+    pending: { label: "Chưa xuất bản", tone: "warning" },
+    rejected: { label: "Bị trả về", tone: "danger" },
+    draft: { label: "Bản nháp", tone: "neutral" }
+  };
+  const courseStatus = (status: string) => COURSE_STATUS[status] || COURSE_STATUS.draft;
+
+  // Courses where a learner's question has no answer yet, surfaced on the course list.
+  const waitingCourses = myCourses
+    .map((course: any) => ({ course, count: unansweredCount(course.id) }))
+    .filter((item: any) => item.count > 0);
+  const waitingTotal = waitingCourses.reduce((total: number, item: any) => total + item.count, 0);
+
+  const renderForumPane = () => {
+    if (!activeCourse) return null;
+    if (selectedClassSection) {
+      return (
+        <ForumDiscussion
+          key={selectedClassSection.id}
+          courseId={activeCourse.id}
+          sectionId={selectedClassSection.id}
+          store={store}
+          currentUser={currentUser}
+          onRefreshData={onRefreshData}
+          triggerToast={(message: string, type?: any) => triggerToast?.(message, type)}
+          initialPostId={forumPostId}
+        />
+      );
+    }
+    if (courseSections.length === 0) {
+      return (
+        <Card>
+          <EmptyState compact illustration="chat" icon={<MessageSquare className="h-6 w-6" />} title="Khóa học chưa có lớp" description="Mỗi lớp có một góc thảo luận riêng. Khi bạn được phân công lớp, câu hỏi của học viên sẽ hiện ở đây." />
+        </Card>
+      );
+    }
+    return (
+      <section className="space-y-3">
+        <SectionTitle title="Thảo luận theo lớp" description="Mỗi lớp có một góc thảo luận riêng. Chọn lớp để xem và trả lời câu hỏi của học viên." />
+        <Card as="ul" className="divide-y divide-slate-100 overflow-hidden">
+          {courseSections.map((sec: any) => {
+            const threads = forumPosts.filter(post => post.sectionId === sec.id);
+            const waiting = threads.filter(needsReply).length;
+            return (
+              <li key={sec.id}>
+                <button type="button" onClick={() => showForum(sec.id, null)} className="group flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-slate-900/[0.025] md:px-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600"><MessageSquare className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-slate-900 group-hover:text-indigo-700">Lớp {sec.sectionCode}</span>
+                    <span className="mt-0.5 block text-[13px] text-slate-500">{threads.length ? `${threads.length} chủ đề` : "Chưa có thảo luận"}</span>
+                  </span>
+                  {waiting > 0 && <Badge tone="warning" dot>{waiting} chưa trả lời</Badge>}
+                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 group-hover:text-indigo-500" />
+                </button>
+              </li>
+            );
+          })}
+        </Card>
+      </section>
+    );
+  };
+
   return (
     <>
-        {/* Tab 1: Danh sách Khóa học phụ trách (Level 1: Courses Overview) */}
+        {/* Level 1: courses this teacher is responsible for */}
         {activeSubTab === "courses" && !selectedCourseId && (
-          <div className="space-y-6 font-sans">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-              <div>
-                <h4 className="text-xl font-display font-bold text-slate-900 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-indigo-600" />
-                  {contentOnly ? "Khóa học" : "Khóa học Phụ trách"} ({myCourses.length})
-                </h4>
-                <p className="text-sm text-slate-500 mt-1">
-                  Quản lý tài liệu mở đầu, slide, file data và bài tập của từng buổi học theo từng khóa và lớp.
-                </p>
-              </div>
+          <div className="space-y-6">
+            <PageHeader
+              title="Khóa học của tôi"
+              subtitle={myCourses.length ? `${myCourses.length} khóa học bạn phụ trách. Chọn một khóa để quản lý buổi học, tài liệu và lớp.` : undefined}
+              actions={
+                <>
+                  <SearchField value={courseSearch} onChange={setCourseSearch} placeholder="Tìm khóa học…" className="w-full sm:w-64" />
+                  {!contentOnly && currentUser.role !== "teacher" && (
+                    <Button icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateCourse}>Tạo khóa học</Button>
+                  )}
+                </>
+              }
+            />
 
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm khóa học..."
-                    value={courseSearch}
-                    onChange={(e) => setCourseSearch(e.target.value)}
-                    className="w-full sm:w-64 pl-8 pr-3 py-2 bg-white text-slate-900 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm"
-                  />
-                </div>
-                {currentUser.role !== "teacher" && !contentOnly && (
-                  <button
-                    onClick={handleOpenCreateCourse}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Tạo khóa học
-                  </button>
-                )}
-              </div>
-            </div>
+            {waitingTotal > 0 && (
+              <Callout tone="warning" icon={<MessageSquare className="h-5 w-5" />} title={`${waitingTotal} câu hỏi của học viên đang chờ bạn trả lời`}>
+                <ul className="mt-1 space-y-1">
+                  {waitingCourses.map(({ course, count }: any) => (
+                    <li key={course.id}>
+                      <button type="button" onClick={() => openForum(course.id)} className="inline-flex max-w-full items-center gap-1 text-left font-semibold underline-offset-2 hover:underline">
+                        <span className="truncate">{course.title}</span>
+                        <span className="shrink-0">· {count} câu hỏi</span>
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Callout>
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 font-sans">
-              {filteredCourses.map((course: any) => {
-                const enrolledCount = store.enrollments.filter((e: any) => e.courseId === course.id).length;
-                const sectionsCount = (store.courseSections || []).filter((s: any) => s.courseId === course.id).length;
-                const lessonsCount = (store.lessons || []).filter((l: any) => l.courseId === course.id).length;
-                
-                return (
-                  <div 
-                    key={course.id} 
-                    className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-indigo-300 transition-colors flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="p-5 space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-semibold text-indigo-700">{course.category || "Chuyên đề"}</span>
-                          <span className={`shrink-0 px-2 py-1 rounded-md text-xs font-semibold border ${
-                            course.status === "published" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            course.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                            course.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                            "bg-slate-100 text-slate-700 border-slate-300"
-                          }`}>
-                            {course.status === "published" ? "Đang mở" :
-                             course.status === "pending" ? "Chưa xuất bản" :
-                             course.status === "rejected" ? "Bị trả về" : "Bản nháp"}
-                          </span>
+            {filteredCourses.length === 0 ? (
+              <Card>
+                <EmptyState
+                  illustration="teach"
+                  icon={<BookOpen className="h-6 w-6" />}
+                  title={myCourses.length === 0 ? "Chưa có khóa học nào" : "Không tìm thấy khóa học"}
+                  description={myCourses.length === 0 ? "Khi quản trị viên phân công, khóa học của bạn sẽ hiện ở đây." : "Thử tìm với từ khóa khác."}
+                  action={!contentOnly && myCourses.length === 0 && currentUser.role !== "teacher" ? <Button onClick={handleOpenCreateCourse}>Tạo bản nháp khóa học</Button> : undefined}
+                />
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+                {filteredCourses.map((course: any) => {
+                  const enrolledCount = store.enrollments.filter((e: any) => e.courseId === course.id).length;
+                  const sectionsCount = (store.courseSections || []).filter((s: any) => s.courseId === course.id).length;
+                  const lessonsCount = (store.lessons || []).filter((l: any) => l.courseId === course.id).length;
+                  const status = courseStatus(course.status);
+                  const open = () => { setSelectedCourseId(course.id); setSelectedFolderSessionNumber(null); };
+                  return (
+                    <Card key={course.id} className="flex flex-col overflow-hidden">
+                      <button type="button" onClick={open} className="group text-left">
+                        <CourseCover src={course.thumbnail} title={course.title} category={course.category} className="aspect-[16/7] w-full" iconSize="h-8 w-8" />
+                        <div className="space-y-2 p-5 pb-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[13px] font-semibold text-indigo-600">{course.category || "Chuyên đề"}</span>
+                            <Badge tone={status.tone} dot>{status.label}</Badge>
+                          </div>
+                          <h3 className="line-clamp-2 text-[17px] font-bold leading-snug text-slate-900 group-hover:text-indigo-700">{course.title}</h3>
                         </div>
-                        <h5 className="font-display font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition leading-snug line-clamp-2">
-                          {course.title}
-                        </h5>
-                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
-                          {course.description}
-                        </p>
-                        <p className="text-sm text-slate-600">{sectionsCount > 0 ? `${sectionsCount} lớp học` : "Chưa lập lớp"} · {lessonsCount} bài học · {enrolledCount} học viên</p>
-                      </div>
-                    </div>
-
-                    <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end text-sm">
-                      <div className="flex gap-2">
-                        {currentUser.role !== "teacher" && !contentOnly && (
-                          <button
-                            onClick={() => handleOpenEditCourse(course)}
-                            className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-sm rounded-lg border border-slate-200 text-slate-700 font-semibold cursor-pointer flex items-center gap-1 transition"
-                          >
-                            <Edit className="h-3 w-3" /> Sửa
+                      </button>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 text-[13px] text-slate-500">
+                        <span className="inline-flex items-center gap-1.5"><Layers className="h-4 w-4" />{sectionsCount ? `${sectionsCount} lớp` : "Chưa lập lớp"}</span>
+                        <span className="inline-flex items-center gap-1.5"><BookOpen className="h-4 w-4" />{lessonsCount} bài học</span>
+                        <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4" />{enrolledCount} học viên</span>
+                        {unansweredCount(course.id) > 0 && (
+                          <button type="button" onClick={() => openForum(course.id)} className="inline-flex items-center gap-1.5 font-semibold text-amber-700 hover:underline">
+                            <MessageSquare className="h-4 w-4" />{unansweredCount(course.id)} câu hỏi chờ trả lời
                           </button>
                         )}
-                        <button
-                          onClick={() => {
-                            setSelectedCourseId(course.id);
-                            setSelectedFolderSessionNumber(null);
-                          }}
-                          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 font-semibold text-white text-sm rounded-lg transition cursor-pointer flex items-center gap-1"
-                        >
-                          Quản lý khóa học <ChevronRight className="h-4 w-4" />
-                        </button>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {filteredCourses.length === 0 && (
-                <div className="col-span-full text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 shadow-sm">
-                  <BookOpen className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-xs text-slate-500 mb-3">
-                    {myCourses.length === 0 ? (contentOnly ? "Chưa có khóa học nào. Hãy tạo hoặc nạp khóa học ở mục Khóa học & Lớp học." : "Chưa có khóa học hoặc lớp nào được phân công cho tài khoản này.") : "Không tìm thấy khóa học nào phù hợp với từ khóa tìm kiếm."}
-                  </p>
-                  {myCourses.length === 0 && currentUser.role !== "teacher" && !contentOnly && (
-                    <button 
-                      onClick={handleOpenCreateCourse}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
-                    >
-                      Tạo bản nháp khóa học
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+                      <div className="mt-auto flex gap-2 p-5 pt-4">
+                        {!contentOnly && currentUser.role !== "teacher" && (
+                          <Button variant="secondary" size="sm" icon={<Edit className="h-4 w-4" />} onClick={() => handleOpenEditCourse(course)}>Sửa</Button>
+                        )}
+                        <Button size="sm" variant="tinted" className="flex-1" onClick={open} iconRight={<ChevronRight className="h-4 w-4" />}>Quản lý khóa học</Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tab 1 Detail: Quản lý Khóa học & Thư mục Buổi học (Folder View) */}
+        {/* Level 2/3: one course, its classes and sessions */}
         {activeSubTab === "courses" && selectedCourseId && activeCourse && (
-          <div className="space-y-6 font-sans">
-            {/* Header tổng quan khóa học & Thanh công cụ */}
-            <div className="border-b border-slate-200 pb-4 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <button 
-                    onClick={() => {
-                      if (selectedFolderSessionNumber) {
-                        setSelectedFolderSessionNumber(null);
-                      } else {
-                        setSelectedCourseId(null);
-                      }
-                    }}
-                    className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-sm text-slate-700 rounded-lg cursor-pointer font-semibold flex items-center gap-1 transition shrink-0"
-                    title="Quay lại"
-                  >
-                    <ArrowLeft className="h-4 w-4" /> Quay lại
-                  </button>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-indigo-700">
-                        {activeCourse.category || "Khóa học"}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${
-                        activeCourse.status === "published" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        activeCourse.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        activeCourse.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                        "bg-slate-100 text-slate-700 border-slate-200"
-                      }`}>
-                        {activeCourse.status === "published" ? "Đang mở" :
-                         activeCourse.status === "pending" ? "Chưa xuất bản" :
-                         activeCourse.status === "rejected" ? "Bị trả về" : "Bản nháp"}
-                      </span>
-                    </div>
-                    <h4 className="text-lg md:text-xl font-display font-bold text-slate-900 mt-1 break-words">
-                      {activeCourse.title}
-                    </h4>
+          <div className="space-y-8">
+            <header className="space-y-5">
+              <button
+                type="button"
+                onClick={() => (selectedFolderSessionNumber ? setSelectedFolderSessionNumber(null) : setSelectedCourseId(null))}
+                className="-ml-2 inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"
+              >
+                <ArrowLeft className="h-4 w-4" /> {selectedFolderSessionNumber ? "Tất cả buổi học" : "Khóa học của tôi"}
+              </button>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[13px] font-semibold text-indigo-600">{activeCourse.category || "Khóa học"}</span>
+                    <Badge tone={courseStatus(activeCourse.status).tone} dot>{courseStatus(activeCourse.status).label}</Badge>
                   </div>
+                  <h1 className="text-[26px] font-bold leading-tight tracking-tight text-slate-900 md:text-[32px]">{activeCourse.title}</h1>
                 </div>
-
-                {/* Quick actions for teacher */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateSession}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Tạo buổi học
-                  </button>
-                  {activeCourse.status === "published" && currentUser.role !== "teacher" && !contentOnly && (
-                    <button
-                      type="button"
-                      onClick={handleOpenCreateSection}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Lập lớp học phần
-                    </button>
-                  )}
                   {(activeCourse.status === "draft" || activeCourse.status === "pending" || activeCourse.status === "rejected") && (
-                    <button
-                      type="button"
-                      onClick={() => handleSubmitCourseForApproval(activeCourse.id)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
-                    >
-                      Xuất bản khóa học
-                    </button>
+                    <Button variant="secondary" onClick={() => handleSubmitCourseForApproval(activeCourse.id)}>Xuất bản khóa học</Button>
                   )}
+                  {!contentOnly && activeCourse.status === "published" && currentUser.role !== "teacher" && (
+                    <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateSection}>Lập lớp học phần</Button>
+                  )}
+                  <Button disabled={needsClassChoice} icon={<Plus className="h-4 w-4" />} onClick={handleOpenCreateSession}>Tạo buổi học</Button>
                 </div>
               </div>
 
-              {/* Section selector & filter bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-slate-600">Lớp học phần:</span>
-                  <button
-                    onClick={() => setSelectedClassSectionId(null)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
-                      !selectedClassSectionId 
-                        ? "bg-indigo-600 text-white shadow-sm" 
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Tất cả / Giáo trình môn
-                  </button>
-                  {courseSections.map((sec: any) => (
+              {/* Class filter */}
+              <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedClassSectionId(null); setForumPostId(null); }}
+                  className={cx("h-10 shrink-0 rounded-full px-4 text-sm font-semibold", !selectedClassSectionId ? "bg-slate-900 text-white" : "bg-white text-slate-600 shadow-card ring-1 ring-slate-200/70 hover:text-slate-900")}
+                >
+                  Giáo trình chung
+                </button>
+                {courseSections.map((sec: any) => {
+                  const selected = selectedClassSectionId === sec.id;
+                  return (
                     <button
                       key={sec.id}
-                      onClick={() => setSelectedClassSectionId(sec.id)}
-                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                        selectedClassSectionId === sec.id 
-                          ? "bg-indigo-600 text-white shadow-sm" 
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      }`}
+                      type="button"
+                      onClick={() => { setSelectedClassSectionId(sec.id); setForumPostId(null); }}
+                      className={cx("inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold", selected ? "bg-slate-900 text-white" : "bg-white text-slate-600 shadow-card ring-1 ring-slate-200/70 hover:text-slate-900")}
                     >
-                      <span>Lớp {sec.sectionCode}</span>
-                      <span className={`text-[9px] px-1.5 py-0.2 rounded-md ${
-                        selectedClassSectionId === sec.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-                      }`}>
-                        {getSectionRegisteredCount(sec.id)} HV
-                      </span>
+                      Lớp {sec.sectionCode}
+                      <span className={cx("rounded-full px-1.5 text-xs leading-5", selected ? "bg-white/20" : "bg-slate-100 text-slate-500")}>{getSectionRegisteredCount(sec.id)}</span>
                     </button>
-                  ))}
-                </div>
-
-                {selectedClassSection && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600 font-sans border-t border-slate-100 pt-3 mt-1 w-full">
-                    <div className="flex items-center gap-2 flex-wrap font-mono text-[11px]">
-                      <span className="font-bold text-indigo-700">TKB:</span>
-                      {(selectedClassSection.schedule || []).map((slot: any, idx: number) => (
-                        <span key={idx} className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700">
-                          {slot.dayOfWeek} ({slot.startTime}-{slot.endTime})
-                        </span>
-                      ))}
-                      {(!selectedClassSection.schedule || selectedClassSection.schedule.length === 0) && (
-                        <span className="text-amber-600 italic">Chưa xếp ca học</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {selectedClassSection.meetingUrl ? (
-                        <>
-                          <a
-                            href={selectedClassSection.meetingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-xs font-bold border border-blue-200 transition shadow-xs"
-                            title={selectedClassSection.meetingUrl}
-                          >
-                            <ZoomLogo className="h-3.5 w-3.5 shrink-0" /> Vào phòng Zoom ↗
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditZoom(selectedClassSection)}
-                            className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer px-1"
-                          >
-                            Đổi link
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditZoom(selectedClassSection)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer border border-slate-200"
-                        >
-                          <ZoomLogo className="h-3.5 w-3.5 shrink-0" /> + Gắn link Zoom cho lớp
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
-            </div>
 
-            {/* MAIN CONTENT: FOLDER GRID HOẶC FOLDER VIEW */}
-            {!selectedFolderSessionNumber ? (
-              /* LEVEL 2: LƯỚI TẤT CẢ CÁC THƯ MỤC BUỔI HỌC (FOLDER CARDS GRID) */
-              <div className="space-y-5">
-                <CourseIntroEditor
-                  course={activeCourse}
-                  introMaterials={introMaterials}
-                  triggerToast={triggerToast || props.triggerToast || (() => {})}
-                  onChanged={onRefreshData}
-                />
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-                  <div>
-                    <h4 className="text-lg font-display font-semibold text-slate-900">Buổi học{selectedClassSection ? ` của lớp ${selectedClassSection.sectionCode}` : ""}</h4>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {courseSessions.length} buổi · Chọn một buổi để quản lý slide, file data, bài tập và video.
-                    </p>
+              {selectedClassSection && (
+                <Card className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <CalendarDays className="h-4 w-4 text-slate-400" />
+                    {(selectedClassSection.schedule || []).length > 0 ? (
+                      selectedClassSection.schedule.map((slot: any, idx: number) => (
+                        <span key={idx} className="rounded-full bg-canvas px-3 py-1 font-medium text-slate-700">{slot.dayOfWeek} {slot.startTime}–{slot.endTime}</span>
+                      ))
+                    ) : (
+                      <span className="text-amber-700">Chưa xếp ca học</span>
+                    )}
+                    <span className="text-slate-400">· {renderSectionStatus(selectedClassSection.status)}</span>
                   </div>
-                </div>
-                {needsClassChoice && (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    Tài liệu và bài tập thuộc từng lớp. Hãy chọn một lớp ở thanh "Lớp học phần" phía trên trước khi tải nội dung cho buổi học.
-                  </p>
-                )}
-
-                {/* Grid các thư mục buổi học */}
-                {courseSessions.length === 0 ? (
-                  <div className="text-center py-12 border border-dashed border-slate-200 rounded-2xl bg-white p-6 space-y-3">
-                    <Folder className="h-10 w-10 text-slate-300 mx-auto" />
-                    <div className="text-sm font-bold text-slate-700">Chưa có buổi học nào</div>
-                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                      Bấm nút &quot;Tạo buổi học&quot; ở góc trên bên phải để tạo buổi học đầu tiên cho khóa học này.
-                    </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {selectedClassSection.meetingUrl ? (
+                      <>
+                        <a href={selectedClassSection.meetingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "sm", variant: "zoom" })} title={selectedClassSection.meetingUrl}>
+                          <Video className="h-4 w-4" /> Vào phòng Zoom
+                        </a>
+                        <Button size="sm" variant="ghost" onClick={() => handleOpenEditZoom(selectedClassSection)}>Đổi link</Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="secondary" icon={<ZoomLogo className="h-4 w-4" />} onClick={() => handleOpenEditZoom(selectedClassSection)}>Gắn link Zoom</Button>
+                    )}
                   </div>
-                ) : (
-                  <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  {courseSessions.map((session) => {
-                    return (
-                      <button
-                        type="button"
-                        key={session.number}
-                        onClick={() => setSelectedFolderSessionNumber(session.number)}
-                        className="group flex w-full flex-col gap-2 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">{session.number}</span>
-                          <div className="min-w-0">
-                            <h5 className="truncate text-sm font-semibold text-slate-900 group-hover:text-indigo-700">{session.topic}</h5>
-                            <p className="mt-0.5 text-xs text-slate-500">{session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Theo thời khóa biểu"} · {session.materials.length} tài liệu{session.assignments.length ? ` · ${session.assignments.length} bài tập` : ""}{(session.videoUrl || session.recordingUrl) ? " · Video" : ""}</p>
-                          </div>
-                        </div>
-                        <ArrowRight className="hidden h-4 w-4 shrink-0 text-slate-400 sm:block" />
-                      </button>
-                    );
-                  })}
-                </div>
+                </Card>
               )}
-            </div>
+
+              {!selectedFolderSessionNumber && (
+                <Segmented
+                  value={classDetailTab}
+                  onChange={tab => (tab === "forum" ? openForum(activeCourse.id, selectedClassSectionId) : setClassDetailTab(tab))}
+                  options={[
+                    { value: "lessons", label: "Buổi học" },
+                    { value: "forum", label: "Thảo luận", count: unansweredCount(activeCourse.id, selectedClassSectionId) }
+                  ]}
+                />
+              )}
+            </header>
+
+            {!selectedFolderSessionNumber && <CourseIntroEditor course={activeCourse} introMaterials={introMaterials} triggerToast={triggerToast || (() => {})} onChanged={onRefreshData} />}
+            {needsClassChoice && classDetailTab !== "forum" ? (
+              <Callout tone="info">Chọn một lớp để quản lý buổi học, tài liệu và bài tập riêng của lớp đó.</Callout>
+            ) : !selectedFolderSessionNumber && classDetailTab === "forum" ? (
+              renderForumPane()
+            ) : !selectedFolderSessionNumber ? (
+              <section className="space-y-3">
+                <SectionTitle title="Buổi học" description={`${courseSessions.length} buổi · chọn một buổi để quản lý tài liệu và video`} />
+                {courseSessions.length === 0 ? (
+                  <Card>
+                    <EmptyState compact icon={<FolderPlus className="h-6 w-6" />} title="Chưa có buổi học nào" description="Tạo buổi học đầu tiên để đăng tài liệu cho học viên." action={<Button onClick={handleOpenCreateSession} icon={<Plus className="h-4 w-4" />}>Tạo buổi học</Button>} />
+                  </Card>
+                ) : (
+                  <Card as="ol" className="divide-y divide-slate-100 overflow-hidden">
+                    {courseSessions.map(session => (
+                      <li key={session.number}>
+                        <button type="button" onClick={() => setSelectedFolderSessionNumber(session.number)} className="group flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-slate-900/[0.025] md:px-5">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 font-display text-sm font-bold text-indigo-600">{session.number}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-semibold text-slate-900 group-hover:text-indigo-700">{session.topic}</span>
+                            <span className="mt-0.5 block text-[13px] text-slate-500">
+                              {session.date ? new Date(session.date).toLocaleDateString("vi-VN") : "Theo thời khóa biểu"} · {session.materials.length} tài liệu{(session.videoUrl || session.recordingUrl) ? " · Video" : ""}
+                            </span>
+                          </span>
+                          {session.materials.length === 0 && <Badge>Chưa có tài liệu</Badge>}
+                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 group-hover:text-indigo-500" />
+                        </button>
+                      </li>
+                    ))}
+                  </Card>
+                )}
+              </section>
             ) : currentFolderSession ? (
-              /* LEVEL 3: CHI TIẾT THƯ MỤC BUỔI HỌC - CHỈ TẬP TRUNG QUẢN LÝ FILE & TÀI LIỆU */
-              <div className="space-y-6">
-                {/* Folder Breadcrumbs */}
-                <div className="flex items-center gap-2 px-1 text-xs text-slate-500">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFolderSessionNumber(null)}
-                    className="hover:text-indigo-700 flex items-center gap-1.5 font-bold transition cursor-pointer text-slate-600"
-                  >
-                    <Folder className="h-4 w-4 text-amber-500" /> Tổng quan khóa học
-                  </button>
-                  <span className="text-slate-400">/</span>
-                  {selectedClassSection && (
-                    <>
-                      <span className="text-slate-600 font-medium">Lớp {selectedClassSection.sectionCode}</span>
-                      <span className="text-slate-400">/</span>
-                    </>
-                  )}
-                  <span className="text-slate-900 font-bold flex items-center gap-1.5 truncate">
-                    <FolderOpen className="h-4 w-4 text-amber-500" /> Buổi {currentFolderSession.number}: {currentFolderSession.topic}
-                  </span>
-                </div>
-
-                {/* Session details */}
-                <section className="space-y-4 border-b border-slate-200 pb-6">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-xs font-medium text-slate-500">
-                        Buổi {currentFolderSession.number} · {currentFolderSession.materials.length} tài liệu
-                        {selectedClassSection ? ` · Lớp ${selectedClassSection.sectionCode}` : ""}
+              <div className="space-y-8">
+                <section className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1.5">
+                      <p className="text-[13px] font-semibold text-indigo-600">
+                        Buổi {currentFolderSession.number}{selectedClassSection ? ` · Lớp ${selectedClassSection.sectionCode}` : ""}
+                        {currentFolderSession.date ? ` · ${new Date(currentFolderSession.date).toLocaleString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
                       </p>
-                      <h3 className="text-xl font-display font-semibold text-slate-900 leading-tight">
-                        {currentFolderSession.title}: {currentFolderSession.topic}
-                      </h3>
+                      <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">{currentFolderSession.topic}</h2>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditSession(currentFolderSession)}
-                        className="px-3 py-2 bg-white hover:bg-slate-50 text-indigo-700 border border-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Edit className="h-4 w-4" /> Sửa buổi học
-                      </button>
-                      {currentFolderSession.date && (
-                        <span className="shrink-0 text-xs text-slate-600 flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          {new Date(currentFolderSession.date).toLocaleString("vi-VN")}
-                        </span>
-                      )}
-                    </div>
+                    <Button variant="secondary" icon={<Edit className="h-4 w-4" />} onClick={() => handleOpenEditSession(currentFolderSession)}>Sửa buổi học</Button>
                   </div>
-
-                  {/* Folder Description */}
-                  {currentFolderSession.content && (
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                      {currentFolderSession.content}
-                    </p>
-                  )}
-
-                  {/* Video Recording Link */}
-                  {currentFolderSession.recordingUrl && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                      <div className="flex items-center gap-2 text-sm text-slate-700">
-                        <Video className="h-4 w-4 text-slate-500 shrink-0" />
-                        <span>Video ghi hình buổi học</span>
-                      </div>
-                      <a
-                        href={currentFolderSession.recordingUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-medium text-indigo-700 hover:text-indigo-800"
-                      >
-                        Xem video ↗
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Video lesson link */}
-                  {currentFolderSession.videoUrl && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                      <div className="flex items-center gap-2 text-sm text-slate-700">
-                        <Video className="h-4 w-4 text-slate-500 shrink-0" />
-                        <span>Video bài giảng</span>
-                      </div>
-                      <a href={currentFolderSession.videoUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-indigo-700 hover:text-indigo-800">Mở video ↗</a>
+                  {currentFolderSession.content && <p className="max-w-[70ch] whitespace-pre-line text-[15px] leading-relaxed text-slate-600">{currentFolderSession.content}</p>}
+                  {(currentFolderSession.recordingUrl || currentFolderSession.videoUrl) && (
+                    <div className="flex flex-wrap gap-2">
+                      {currentFolderSession.videoUrl && (
+                        <a href={currentFolderSession.videoUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "sm", variant: "secondary" })}><Play className="h-4 w-4 text-indigo-600" /> Video bài giảng</a>
+                      )}
+                      {currentFolderSession.recordingUrl && (
+                        <a href={currentFolderSession.recordingUrl} target="_blank" rel="noreferrer" className={buttonClass({ size: "sm", variant: "secondary" })}><Video className="h-4 w-4 text-indigo-600" /> Video ghi hình buổi học</a>
+                      )}
                     </div>
                   )}
                 </section>
 
-                {/* KHU VỰC TRỌNG TÂM: QUẢN LÝ FILE & TÀI LIỆU BUỔI HỌC */}
-                <section className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <div>
-                      <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-indigo-600" />
-                        Tài liệu buổi học ({currentFolderSession.materials.length})
-                      </h4>
-                      <p className="text-sm text-slate-500 mt-1">
-                        Slide và tài liệu để học viên xem trực tuyến, file data để học viên tải về thực hành.
-                      </p>
-                    </div>
-                  </div>
-
-                  {needsClassChoice ? (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                      Tài liệu và bài tập thuộc từng lớp. Hãy chọn một lớp ở thanh "Lớp học phần" phía trên để quản lý nội dung buổi học này.
-                    </p>
-                  ) : currentFolderSession.sessionId ? (
+                <section className="space-y-3">
+                  <SectionTitle title={`Tài liệu (${currentFolderSession.materials.length})`} description="Slide, tài liệu hoặc video cho học viên của buổi này." />
+                  {currentFolderSession.sessionId ? (
                     <SessionMaterialsEditor
                       sessionId={currentFolderSession.sessionId}
                       triggerToast={triggerToast || props.triggerToast || (() => {})}
@@ -1182,16 +1088,9 @@ export default function CourseBuilder(props: ComponentProps) {
                       theme="light"
                     />
                   ) : (
-                    <div className="text-center py-8 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-xs text-slate-500 space-y-3">
-                      <p>Buổi học này chưa được kích hoạt đợt ca học để đính kèm file slide / tài liệu.</p>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditSession(currentFolderSession)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm"
-                      >
-                        Khởi tạo buổi học để tải lên tài liệu
-                      </button>
-                    </div>
+                    <Card>
+                      <EmptyState compact icon={<FolderOpen className="h-6 w-6" />} title="Buổi học chưa được kích hoạt" description="Lưu thông tin buổi học một lần để có thể tải slide và tài liệu lên." action={<Button onClick={() => handleOpenEditSession(currentFolderSession)}>Kích hoạt buổi học</Button>} />
+                    </Card>
                   )}
                 </section>
 
@@ -1216,39 +1115,39 @@ export default function CourseBuilder(props: ComponentProps) {
       {/* MODAL 1: ADD / EDIT COURSE FORMS */}
       {showCourseModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl relative text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-md">
             <button 
               onClick={() => setShowCourseModal(false)}
-              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-base font-display font-bold text-slate-900 mb-2 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               <BookOpen className="h-5 w-5 text-indigo-600" /> 
               {courseModalMode === "create" ? "Khởi tạo Khóa học Mới" : "Chỉnh sửa Thông tin Khóa học"}
             </h3>
 
             <form onSubmit={handleSaveCourse} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Tiêu đề Khóa học</label>
+                <label className="mcna-label">Tiêu đề Khóa học</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Thiết kế hệ thống cơ sở dữ liệu quy mô lớn"
                   value={courseTitle}
                   onChange={(e) => setCourseTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs shadow-xs"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Danh mục Chuyên môn</label>
+                <label className="mcna-label">Danh mục Chuyên môn</label>
                 <select
                   value={courseCategory}
                   onChange={(e) => setCourseCategory(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-xs"
+                  className="mcna-select w-full"
                 >
                   <option value="Web Development">Phát triển Web</option>
                   <option value="Data Science">Khoa học Dữ liệu</option>
@@ -1258,35 +1157,35 @@ export default function CourseBuilder(props: ComponentProps) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Mô tả / Đề cương khóa học</label>
+                <label className="mcna-label">Mô tả / Đề cương khóa học</label>
                 <textarea
                   required
                   placeholder="Mô tả chi tiết nội dung chương trình học..."
                   value={courseDesc}
                   onChange={(e) => setCourseDesc(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 h-20 max-h-24 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs shadow-xs"
+                  className="mcna-textarea w-full h-20 max-h-24"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Mức học phí (VND)</label>
+                  <label className="mcna-label">Mức học phí (VND)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="0 = Miễn phí"
                     value={coursePrice}
                     onChange={(e) => setCoursePrice(Number(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-xs"
+                    className="mcna-input w-full font-mono"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Trình độ đào tạo</label>
+                  <label className="mcna-label">Trình độ đào tạo</label>
                   <select
                     value={courseLevel}
                     onChange={(e) => setCourseLevel(e.target.value)}
-                    className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-xs"
+                    className="mcna-select w-full"
                   >
                     <option value="Cơ bản">Cơ bản</option>
                     <option value="Trung cấp">Trung cấp</option>
@@ -1296,13 +1195,13 @@ export default function CourseBuilder(props: ComponentProps) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Các thẻ từ khóa Tìm kiếm (tags)</label>
+                <label className="mcna-label">Các thẻ từ khóa Tìm kiếm (tags)</label>
                 <input
                   type="text"
                   placeholder="Next.js, Python, CSS (phân tách bằng dấu phẩy)"
                   value={courseTags}
                   onChange={(e) => setCourseTags(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs shadow-xs"
+                  className="mcna-input w-full"
                 />
               </div>
 
@@ -1310,13 +1209,13 @@ export default function CourseBuilder(props: ComponentProps) {
                 <button
                   type="button"
                   onClick={() => setShowCourseModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-xs"
+                  className="mcna-btn-primary"
                 >
                   Xác nhận lưu thông số
                 </button>
@@ -1330,35 +1229,35 @@ export default function CourseBuilder(props: ComponentProps) {
       {/* MODAL 2: ADD LESSON FORM */}
       {showLessonModal && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-lg">
             <button 
               onClick={() => setShowLessonModal(false)}
-              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-base font-display font-bold text-slate-900 mb-2 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               <Plus className="h-5 w-5 text-indigo-600" /> Thêm Bài học mới
             </h3>
 
             <form onSubmit={handleAddLessonSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Tiêu đề Bài học</label>
+                <label className="mcna-label">Tiêu đề Bài học</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Bài 1. Làm việc với HTTP controllers"
                   value={lessonTitle}
                   onChange={(e) => setLessonTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-xs"
+                  className="mcna-input w-full"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">Video bài giảng (Không bắt buộc)</label>
+                  <label className="mcna-label">Video bài giảng (Không bắt buộc)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -1366,7 +1265,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       value={lessonVideo}
                       onChange={(e) => setLessonVideo(e.target.value)}
                       disabled={isVideoUploading}
-                      className="flex-1 px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs shadow-xs"
+                      className="mcna-input flex-1 font-mono"
                     />
                     <label className={`px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl cursor-pointer text-xs font-bold text-slate-700 flex items-center justify-center min-w-[80px] transition shadow-xs ${isVideoUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
                       {isVideoUploading ? "Tải..." : "Tải tệp"}
@@ -1380,33 +1279,33 @@ export default function CourseBuilder(props: ComponentProps) {
                     </label>
                   </div>
                   {isVideoUploading && (
-                    <div className="text-[10px] text-indigo-600 font-sans">
+                    <div className="text-xs text-indigo-600 font-sans">
                       ⏳ Đang tải video lên...
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Thời lượng bài học</label>
+                  <label className="mcna-label">Thời lượng bài học</label>
                   <input
                     type="text"
                     required
                     placeholder="Ví dụ: 20 phút"
                     value={lessonDuration}
                     onChange={(e) => setLessonDuration(e.target.value)}
-                    className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                    className="mcna-input w-full"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Nội dung hướng dẫn chi tiết (Hỗ trợ Markdown)</label>
+                <label className="mcna-label">Nội dung hướng dẫn chi tiết (Hỗ trợ Markdown)</label>
                 <textarea
                   required
                   placeholder="Mô tả hướng dẫn chi tiết từng bước cho học sinh tại đây..."
                   value={lessonContent}
                   onChange={(e) => setLessonContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 h-36 max-h-48 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs shadow-xs"
+                  className="mcna-textarea w-full h-36 max-h-48 font-mono"
                 />
               </div>
 
@@ -1414,13 +1313,13 @@ export default function CourseBuilder(props: ComponentProps) {
                 <button
                   type="button"
                   onClick={() => setShowLessonModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-xs"
+                  className="mcna-btn-primary"
                 >
                   Xác nhận thêm
                 </button>
@@ -1433,48 +1332,48 @@ export default function CourseBuilder(props: ComponentProps) {
 
       {showEditLessonModal && editingLesson && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 text-slate-900">
+        <div className="mcna-overlay">
+          <div className="mcna-dialog sm:max-w-lg">
             <button
               onClick={() => setShowEditLessonModal(false)}
-              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
             >
               <X className="h-5 w-5" />
             </button>
-            <h3 className="text-base font-display font-bold text-slate-900 mb-2 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <h3 className="mb-5 flex items-center gap-2.5 pr-10 text-lg font-bold text-slate-900">
               <Edit className="h-5 w-5 text-indigo-600" /> Sửa nội dung buổi học
             </h3>
             <form onSubmit={handleSaveClassLesson} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Tên buổi học</label>
+                <label className="mcna-label">Tên buổi học</label>
                 <input
                   type="text"
                   required
                   value={editLessonTitle}
                   onChange={(e) => setEditLessonTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                  className="mcna-input w-full"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Thời lượng / lịch học</label>
+                  <label className="mcna-label">Thời lượng / lịch học</label>
                   <input
                     type="text"
                     required
                     value={editLessonDuration}
                     onChange={(e) => setEditLessonDuration(e.target.value)}
-                    className="w-full px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                    className="mcna-input w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">Video bài giảng</label>
+                  <label className="mcna-label">Video bài giảng</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={editLessonVideo}
                       onChange={(e) => setEditLessonVideo(e.target.value)}
                       disabled={isVideoUploading}
-                      className="flex-1 px-3 py-2 bg-white text-slate-800 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs min-w-0 shadow-xs"
+                      className="mcna-input flex-1 font-mono min-w-0"
                     />
                     <label className={`px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl cursor-pointer text-xs font-bold text-slate-700 flex items-center justify-center transition shadow-xs ${isVideoUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
                       {isVideoUploading ? "Tải..." : "Tải"}
@@ -1490,25 +1389,25 @@ export default function CourseBuilder(props: ComponentProps) {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Nội dung bài dạy</label>
+                <label className="mcna-label">Nội dung bài dạy</label>
                 <textarea
                   required
                   value={editLessonContent}
                   onChange={(e) => setEditLessonContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-white text-slate-800 h-44 max-h-64 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans text-xs leading-relaxed shadow-xs"
+                  className="mcna-textarea w-full h-44 max-h-64"
                 />
               </div>
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowEditLessonModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                  className="mcna-btn-ghost"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition cursor-pointer shadow-xs"
+                  className="mcna-btn-primary"
                 >
                   Lưu buổi học
                 </button>
@@ -1521,11 +1420,11 @@ export default function CourseBuilder(props: ComponentProps) {
 
       {showSectionModal && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-xl shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+          <div className="mcna-overlay">
+            <div className="mcna-dialog sm:max-w-xl">
               <button 
                 onClick={() => setShowSectionModal(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1545,7 +1444,7 @@ export default function CourseBuilder(props: ComponentProps) {
                     placeholder="Ví dụ: AI01-L02"
                     value={formSectionCode}
                     onChange={(e) => setFormSectionCode(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono shadow-xs"
+                    className="mcna-input w-full font-mono"
                   />
                 </div>
 
@@ -1558,7 +1457,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       max={100}
                       value={formMaxStudents}
                       onChange={(e) => setFormMaxStudents(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                      className="mcna-input w-full"
                     />
                   </div>
 
@@ -1570,7 +1469,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       max={200}
                       value={formSessionsCount}
                       onChange={(e) => setFormSessionsCount(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 shadow-xs"
+                      className="mcna-input w-full"
                     />
                   </div>
 
@@ -1586,13 +1485,13 @@ export default function CourseBuilder(props: ComponentProps) {
                 {/* Sub-form for schedule slots */}
                 <div className="border-t border-slate-100 pt-4 space-y-3">
                   <div className="flex justify-between items-center">
-                    <h5 className="font-semibold text-slate-900 text-xs uppercase tracking-wider text-indigo-600">
+                    <h5 className="text-xs font-semibold text-indigo-600">
                       Thời khóa biểu chi tiết ({formSlots.length})
                     </h5>
                     <button
                       type="button"
                       onClick={addFormSlot}
-                      className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-100 transition cursor-pointer text-[10.5px]"
+                      className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-100 transition cursor-pointer text-xs"
                     >
                       + Thêm ca học tuần
                     </button>
@@ -1605,47 +1504,47 @@ export default function CourseBuilder(props: ComponentProps) {
                         className="bg-slate-50 border border-slate-200 p-3 rounded-xl grid grid-cols-1 sm:grid-cols-4 gap-3 items-end relative overflow-hidden"
                       >
                         <div className="space-y-1">
-                          <label className="text-slate-500 text-[10px] block font-medium">Ngày học</label>
+                          <label className="text-slate-500 text-xs block font-medium">Ngày học</label>
                           <select
                             value={slot.dayOfWeek}
                             onChange={(e) => updateFormSlot(idx, "dayOfWeek", e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs focus:outline-none focus:border-indigo-500"
+                            className="mcna-select w-full"
                           >
                             {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
                           </select>
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-slate-500 text-[10px] block font-medium">Giờ bắt đầu</label>
+                          <label className="text-slate-500 text-xs block font-medium">Giờ bắt đầu</label>
                           <input
                             type="time"
                             required
                             value={slot.startTime}
                             onChange={(e) => updateFormSlot(idx, "startTime", e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                            className="mcna-input w-full font-mono"
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-slate-500 text-[10px] block font-medium">Giờ kết thúc</label>
+                          <label className="text-slate-500 text-xs block font-medium">Giờ kết thúc</label>
                           <input
                             type="time"
                             required
                             value={slot.endTime}
                             onChange={(e) => updateFormSlot(idx, "endTime", e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                            className="mcna-input w-full font-mono"
                           />
                         </div>
 
                         <div className="space-y-1 relative">
-                          <label className="text-slate-500 text-[10px] block font-medium">Phòng học / Đường dẫn</label>
+                          <label className="text-slate-500 text-xs block font-medium">Phòng học / Đường dẫn</label>
                           <input
                             type="text"
                             required
                             placeholder="Ví dụ: Phòng A101"
                             value={slot.room}
                             onChange={(e) => updateFormSlot(idx, "room", e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs focus:outline-none focus:border-indigo-500"
+                            className="mcna-input w-full"
                           />
                           {formSlots.length > 1 && (
                             <button
@@ -1683,13 +1582,13 @@ export default function CourseBuilder(props: ComponentProps) {
                   <button
                     type="button"
                     onClick={() => setShowSectionModal(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition cursor-pointer"
+                    className="mcna-btn-ghost"
                   >
                     Bỏ qua
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs transition cursor-pointer"
+                    className="mcna-btn-primary"
                   >
                     Lưu thiết lập
                   </button>
@@ -1702,11 +1601,11 @@ export default function CourseBuilder(props: ComponentProps) {
       {/* MODAL: EDIT ZOOM MEETING URL */}
       {showEditZoomModal && editingZoomSection && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150 text-slate-900 font-sans">
+          <div className="mcna-overlay">
+            <div className="mcna-dialog sm:max-w-md">
               <button 
                 onClick={() => setShowEditZoomModal(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer font-sans"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1720,14 +1619,14 @@ export default function CourseBuilder(props: ComponentProps) {
 
               <form onSubmit={handleSaveZoomUrl} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Đường link phòng Zoom / Google Meet *</label>
+                  <label className="mcna-label">Đường link phòng Zoom / Google Meet *</label>
                   <input
                     type="url"
                     required
                     value={zoomUrlInput}
                     onChange={(e) => setZoomUrlInput(e.target.value)}
                     placeholder="https://zoom.us/j/... hoặc https://meet.google.com/..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white text-xs font-mono"
+                    className="mcna-input w-full font-mono"
                   />
                   <p className="text-[11px] text-slate-500">
                     Học viên ghi danh vào lớp này sẽ thấy nút vào phòng Zoom trực tuyến ngay trên đầu buổi học.
@@ -1759,11 +1658,11 @@ export default function CourseBuilder(props: ComponentProps) {
       {/* MODAL: EDIT SESSION & RECORDING URL */}
       {showEditSessionModal && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+          <div className="mcna-overlay">
+            <div className="mcna-dialog sm:max-w-lg">
               <button
                 onClick={() => setShowEditSessionModal(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1782,60 +1681,60 @@ export default function CourseBuilder(props: ComponentProps) {
 
               <form onSubmit={handleSaveSession} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Chủ đề / Tiêu đề buổi học *</label>
+                  <label className="mcna-label">Chủ đề / Tiêu đề buổi học *</label>
                   <input
                     type="text"
                     required
                     value={editSessionTopic}
                     onChange={(e) => setEditSessionTopic(e.target.value)}
                     placeholder="Ví dụ: Giới thiệu kiến trúc & Cài đặt môi trường"
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    className="mcna-input w-full"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Nội dung tóm tắt / Giáo án buổi học</label>
+                  <label className="mcna-label">Nội dung tóm tắt / Giáo án buổi học</label>
                   <textarea
                     rows={3}
                     value={editSessionContent}
                     onChange={(e) => setEditSessionContent(e.target.value)}
                     placeholder="Tóm tắt các mục kiến thức cốt lõi và mục tiêu buổi học..."
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    className="mcna-textarea w-full"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Thời gian buổi học</label>
+                    <label className="mcna-label">Thời gian buổi học</label>
                     <input
                       type="datetime-local"
                       value={editSessionDate}
                       onChange={(e) => setEditSessionDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                      className="mcna-input w-full"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Link Video Recording (Zoom / Drive)</label>
+                    <label className="mcna-label">Link Video Recording (Zoom / Drive)</label>
                     <input
                       type="url"
                       value={editSessionRecordingUrl}
                       onChange={(e) => setEditSessionRecordingUrl(e.target.value)}
                       placeholder="https://zoom.us/rec/... hoặc Drive"
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                      className="mcna-input w-full font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Video bài giảng trực tiếp (MP4 URL hoặc Tải lên)</label>
+                  <label className="mcna-label">Video bài giảng trực tiếp (MP4 URL hoặc Tải lên)</label>
                   <div className="flex gap-2">
                     <input
                       type="url"
                       value={editSessionVideoUrl}
                       onChange={(e) => setEditSessionVideoUrl(e.target.value)}
                       placeholder="https://... hoặc bấm Tải tệp lên"
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                      className="mcna-input w-full font-mono"
                     />
                     <label className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1 shadow-sm">
                       <Upload className="h-3.5 w-3.5" /> Tải tệp
@@ -1853,14 +1752,14 @@ export default function CourseBuilder(props: ComponentProps) {
                   <button
                     type="button"
                     onClick={() => setShowEditSessionModal(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                    className="mcna-btn-ghost"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingSession}
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                    className="mcna-btn-primary"
                   >
                     {isSavingSession ? "Đang lưu..." : "Lưu thông tin buổi học"}
                   </button>
@@ -1874,12 +1773,12 @@ export default function CourseBuilder(props: ComponentProps) {
       {/* MODAL: CREATE NEW SESSION */}
       {showCreateSessionModal && (
         <ModalPortal>
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-xl shadow-2xl relative text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-150 my-8">
+          <div className="mcna-overlay">
+            <div className="mcna-dialog sm:max-w-xl">
               <button
                 type="button"
                 onClick={() => setShowCreateSessionModal(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:right-5 sm:top-5"
                 title="Đóng"
               >
                 <X className="h-5 w-5" />
@@ -1891,10 +1790,10 @@ export default function CourseBuilder(props: ComponentProps) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
+                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
                       GIẢNG VIÊN TẠO BUỔI HỌC
                     </span>
-                    <span className="text-[10px] font-mono font-semibold text-slate-500">
+                    <span className="text-xs font-mono font-semibold text-slate-500">
                       {activeCourse?.title}
                     </span>
                   </div>
@@ -1907,7 +1806,7 @@ export default function CourseBuilder(props: ComponentProps) {
               <form onSubmit={handleCreateSessionSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1 sm:col-span-1">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <label className="mcna-label flex items-center gap-1">
                       <Layers className="h-3.5 w-3.5 text-indigo-600" /> Buổi số *
                     </label>
                     <input
@@ -1922,18 +1821,18 @@ export default function CourseBuilder(props: ComponentProps) {
                           setNewSessionTopic(`Buổi ${val}: `);
                         }
                       }}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm font-semibold"
+                      className="mcna-input w-full"
                     />
                   </div>
 
                   <div className="space-y-1 sm:col-span-2">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <label className="mcna-label flex items-center gap-1">
                       <Users className="h-3.5 w-3.5 text-indigo-600" /> Áp dụng cho lớp học phần
                     </label>
                     <select
                       value={newSessionSectionId}
                       onChange={(e) => setNewSessionSectionId(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                      className="mcna-select w-full"
                     >
                       <option value="">Tất cả các lớp / Giáo trình chung của môn</option>
                       {courseSections.map((sec: any) => (
@@ -1946,32 +1845,32 @@ export default function CourseBuilder(props: ComponentProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Chủ đề / Tiêu đề buổi học *</label>
+                  <label className="mcna-label">Chủ đề / Tiêu đề buổi học *</label>
                   <input
                     type="text"
                     required
                     value={newSessionTopic}
                     onChange={(e) => setNewSessionTopic(e.target.value)}
                     placeholder="Ví dụ: Buổi 5: Xử lý State nâng cao & Redux Toolkit"
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    className="mcna-input w-full"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <label className="mcna-label flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5 text-indigo-600" /> Thời gian diễn ra
                     </label>
                     <input
                       type="datetime-local"
                       value={newSessionDate}
                       onChange={(e) => setNewSessionDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                      className="mcna-input w-full"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <label className="mcna-label flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-indigo-600" /> Thời lượng ước tính
                     </label>
                     <input
@@ -1979,24 +1878,24 @@ export default function CourseBuilder(props: ComponentProps) {
                       value={newSessionDuration}
                       onChange={(e) => setNewSessionDuration(e.target.value)}
                       placeholder="Ví dụ: 2 giờ hoặc 90 phút"
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                      className="mcna-input w-full"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Nội dung tóm tắt / Mục tiêu buổi học</label>
+                  <label className="mcna-label">Nội dung tóm tắt / Mục tiêu buổi học</label>
                   <textarea
                     rows={3}
                     value={newSessionContent}
                     onChange={(e) => setNewSessionContent(e.target.value)}
                     placeholder="Tóm tắt giáo án, kiến thức cốt lõi và bài tập cần hoàn thành trong buổi này..."
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs shadow-sm"
+                    className="mcna-textarea w-full"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <label className="mcna-label flex items-center gap-1">
                     <Video className="h-3.5 w-3.5 text-indigo-600" /> Video bài giảng trực tiếp (MP4 URL hoặc tải file lên)
                   </label>
                   <div className="flex gap-2">
@@ -2005,7 +1904,7 @@ export default function CourseBuilder(props: ComponentProps) {
                       value={newSessionVideoUrl}
                       onChange={(e) => setNewSessionVideoUrl(e.target.value)}
                       placeholder="https://... hoặc tải video từ máy tính"
-                      className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                      className="mcna-input w-full font-mono"
                     />
                     <label className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1 shadow-sm transition">
                       <Upload className="h-3.5 w-3.5" />
@@ -2022,7 +1921,7 @@ export default function CourseBuilder(props: ComponentProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <label className="mcna-label flex items-center gap-1">
                     <ExternalLink className="h-3.5 w-3.5 text-emerald-600" /> Link Video Recording (Zoom / Google Drive / Teams)
                   </label>
                   <input
@@ -2030,7 +1929,7 @@ export default function CourseBuilder(props: ComponentProps) {
                     value={newSessionRecordingUrl}
                     onChange={(e) => setNewSessionRecordingUrl(e.target.value)}
                     placeholder="https://zoom.us/rec/... hoặc liên kết Google Drive"
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs font-mono shadow-sm"
+                    className="mcna-input w-full font-mono"
                   />
                 </div>
 
@@ -2054,14 +1953,14 @@ export default function CourseBuilder(props: ComponentProps) {
                   <button
                     type="button"
                     onClick={() => setShowCreateSessionModal(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+                    className="mcna-btn-ghost"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
                     disabled={isCreatingSession}
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    className="mcna-btn-primary"
                   >
                     <Plus className="h-4 w-4" />
                     {isCreatingSession ? "Đang tạo buổi học..." : "Khởi tạo buổi học"}

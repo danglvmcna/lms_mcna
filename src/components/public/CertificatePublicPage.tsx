@@ -1,5 +1,6 @@
 import React from "react";
 import { Award, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { BrandLockup } from "../ui";
 
 type Certificate = {
   certificateCode: string;
@@ -27,27 +28,45 @@ export default function CertificatePublicPage({ code }: { code: string }) {
   }, [code]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-12 text-slate-900">
-      <div className="mx-auto w-full max-w-xl">
-        <div className="mb-6 text-center">
-          <p className="text-xs font-mono font-bold uppercase tracking-[0.28em] text-indigo-600">MCNA Technology School</p>
-          <h1 className="mt-3 text-2xl font-display font-bold">Xác thực chứng chỉ</h1>
-          <p className="mt-2 text-sm text-slate-500">Trang kiểm tra công khai cho nhà tuyển dụng và đối tác.</p>
+    <main className="min-h-dvh bg-aurora px-5 py-10 text-slate-900">
+      <div className="mx-auto w-full max-w-lg space-y-8">
+        <div className="flex justify-center"><BrandLockup /></div>
+        <div className="text-center">
+          <h1 className="text-[28px] font-bold tracking-tight">Xác thực chứng chỉ</h1>
+          <p className="mt-2 text-[15px] text-slate-500">Trang kiểm tra công khai dành cho nhà tuyển dụng và đối tác.</p>
         </div>
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/50">
+        <section className="rounded-[1.75rem] bg-white p-6 shadow-raised ring-1 ring-slate-200/70 md:p-8">
           {!certificate && !error && <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-indigo-600" /> Đang kiểm tra mã…</div>}
-          {error && <div className="py-12 text-center"><ShieldCheck className="mx-auto h-12 w-12 text-rose-500" /><h2 className="mt-4 text-lg font-bold">Không xác thực được</h2><p className="mt-2 text-sm text-slate-500">{error}</p><p className="mt-4 font-mono text-xs text-slate-400">Mã: {code.toUpperCase()}</p></div>}
-          {certificate && <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
-              <div className="flex items-center gap-3"><div className="rounded-2xl bg-emerald-50 p-3 text-emerald-600"><Award className="h-7 w-7" /></div><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Chứng chỉ hợp lệ</p><p className="mt-1 text-xs text-slate-500">Đã được cấp bởi MCNA</p></div></div>
-              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500" />
+          {error && (
+            <div className="py-10 text-center">
+              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-50 text-rose-500"><ShieldCheck className="h-8 w-8" /></span>
+              <h2 className="mt-4 text-lg font-bold">Không xác thực được</h2>
+              <p className="mt-2 text-sm text-slate-500">{error}</p>
+              <p className="mt-4 font-mono text-xs text-slate-500">Mã: {code.toUpperCase()}</p>
             </div>
-            <div className="space-y-4 text-sm">
-              <div><p className="text-xs text-slate-400">Học viên</p><p className="mt-1 text-lg font-bold text-slate-900">{certificate.studentName}</p></div>
-              <div><p className="text-xs text-slate-400">Khóa học hoàn thành</p><p className="mt-1 font-semibold text-slate-800">{certificate.courseTitle}</p></div>
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4"><div><p className="text-xs text-slate-400">Ngày cấp</p><p className="mt-1 font-mono text-xs font-semibold">{new Date(certificate.issuedAt).toLocaleDateString("vi-VN")}</p></div><div><p className="text-xs text-slate-400">Mã kiểm định</p><p className="mt-1 font-mono text-xs font-semibold uppercase text-indigo-700">{certificate.certificateCode}</p></div></div>
+          )}
+          {certificate && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><CheckCircle2 className="h-6 w-6" /></span>
+                <div>
+                  <p className="font-semibold text-emerald-900">Chứng chỉ hợp lệ</p>
+                  <p className="text-sm text-emerald-800/80">Được cấp bởi MCNA Technology School</p>
+                </div>
+              </div>
+              <div className="space-y-1 text-center">
+                <Award className="mx-auto h-8 w-8 text-indigo-500" />
+                <p className="pt-2 text-sm text-slate-500">Chứng nhận</p>
+                <p className="text-2xl font-bold tracking-tight text-slate-900">{certificate.studentName}</p>
+                <p className="text-sm text-slate-500">đã hoàn thành khóa học</p>
+                <p className="text-lg font-semibold text-slate-800">{certificate.courseTitle}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-canvas p-4"><dt className="text-xs text-slate-500">Ngày cấp</dt><dd className="mt-0.5 font-semibold">{new Date(certificate.issuedAt).toLocaleDateString("vi-VN")}</dd></div>
+                <div className="rounded-2xl bg-canvas p-4"><dt className="text-xs text-slate-500">Mã kiểm định</dt><dd className="mt-0.5 truncate font-mono text-sm font-semibold uppercase text-indigo-700">{certificate.certificateCode}</dd></div>
+              </dl>
             </div>
-          </div>}
+          )}
         </section>
       </div>
     </main>

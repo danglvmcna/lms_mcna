@@ -920,7 +920,8 @@ function toPublicUser(row) {
     emailProvisionedAt: row.email_provisioned_at || void 0,
     mustChangePassword: Boolean(row.must_change_password),
     signupSource: row.signup_source || "admin",
-    crmContactId: row.crm_contact_id || void 0
+    crmContactId: row.crm_contact_id || void 0,
+    canManageSales: Boolean(row.can_manage_sales)
   };
 }
 function courseFromRow(row) {
@@ -3452,11 +3453,14 @@ async function sendCourseRegistrationEmail(params) {
     const txHex = (params.transactionId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "ORDER1";
     const memoText = `MCNA ${studentHex} ${txHex}`;
     const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${params.price}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
     const subject = isPaid ? `[MCNA] H\u01B0\u1EDBng d\u1EABn thanh to\xE1n & X\xE1c nh\u1EADn \u0111\u0103ng k\xFD: ${params.courseTitle}` : `[MCNA] X\xE1c nh\u1EADn \u0111\u0103ng k\xFD th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
       <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. \u0110\u01A1n \u0111\u0103ng k\xFD h\u1ECDc t\u1EADp c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\xEAn h\u1EC7 th\u1ED1ng.</p>
-      
+
       <div class="info-box">
         <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
           TH\xD4NG TIN KH\xD3A H\u1ECCC \u0110\u0102NG K\xDD
@@ -3523,7 +3527,7 @@ async function sendCourseRegistrationEmail(params) {
       `}
 
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn" target="_blank">Xem ph\xF2ng h\u1ECDc & \u0110\u01A1n \u0111\u0103ng k\xFD</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">Xem ph\xF2ng h\u1ECDc & \u0110\u01A1n \u0111\u0103ng k\xFD</a>
       </div>
     `;
     const plainText = `K\xEDnh g\u1EEDi ${params.name},
@@ -3547,10 +3551,15 @@ Truy c\u1EADp h\u1EC7 th\u1ED1ng t\u1EA1i: ${getAppUrl()}`;
 async function sendPaymentConfirmationEmail(params) {
   try {
     const subject = `[MCNA] X\xE1c nh\u1EADn thanh to\xE1n th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
+    const safeTeacherName = params.teacherName ? escapeHtml(params.teacherName) : "";
+    const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
       <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
-      
+
       <div class="success-box">
         <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           BI\xCAN NH\u1EACN THANH TO\xC1N & TH\xD4NG TIN H\u1ECCC PH\u1EA6N
@@ -3576,7 +3585,7 @@ async function sendPaymentConfirmationEmail(params) {
             <td style="color: #475569; padding: 5px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
             <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
           </tr>
-          ${params.teacherName ? `
+          ${safeTeacherName ? `
           <tr>
             <td style="color: #475569; padding: 5px 0;">Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:</td>
             <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.teacherName)}</td>
@@ -3593,7 +3602,7 @@ async function sendPaymentConfirmationEmail(params) {
       </p>
 
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn btn-green" target="_blank">V\xE0o h\u1ECDc ngay tr\xEAn MCNA LMS</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn btn-green" target="_blank">V\xE0o h\u1ECDc ngay tr\xEAn MCNA LMS</a>
       </div>
     `;
     const plainText = `K\xEDnh g\u1EEDi ${params.name},
@@ -3611,6 +3620,8 @@ Truy c\u1EADp v\xE0o h\u1ECDc ngay t\u1EA1i: ${getAppUrl()}`;
 async function sendEmailDirect(recipientEmail, recipientName, message) {
   try {
     const subject = `[MCNA LMS] Th\xF4ng b\xE1o m\u1EDBi t\u1EEB h\u1EC7 th\u1ED1ng`;
+    const safeName = escapeHtml(recipientName);
+    const safeMessage = escapeHtml(message);
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(recipientName)},</p>
       <p>H\u1EC7 th\u1ED1ng H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin g\u1EEDi \u0111\u1EBFn b\u1EA1n th\xF4ng b\xE1o m\u1EDBi:</p>
@@ -3619,7 +3630,7 @@ async function sendEmailDirect(recipientEmail, recipientName, message) {
       </div>
       <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp v\xE0o h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\u1EBFt.</p>
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn" target="_blank">\u0110i t\u1EDBi MCNA LMS</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">\u0110i t\u1EDBi MCNA LMS</a>
       </div>
     `;
     const plainText = `K\xEDnh g\u1EEDi ${recipientName},
@@ -3878,14 +3889,14 @@ function wrapHtmlBody(title, contentHtml) {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
+        <h1>MCNA Technology School</h1>
       </div>
       <div class="content">
         ${contentHtml}
       </div>
       <div class="footer">
-        <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
-        <p>\u0110\xE2y l\xE0 email th\xF4ng b\xE1o t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng qu\u1EA3n l\xFD h\u1ECDc t\u1EADp MCNA LMS. Vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y.</p>
+        <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School \xB7 mcna.vn</p>
+        <p>Email t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng h\u1ECDc tr\u1EF1c tuy\u1EBFn MCNA LMS, vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y. C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n nh\u1EAFn MCNA qua Zalo 0939 866 825.</p>
       </div>
     </div>
   </div>
@@ -3894,12 +3905,12 @@ function wrapHtmlBody(title, contentHtml) {
   `;
 }
 async function sendWelcomeEmail(pool2, userId, params) {
-  const subject = `[MCNA LMS] Ch\xE0o m\u1EEBng t\xE2n sinh vi\xEAn - C\u1EA5p t\xE0i kho\u1EA3n Email tr\u01B0\u1EDDng`;
+  const subject = `[MCNA LMS] Ch\xE0o m\u1EEBng b\u1EA1n \u0111\u1EBFn v\u1EDBi MCNA - T\xE0i kho\u1EA3n email h\u1ECDc vi\xEAn`;
   const htmlContent = wrapHtmlBody(
-    "Ch\xE0o m\u1EEBng t\xE2n sinh vi\xEAn",
+    "Ch\xE0o m\u1EEBng b\u1EA1n \u0111\u1EBFn v\u1EDBi MCNA",
     `
       <p class="greeting">Ch\xE0o b\u1EA1n ${params.name},</p>
-      <p>Ch\xFAc m\u1EEBng b\u1EA1n \u0111\xE3 gia nh\u1EADp H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA! T\xE0i kho\u1EA3n Email ch\xEDnh th\u1EE9c c\u1EE7a b\u1EA1n t\u1EA1i tr\u01B0\u1EDDng \u0111\xE3 \u0111\u01B0\u1EE3c t\u1EA1o th\xE0nh c\xF4ng:</p>
+      <p>Ch\xE0o m\u1EEBng b\u1EA1n \u0111\u1EBFn v\u1EDBi MCNA Technology School! T\xE0i kho\u1EA3n email h\u1ECDc vi\xEAn c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c t\u1EA1o:</p>
       <div class="message-box">
         <strong>Email tr\u01B0\u1EDDng:</strong> ${params.schoolEmail}<br/>
         ${params.tempPassword ? `<strong>M\u1EADt kh\u1EA9u t\u1EA1m th\u1EDDi:</strong> ${params.tempPassword}<br/>` : ""}
@@ -3972,7 +3983,7 @@ async function sendLmsNotification(pool2, userId, params) {
       <p class="greeting">Ch\xE0o h\u1ECDc vi\xEAn,</p>
       <p>H\u1EC7 th\u1ED1ng LMS th\xF4ng b\xE1o c\u1EADp nh\u1EADt m\u1EDBi li\xEAn quan \u0111\u1EBFn t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n:</p>
       <div class="message-box">
-        ${params.body}
+        ${escapeHtml2(params.body)}
       </div>
       <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp c\u1ED5ng th\xF4ng tin LMS \u0111\u1EC3 bi\u1EBFt th\xEAm chi ti\u1EBFt.</p>
     `
@@ -4067,7 +4078,7 @@ async function deliverEmail(params) {
   }
 }
 async function sendTemporaryPasswordEmail(pool2, userId, params) {
-  const subject = `[LMS MCNA] Th\xF4ng tin \u0111\u0103ng nh\u1EADp t\xE0i kho\u1EA3n h\u1ECDc vi\xEAn`;
+  const subject = `[MCNA LMS] Th\xF4ng tin \u0111\u0103ng nh\u1EADp t\xE0i kho\u1EA3n h\u1ECDc vi\xEAn`;
   const safeName = escapeHtml2(params.name);
   const safeEmail = escapeHtml2(params.to);
   const safePassword = escapeHtml2(params.temporaryPassword);
@@ -4113,7 +4124,7 @@ B\u1EA1n s\u1EBD \u0111\u01B0\u1EE3c y\xEAu c\u1EA7u \u0111\u1ED5i m\u1EADt kh\u
   }
 }
 async function sendAccountExistsEmail(pool2, userId, params) {
-  const subject = `[LMS MCNA] B\u1EA1n \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS`;
+  const subject = `[MCNA LMS] B\u1EA1n \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS`;
   const safeName = escapeHtml2(params.name);
   const safeLoginUrl = escapeHtml2(params.loginUrl);
   const html = wrapHtmlBody(
@@ -4247,7 +4258,9 @@ var notificationsRepository = {
       type: row.type,
       message: row.message,
       isRead: Boolean(row.is_read),
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      relatedEntityType: row.related_entity_type || void 0,
+      relatedEntityId: row.related_entity_id || void 0
     }));
   },
   async create(db, input) {
@@ -4291,7 +4304,8 @@ var notificationsRepository = {
         input.relatedEntityId || null
       ]
     );
-    if (userRole === "student") {
+    if (input.skipEmail) {
+    } else if (userRole === "student") {
       if (emailProvisioned) {
         provisioningService.sendNotificationEmail(db, notification.userId, {
           subject: "C\u1EADp nh\u1EADt th\xF4ng b\xE1o t\u1EEB LMS",
@@ -4299,6 +4313,10 @@ var notificationsRepository = {
           type: notification.type
         }).catch((err) => {
           console.error("[Notifications Repository] School email notification dispatch error:", err);
+        });
+      } else if (input.emailFallback && userEmail) {
+        sendEmailDirect(userEmail, userName || "H\u1ECDc vi\xEAn", notification.message).catch((err) => {
+          console.error("[Notifications Repository] Sign-up email notification dispatch error:", err);
         });
       } else {
         console.log(`[Notifications Repository] Skipping email for unprovisioned student ${notification.userId}`);
@@ -6018,7 +6036,8 @@ async function sendClassPlacementNotice(db, input) {
         type: "success",
         message: `B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp ${row.section_code} c\u1EE7a kh\xF3a "${row.course_title}". Xem l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 t\xE0i li\u1EC7u trong m\u1EE5c L\u1EDBp h\u1ECDc c\u1EE7a t\xF4i.`,
         relatedEntityType: "enrollment",
-        relatedEntityId: row.enrollment_id || void 0
+        relatedEntityId: row.enrollment_id || void 0,
+        skipEmail: true
       });
     }
     return { ...base, email: row.student_email, status };
@@ -6367,18 +6386,24 @@ async function processSepayWebhook(payload, rawBody, onSuccessfulPayment) {
     client2.release();
   }
   onSuccessfulPayment?.();
+  const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+  const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
     void sendClassPlacementNotice(pool, { studentId: matchedTx.student_id, sectionId: placedSectionId, notifyInApp: false }).catch((err) => console.error("[SePay] placement notice failed:", err));
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc v\xE0 c\xF3 th\u1EC3 b\u1EAFt \u0111\u1EA7u h\u1ECDc t\u1EADp ngay.`
+      message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\u1EBFp v\xE0o l\u1EDBp h\u1ECDc v\xE0 c\xF3 th\u1EC3 b\u1EAFt \u0111\u1EA7u h\u1ECDc t\u1EADp ngay.`,
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n vui l\xF2ng ch\u1EDD qu\u1EA3n tr\u1ECB vi\xEAn x\u1EBFp l\u1EDBp h\u1ECDc ph\u1EA7n.`
+      message: `Thanh to\xE1n h\u1ECDc ph\xED kh\xF3a h\u1ECDc "${matchedTx.course_title}" \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn t\u1EF1 \u0111\u1ED9ng qua SePay! B\u1EA1n vui l\xF2ng ch\u1EDD qu\u1EA3n tr\u1ECB vi\xEAn x\u1EBFp l\u1EDBp h\u1ECDc ph\u1EA7n.`,
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   }
   void notifyRole(pool, "admin", `SePay: \u0110\xE3 nh\u1EADn thanh to\xE1n ${receivedAmount.toLocaleString("vi-VN")}\u0111 cho kh\xF3a h\u1ECDc "${matchedTx.course_title}".`, {
@@ -8301,6 +8326,19 @@ async function generateCertificateCode(db) {
   }
   return `MCNA-${Date.now().toString(36).toUpperCase()}`;
 }
+async function learnerPlacementSummary(db, enrollmentId, sectionId, feeConfirmed) {
+  const row = (await db.query(
+    `SELECT c.title, cs.section_code
+       FROM enrollments e
+       JOIN courses c ON c.id = e.course_id
+       LEFT JOIN course_sections cs ON cs.id = $2
+      WHERE e.id = $1`,
+    [enrollmentId, sectionId || null]
+  )).rows[0];
+  const course = row?.title ? `kh\xF3a "${row.title}"` : "kh\xF3a h\u1ECDc";
+  const intro = feeConfirmed ? "MCNA \u0111\xE3 x\xE1c nh\u1EADn h\u1ECDc ph\xED" : "MCNA \u0111\xE3 duy\u1EC7t \u0111\u0103ng k\xFD";
+  return row?.section_code ? `${intro} v\xE0 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp ${row.section_code} c\u1EE7a ${course}. V\xE0o m\u1EE5c L\u1EDBp h\u1ECDc c\u1EE7a t\xF4i \u0111\u1EC3 xem l\u1ECBch h\u1ECDc, link Zoom v\xE0 t\xE0i li\u1EC7u.` : `${intro} ${course} c\u1EE7a b\u1EA1n. B\u1EA1n s\u1EBD nh\u1EADn th\xF4ng b\xE1o ngay khi \u0111\u01B0\u1EE3c x\u1EBFp l\u1EDBp.`;
+}
 async function maybePostFinalCourseGrade(db, studentId, courseId2) {
   const assignments = (await db.query(
     `SELECT a.id, a.max_score, s.score
@@ -9774,7 +9812,10 @@ app.post("/api/enrollments/:id/activate", requireAuth, requireRole(["manager", "
     await notificationsRepository.create(pool, {
       userId: studentId,
       type: "success",
-      message: "\u0110\u01A1n \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t."
+      message: await learnerPlacementSummary(pool, enrollmentId, targetSectionId, true),
+      relatedEntityType: "enrollment",
+      relatedEntityId: enrollmentId,
+      skipEmail: Boolean(studentUser?.email)
     });
   }
   if (studentUser?.email) {
@@ -9846,7 +9887,10 @@ app.patch("/api/enrollments/:id/approve", requireAuth, requireRole(["manager", "
     await notificationsRepository.create(pool, {
       userId: enrollment.student_id,
       type: "success",
-      message: "Y\xEAu c\u1EA7u \u0111\u0103ng k\xFD m\xF4n h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c duy\u1EC7t."
+      message: await learnerPlacementSummary(pool, req.params.id, sectionId, false),
+      relatedEntityType: "enrollment",
+      relatedEntityId: req.params.id,
+      emailFallback: true
     });
   }
   await audit(req, "approve_enrollment", enrollment.id, sectionId || "no-section");
@@ -10641,7 +10685,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`
+          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: post.id
         });
       }
     }
@@ -10649,7 +10695,9 @@ app.post("/api/courses/:courseId/forum", requireAuth, requireRole(["student", "t
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 \u0111\u0103ng b\xE0i th\u1EA3o lu\u1EADn m\u1EDBi: "${title}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: post.id
       });
     }
   }
@@ -10718,7 +10766,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: postAuthorId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 b\xECnh lu\u1EADn v\xE0o b\xE0i vi\u1EBFt "${postTitle}" c\u1EE7a b\u1EA1n.`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: ${authorName} \u0111\xE3 b\xECnh lu\u1EADn v\xE0o b\xE0i vi\u1EBFt "${postTitle}" c\u1EE7a b\u1EA1n.`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
     const studentsRes = await pool.query(
@@ -10730,7 +10780,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
         await notificationsRepository.create(pool, {
           userId: row.student_id,
           type: "info",
-          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`
+          message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`,
+          relatedEntityType: "forum_post",
+          relatedEntityId: postId
         });
       }
     }
@@ -10738,7 +10790,9 @@ app.post("/api/forum/posts/:postId/replies", requireAuth, requireRole(["student"
       await notificationsRepository.create(pool, {
         userId: teacherId,
         type: "info",
-        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`
+        message: `Di\u1EC5n \u0111\xE0n l\u1EDBp ${secCode}: c\xF3 ph\u1EA3n h\u1ED3i m\u1EDBi t\u1EEB ${authorName} trong ch\u1EE7 \u0111\u1EC1 "${postTitle}".`,
+        relatedEntityType: "forum_post",
+        relatedEntityId: postId
       });
     }
   }
@@ -11076,6 +11130,28 @@ app.post("/api/admin/notifications", requireAuth, requireRole(["admin"]), valida
   } finally {
     client2.release();
   }
+}));
+app.get("/api/admin/system/status", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {
+  const has = (name) => Boolean((process.env[name] || "").trim());
+  let googleWorkspace = false;
+  try {
+    const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "");
+    googleWorkspace = Boolean(creds?.client_email && creds?.private_key) && has("SCHOOL_EMAIL_DOMAIN");
+  } catch {
+    googleWorkspace = false;
+  }
+  const status = {
+    environment: process.env.NODE_ENV || "development",
+    sepay: has("SEPAY_API_KEY"),
+    email: hasSmtpConfig(),
+    appUrl: has("LMS_LOGIN_URL") || has("APP_URL"),
+    storage: has("SUPABASE_URL") && has("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "database",
+    crmOutbound: has("CRM_WEBHOOK_URL") && has("CRM_WEBHOOK_SECRET"),
+    crmInbound: has("CRM_API_KEY") && has("CRM_INBOUND_SECRET"),
+    cron: has("CRON_SECRET"),
+    googleWorkspace
+  };
+  res.json(status);
 }));
 app.get("/api/admin/crm/outbox", requireAuth, requireRole(["admin"]), asyncHandler(async (_req, res) => {
   const configured = Boolean(process.env.CRM_WEBHOOK_URL && process.env.CRM_WEBHOOK_SECRET);

@@ -69,6 +69,9 @@ Hướng dẫn vận hành từng bước: [docs/direct-sale-van-hanh.md](docs/d
 * `src/server/`: backend - repositories PostgreSQL, cache Redis, xác thực JWT, scheduler, tích hợp CRM và email.
 * `scripts/`: migration, seed, đối soát schema và kiểm thử E2E.
 * `server.ts`: máy chủ Express, kiêm proxy Vite dev server.
+* `src/components/ui/`: hệ thống thiết kế dùng chung (nút, hộp thoại dạng sheet, toast, badge, ảnh bìa khóa học, trạng thái trống); token màu và kiểu chữ ở `src/index.css`.
+* `src/components/layout/AppShell.tsx`: khung ứng dụng cho cả ba vai trò (thanh bên trên máy tính, thanh tab dưới trên điện thoại).
+* `src/assets/illustrations/`: hình minh họa linh vật Bít (SVG), tự hiển thị theo tên file. Sửa nhân vật hoặc cảnh trong `scripts/mascot/build-illustrations.mjs` rồi chạy `node scripts/mascot/build-illustrations.mjs` để tạo lại cả bộ.
 
 ### 2. Thiết lập môi trường
 
@@ -172,6 +175,9 @@ npm start             # chạy production
 
 #### CRM
 * `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET`, `CRM_API_KEY`, `CRM_INBOUND_SECRET`, `CRM_SIGNATURE_TOLERANCE_SECONDS`
+* `CRON_SECRET`: xác thực lịch gửi lại hàng đợi CRM (Vercel Cron và GitHub Actions).
+
+Sau khi triển khai, quản trị vào **Tổng quan → Cấu hình hệ thống** để xem mục nào còn thiếu (chỉ hiện có hay chưa, không hiện giá trị).
 
 ---
 

@@ -414,7 +414,11 @@ export async function processSepayWebhook(
   // Trigger cache invalidation callback
   onSuccessfulPayment?.();
 
-  // Send notifications to the learner
+  // Send notifications to the learner. A formal payment-confirmation email is about to be sent
+  // below whenever the student has any email on file, so suppress the generic fallback
+  // notification email in that case to avoid a duplicate send.
+  const sepayStudentEmailRow = (await pool.query("SELECT email FROM users WHERE id = $1", [matchedTx.student_id])).rows[0];
+  const willSendSepayPaymentConfirmationEmail = Boolean(sepayStudentEmailRow?.email);
   if (placedSectionId) {
     // Class details (timetable, Zalo group, teacher) go out by email; the in-app message is created below.
     void sendClassPlacementNotice(pool, { studentId: matchedTx.student_id, sectionId: placedSectionId, notifyInApp: false })
@@ -422,13 +426,17 @@ export async function processSepayWebhook(
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`
+      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn đã được xếp vào lớp học và có thể bắt đầu học tập ngay.`,
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   } else {
     await notificationsRepository.create(pool, {
       userId: matchedTx.student_id,
       type: "success",
-      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`
+      message: `Thanh toán học phí khóa học "${matchedTx.course_title}" đã được xác nhận tự động qua SePay! Bạn vui lòng chờ quản trị viên xếp lớp học phần.`,
+      emailFallback: !willSendSepayPaymentConfirmationEmail,
+      skipEmail: willSendSepayPaymentConfirmationEmail
     });
   }
 

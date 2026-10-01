@@ -32,6 +32,7 @@ export interface User {
   mustChangePassword?: boolean;
   signupSource?: "admin" | "self" | "crm";
   crmContactId?: string;
+  canManageSales?: boolean;
 }
 
 export interface Course {
@@ -396,6 +397,19 @@ export interface CrmOutboxEvent {
   lastError?: string | null;
   createdAt: string;
   sentAt?: string | null;
+}
+
+/** Presence of each integration's settings on the server (GET /api/admin/system/status). */
+export interface SystemStatus {
+  environment: string;
+  sepay: boolean;
+  email: boolean;
+  appUrl: boolean;
+  storage: "supabase" | "database";
+  crmOutbound: boolean;
+  crmInbound: boolean;
+  cron: boolean;
+  googleWorkspace: boolean;
 }
 
 export interface CrmOutboxStatus {

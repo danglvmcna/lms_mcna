@@ -87,7 +87,8 @@ export async function sendClassPlacementNotice(
         type: "success",
         message: `Bạn đã được xếp vào lớp ${row.section_code} của khóa "${row.course_title}". Xem lịch học, nhóm Zalo và tài liệu trong mục Lớp học của tôi.`,
         relatedEntityType: "enrollment",
-        relatedEntityId: row.enrollment_id || undefined
+        relatedEntityId: row.enrollment_id || undefined,
+        skipEmail: true
       });
     }
 

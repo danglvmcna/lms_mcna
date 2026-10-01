@@ -363,6 +363,10 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
     const memoText = `MCNA ${studentHex} ${txHex}`;
     const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${params.price}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
 
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "Đang xếp lớp");
+
     const subject = isPaid
       ? `[MCNA] Hướng dẫn thanh toán & Xác nhận đăng ký: ${params.courseTitle}`
       : `[MCNA] Xác nhận đăng ký thành công khóa học: ${params.courseTitle}`;
@@ -370,7 +374,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(params.name)},</p>
       <p>Cảm ơn bạn đã đăng ký khóa học tại <strong>Học Viện Công Nghệ MCNA</strong>. Đơn đăng ký học tập của bạn đã được ghi nhận trên hệ thống.</p>
-      
+
       <div class="info-box">
         <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
           THÔNG TIN KHÓA HỌC ĐĂNG KÝ
@@ -437,7 +441,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
       `}
 
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn" target="_blank">Xem phòng học & Đơn đăng ký</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">Xem phòng học & Đơn đăng ký</a>
       </div>
     `;
 
@@ -466,10 +470,16 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
   try {
     const subject = `[MCNA] Xác nhận thanh toán thành công khóa học: ${params.courseTitle}`;
 
+    const safeName = escapeHtml(params.name);
+    const safeCourseTitle = escapeHtml(params.courseTitle);
+    const safeSectionCode = escapeHtml(params.sectionCode || "Đang xếp lớp");
+    const safeTeacherName = params.teacherName ? escapeHtml(params.teacherName) : "";
+    const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
+
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(params.name)},</p>
       <p>Học Viện Công Nghệ MCNA xin trân trọng thông báo: Khoản thanh toán học phí của bạn đã được <strong>xác nhận thành công</strong>! Khóa học của bạn đã được kích hoạt trên hệ thống.</p>
-      
+
       <div class="success-box">
         <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           BIÊN NHẬN THANH TOÁN & THÔNG TIN HỌC PHẦN
@@ -495,7 +505,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
             <td style="color: #475569; padding: 5px 0;">Lớp học phần:</td>
             <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml(params.sectionCode || "Đang xếp lớp")}</td>
           </tr>
-          ${params.teacherName ? `
+          ${safeTeacherName ? `
           <tr>
             <td style="color: #475569; padding: 5px 0;">Giảng viên phụ trách:</td>
             <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.teacherName)}</td>
@@ -512,7 +522,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
       </p>
 
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn btn-green" target="_blank">Vào học ngay trên MCNA LMS</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn btn-green" target="_blank">Vào học ngay trên MCNA LMS</a>
       </div>
     `;
 
@@ -530,6 +540,8 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
 export async function sendEmailDirect(recipientEmail: string, recipientName: string, message: string) {
   try {
     const subject = `[MCNA LMS] Thông báo mới từ hệ thống`;
+    const safeName = escapeHtml(recipientName);
+    const safeMessage = escapeHtml(message);
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Kính gửi ${escapeHtml(recipientName)},</p>
       <p>Hệ thống Học Viện Công Nghệ MCNA xin gửi đến bạn thông báo mới:</p>
@@ -538,7 +550,7 @@ export async function sendEmailDirect(recipientEmail: string, recipientName: str
       </div>
       <p>Vui lòng đăng nhập vào hệ thống để xem chi tiết.</p>
       <div class="btn-container">
-        <a href="${getAppUrl()}" class="btn" target="_blank">Đi tới MCNA LMS</a>
+        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">Đi tới MCNA LMS</a>
       </div>
     `;
     const plainText = `Kính gửi ${recipientName},\n\nBạn có một thông báo mới từ MCNA LMS:\n\n${message}\n\nTruy cập hệ thống: ${getAppUrl()}`;
