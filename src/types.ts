@@ -410,6 +410,10 @@ export interface SystemStatus {
   crmInbound: boolean;
   cron: boolean;
   googleWorkspace: boolean;
+  salesMode: SalesMode;
+  // Reading the paid list from the CRM database: checked with a real read-only query.
+  crmDatabase: "not_configured" | "ok" | "certificate" | "unreachable";
+  defaultStudentPassword: boolean;
 }
 
 export interface CrmOutboxStatus {
