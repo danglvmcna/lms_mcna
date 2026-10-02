@@ -31,6 +31,21 @@ Chưa đặt `CRM_API_KEY` hoặc `CRM_INBOUND_SECRET` thì mọi endpoint `/api
 
 ## 2. Cách ký (dùng chung hai chiều)
 
+### Nguồn danh sách đã thanh toán: chỉ đọc từ database CRM
+
+Đây là nguồn nhập **theo thao tác của Quản lý lớp**, độc lập với webhook và API hai chiều. Không phải đồng bộ nền, không ghi CRM, không tự xếp lớp. Endpoint `GET /api/admin/paid-enrollments/crm` chỉ cho `admin`/`manager`, yêu cầu đăng nhập, giới hạn tần suất và trả `Cache-Control: no-store`. Nhật ký LMS chỉ ghi số lượng; không ghi tên/email/điện thoại của dữ liệu lấy về.
+
+1. Cấu hình biến máy chủ `CRM_DATABASE_URL` tới database CRM bằng role chuyên dụng chỉ có `CONNECT`, `USAGE` schema và `SELECT` bảng `public.revenue_records`. Đặt `default_transaction_read_only=on` cho role như lớp bảo vệ bổ sung. Không dùng tài khoản chủ database hoặc đặt biến có tiền tố `VITE_`.
+2. Bảng cần các cột: `id`, `seq` (số thứ tự duy nhất), `saleDate`, `customerName`, `customerPhone`, `customerEmail`, `customerType`, `courseSold`, `totalRevenue`, `debt`, `paymentMethod`. Các cột camelCase phải giữ nguyên tên. `courseSold` là mảng hoặc danh sách mã phân cách bằng dấu phẩy/chấm phẩy/xuống dòng.
+3. Kết nối ngoài localhost bắt buộc TLS xác thực chứng chỉ. Nếu nhà cung cấp dùng CA riêng, đặt `CRM_DATABASE_CA_CERT` bằng PEM của họ; không tắt kiểm tra chứng chỉ. Cần kết nối cho phép IP máy chủ LMS và redeploy/restart sau khi đổi biến. Không cần migration trong CRM.
+4. Mỗi truy vấn chạy trong transaction `READ ONLY`, timeout truy vấn 8 giây, pool tối đa 2 kết nối. API trả lỗi chung `502` khi kết nối hoặc schema không phù hợp; không đưa lỗi database/credentials ra giao diện.
+5. Chỉ nhận các trạng thái chuẩn `Đã hoàn tất thanh toán - Fully Paid`, `Đã hoàn tất thanh toán`, `Fully Paid` (không phân biệt hoa/thường/dấu) với số nợ hợp lệ đúng bằng 0. Không nhận chuỗi phủ định như `not fully paid`, dữ liệu nợ trống hoặc số không hợp lệ. Email/họ tên không hợp lệ được liệt kê ở phần bỏ qua.
+6. Mỗi trang lấy 500 bản ghi mới nhất theo `seq DESC`. Nếu có trang cũ hơn, phản hồi có `nextCursor`; gọi lại với `?cursor=<nextCursor>`. Cột `seq` cần duy nhất và không thay đổi. Giao diện chia dòng phát sinh thành lô tối đa 500; từng lô có bước kiểm tra/nhập riêng. Không cron hoặc tự tạo tài khoản chỉ vì bấm lấy dữ liệu.
+7. Mã khóa được đối chiếu qua ID, tag, tên và tên rút gọn; mã gộp không dấu phân cách cũng được nhận (`AIAGENT`, `AIAUTOMATION`); `AI4WORK` ánh xạ `AI_WORK`. Khớp nhiều khóa hoặc không khớp cần xử lý trong bước kiểm tra; không tự chọn khóa doanh nghiệp khác.
+8. Đơn nhiều khóa không có tiền phân bổ từng khóa: giữ tổng ở ghi chú và cảnh báo dùng giá danh mục cho khoản ghi nhận LMS. Số tiền này không phải bằng chứng/đối soát doanh thu thực thu. `crmRef` là ID doanh thu và được lưu trong ghi chú giao dịch, **không gán vào `crm_deal_id`**; mã deal thật vẫn chỉ dùng qua hợp đồng API CRM. Nhập lại không tạo thêm ghi danh đã tồn tại.
+
+Kiểm thử phải dùng CRM giả lập và database LMS thử. Không chạy nhập/ghi danh/email với khách thật để kiểm tra kết nối. Thành công khi chỉ đọc danh sách không chứng minh webhook, email, đối soát thanh toán hoặc tự xếp lớp đã chạy production.
+
 ```
 signature = hex( HMAC_SHA256( secret, "<timestamp>.<raw body>" ) )
 ```
