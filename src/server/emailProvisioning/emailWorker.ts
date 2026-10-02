@@ -33,7 +33,7 @@ let activeTransporter: nodemailer.Transporter | null = null;
 export function hasSmtpConfig(): boolean {
   const user = getSmtpUser();
   const pass = getSmtpPass();
-  if (user && pass && !user.includes("your_email") && !pass.includes("your_app_password")) {
+  if (user && pass && !user.includes("your_email") && !user.includes("example.com") && !pass.includes("your_app_password")) {
     return true;
   }
   return hasSmtpOauth2Config();
