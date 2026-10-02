@@ -174,10 +174,10 @@ import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
 import { getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
 import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src/server/services/email";
-import { getDefaultStudentPassword, getPublicAppConfig, getSupportPhone, isDirectSale } from "./src/server/config";
+import { getDefaultStudentPassword, getPublicAppConfig, getSalesMode, getSupportPhone, isDirectSale } from "./src/server/config";
 import { notifyTeacherOfPlacements, sendClassPlacementNotice } from "./src/server/services/placementNotice";
 import { importPaidEnrollments } from "./src/server/services/paidEnrollmentImport";
-import { isCrmSourceConfigured, pullCrmPaidRecords } from "./src/server/services/crmPaidSource";
+import { checkCrmSource, isCrmSourceConfigured, pullCrmPaidRecords } from "./src/server/services/crmPaidSource";
 import { importMcnaCatalog, mcnaCatalog } from "./src/server/services/catalogImport";
 import { generateWelcomeLetterDraft } from "./src/server/services/welcomeLetterAi";
 import { FileMaterialType, isFileMaterialType, isPdfFile, learnerMaterialAccess, MATERIAL_EXTENSIONS, resolveUploadType } from "./src/materialAccess";
@@ -4036,7 +4036,10 @@ app.get("/api/admin/system/status", requireAuth, requireRole(["admin"]), asyncHa
     crmOutbound: has("CRM_WEBHOOK_URL") && has("CRM_WEBHOOK_SECRET"),
     crmInbound: has("CRM_API_KEY") && has("CRM_INBOUND_SECRET"),
     cron: has("CRON_SECRET"),
-    googleWorkspace
+    googleWorkspace,
+    salesMode: getSalesMode(),
+    crmDatabase: isDevMockDb ? "not_configured" : await checkCrmSource(),
+    defaultStudentPassword: Boolean(getDefaultStudentPassword())
   };
   res.json(status);
 }));
