@@ -33,6 +33,30 @@ function getCrmPool(): pg.Pool {
   return crmPool;
 }
 
+export type CrmSourceCheck = "not_configured" | "ok" | "certificate" | "unreachable";
+
+/** Whether the CRM database can be read right now, for the admin's system status. Never throws. */
+export async function checkCrmSource(): Promise<CrmSourceCheck> {
+  if (!isCrmSourceConfigured()) return "not_configured";
+  try {
+    const client = await getCrmPool().connect();
+    try {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      await client.query("SELECT 1 FROM revenue_records LIMIT 1");
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    return "ok";
+  } catch (error: any) {
+    // The provider's CA is not trusted (CRM_DATABASE_CA_CERT missing or wrong) vs. any other failure.
+    return /CERT|SELF_SIGNED|UNABLE_TO_VERIFY/.test(String(error?.code || "")) ? "certificate" : "unreachable";
+  }
+}
+
 /** The latest revenue records of the CRM as rows for the paid-customers import. */
 export async function pullCrmPaidRecords(cursor?: string): Promise<CrmPaidPull> {
   if (!isCrmSourceConfigured()) throw new Error("CRM source not configured.");
