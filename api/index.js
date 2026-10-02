@@ -7186,6 +7186,25 @@ function getCrmPool() {
   }
   return crmPool;
 }
+async function checkCrmSource() {
+  if (!isCrmSourceConfigured()) return "not_configured";
+  try {
+    const client2 = await getCrmPool().connect();
+    try {
+      await client2.query("BEGIN TRANSACTION READ ONLY");
+      await client2.query("SELECT 1 FROM revenue_records LIMIT 1");
+      await client2.query("COMMIT");
+    } catch (error) {
+      await client2.query("ROLLBACK").catch(() => void 0);
+      throw error;
+    } finally {
+      client2.release();
+    }
+    return "ok";
+  } catch (error) {
+    return /CERT|SELF_SIGNED|UNABLE_TO_VERIFY/.test(String(error?.code || "")) ? "certificate" : "unreachable";
+  }
+}
 async function pullCrmPaidRecords(cursor) {
   if (!isCrmSourceConfigured()) throw new Error("CRM source not configured.");
   if (cursor !== void 0 && !/^\d{1,20}$/.test(cursor)) throw new Error("Invalid CRM cursor.");
@@ -11283,7 +11302,10 @@ app.get("/api/admin/system/status", requireAuth, requireRole(["admin"]), asyncHa
     crmOutbound: has("CRM_WEBHOOK_URL") && has("CRM_WEBHOOK_SECRET"),
     crmInbound: has("CRM_API_KEY") && has("CRM_INBOUND_SECRET"),
     cron: has("CRON_SECRET"),
-    googleWorkspace
+    googleWorkspace,
+    salesMode: getSalesMode(),
+    crmDatabase: isDevMockDb ? "not_configured" : await checkCrmSource(),
+    defaultStudentPassword: Boolean(getDefaultStudentPassword())
   };
   res.json(status);
 }));
