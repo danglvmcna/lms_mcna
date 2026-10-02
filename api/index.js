@@ -3129,9 +3129,6 @@ var enrollmentsRepository = {
   }
 };
 
-// src/server/services/email.ts
-import nodemailer from "nodemailer";
-
 // src/server/config.ts
 var DEFAULT_SUPPORT_PHONE = "0939.866.825";
 function getSalesMode() {
@@ -3152,491 +3149,10 @@ function getPublicAppConfig() {
   };
 }
 
-// src/server/services/email.ts
+// src/server/emailProvisioning/emailWorker.ts
+import nodemailer from "nodemailer";
 import fs2 from "fs";
 import path2 from "path";
-var getSmtpConfig = () => ({
-  host: (process.env.SMTP_HOST || "").trim(),
-  port: Number(process.env.SMTP_PORT) || 587,
-  user: (process.env.SMTP_USER || "").trim(),
-  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
-  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
-  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
-  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
-});
-var BANK_ACCOUNT_NUMBER = "099162438104";
-var BANK_NAME = "MB Bank (Ng\xE2n h\xE0ng Qu\xE2n \u0110\u1ED9i)";
-var ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
-var getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
-var isPlaceholderSmtp = () => {
-  const config = getSmtpConfig();
-  return !config.user || config.user.includes("your_email") || config.user.includes("example.com") || config.pass.includes("your_app_password");
-};
-var transporter = null;
-async function getTransporter() {
-  const config = getSmtpConfig();
-  if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
-    if (!transporter) {
-      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
-      transporter = nodemailer.createTransport(
-        isGmail ? {
-          service: "gmail",
-          auth: {
-            user: config.user,
-            pass: config.pass
-          }
-        } : {
-          host: config.host,
-          port: config.port,
-          secure: config.port === 465,
-          auth: {
-            user: config.user,
-            pass: config.pass
-          }
-        }
-      );
-    }
-    return transporter;
-  }
-  return null;
-}
-function logEmailMock(to, name, subject, htmlContent) {
-  try {
-    const scratchDir = path2.join(process.cwd(), "scratch");
-    if (!fs2.existsSync(scratchDir)) {
-      fs2.mkdirSync(scratchDir, { recursive: true });
-    }
-    const logFile = path2.join(scratchDir, "emails.log");
-    const logEntry = `
-========================================
-[EMAIL MOCK DISPATCHED] ${(/* @__PURE__ */ new Date()).toISOString()}
-To: "${name}" <${to}>
-Subject: ${subject}
-----------------------------------------
-${htmlContent}
-========================================
-`;
-    fs2.appendFileSync(logFile, logEntry, "utf8");
-  } catch {
-  }
-  console.log(`[Email Mock] Sent to "${name}" <${to}>: ${subject}`);
-}
-var formatMoney = (amount) => amount > 0 ? `${new Intl.NumberFormat("vi-VN").format(amount)} \u0111` : "Mi\u1EC5n ph\xED";
-function renderBaseLayout(title, bodyContent) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
-    .wrapper { width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; }
-    .card { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-    .header { background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center; }
-    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
-    .header p { color: #c7d2fe; margin: 4px 0 0 0; font-size: 12px; font-weight: 500; }
-    .content { padding: 32px 24px; }
-    .info-box { background-color: #f1f5f9; border-radius: 12px; padding: 16px 20px; margin: 20px 0; border: 1px solid #e2e8f0; }
-    .bank-box { background-color: #eff6ff; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bfdbfe; }
-    .success-box { background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0; }
-    .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
-    .row-label { color: #64748b; font-weight: 500; }
-    .row-value { color: #0f172a; font-weight: 700; text-align: right; }
-    .highlight { color: #4f46e5; font-weight: 800; }
-    .highlight-green { color: #16a34a; font-weight: 800; }
-    .footer { background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; }
-    .btn-container { text-align: center; margin: 28px 0 10px 0; }
-    .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
-    .btn-green { background-color: #16a34a; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3); }
-    .mono { font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
-  </style>
-</head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-      <div class="header">
-        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
-        <p>H\u1EC7 th\u1ED1ng \u0110\xE0o t\u1EA1o & Qu\u1EA3n l\xFD H\u1ECDc v\u1EE5 Tr\u1EF1c tuy\u1EBFn (MCNA LMS)</p>
-      </div>
-      <div class="content">
-        ${bodyContent}
-      </div>
-      <div class="footer">
-        <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</p>
-        <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: ${getSupportPhone()} \xB7 Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, "")}</a></p>
-        <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-async function dispatchEmail(to, name, subject, html, text2) {
-  const config = getSmtpConfig();
-  let toEmail = to;
-  if (config.testReceiver && !config.testReceiver.includes("your_real_email")) {
-    toEmail = config.testReceiver;
-    console.log(`[Email Service] Overriding recipient from ${to} to test email ${toEmail}`);
-  }
-  const activeTransporter2 = await getTransporter();
-  if (!activeTransporter2) {
-    logEmailMock(toEmail, name, subject, html);
-    return "mock";
-  }
-  try {
-    await activeTransporter2.sendMail({
-      from: config.from,
-      to: toEmail,
-      subject,
-      html,
-      text: text2
-    });
-    console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
-    return "sent";
-  } catch (err) {
-    console.warn(`[Email Service] SMTP dispatch failed, fallback to mock log:`, err);
-    logEmailMock(toEmail, name, subject, html);
-    return "failed";
-  }
-}
-var escapeHtml = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-var safeHttpUrl = (value) => {
-  try {
-    const url = new URL(String(value || "").trim());
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
-  } catch {
-    return "";
-  }
-};
-var infoRow = (label, value, valueStyle = "font-weight: 700; color: #0f172a;") => `
-          <tr>
-            <td style="color: #64748b; padding: 5px 0; vertical-align: top; width: 38%;">${label}</td>
-            <td style="${valueStyle} text-align: right; padding: 5px 0;">${value}</td>
-          </tr>`;
-async function sendClassPlacementEmail(params) {
-  try {
-    const subject = `[MCNA] Th\xF4ng tin x\u1EBFp l\u1EDBp ${params.sectionCode} \u2013 ${params.courseTitle}`;
-    const zaloUrl = safeHttpUrl(params.groupChatUrl);
-    const schedule = String(params.scheduleText || "").trim() || "MCNA s\u1EBD th\xF4ng b\xE1o trong nh\xF3m l\u1EDBp";
-    const teacher = String(params.teacherName || "").trim() || "\u0110ang c\u1EADp nh\u1EADt";
-    const appUrl = getAppUrl();
-    const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml(params.name)},</p>
-      <p>MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc <strong>${escapeHtml(params.courseTitle)}</strong>. D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin l\u1EDBp c\u1EE7a b\u1EA1n:</p>
-
-      <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
-          TH\xD4NG TIN L\u1EDAP H\u1ECCC
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("T\xEAn l\u1EDBp:", escapeHtml(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
-          ${params.openingDate ? infoRow("Ng\xE0y khai gi\u1EA3ng:", escapeHtml(params.openingDate)) : ""}
-          ${infoRow("L\u1ECBch h\u1ECDc:", escapeHtml(schedule))}
-          ${params.room ? infoRow("H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc:", escapeHtml(params.room), "font-weight: 600; color: #334155;") : ""}
-          ${params.numberOfSessions ? infoRow("S\u1ED1 bu\u1ED5i:", `${Number(params.numberOfSessions)} bu\u1ED5i`, "font-weight: 600; color: #334155;") : ""}
-          ${infoRow("Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:", escapeHtml(teacher))}
-          ${infoRow("S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3:", escapeHtml(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
-        </table>
-      </div>
-
-      <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
-        ${zaloUrl ? `
-        <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">M\u1ECDi th\xF4ng b\xE1o c\u1EE7a l\u1EDBp v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn di\u1EC5n ra trong nh\xF3m Zalo. B\u1EA1n tham gia nh\xF3m tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng nh\xE9.</p>
-        <div style="text-align: center;">
-          <a href="${escapeHtml(zaloUrl)}" class="btn" target="_blank" style="background-color: #0068ff;">Tham gia nh\xF3m Zalo l\u1EDBp</a>
-        </div>
-        <p style="font-size: 11px; color: #64748b; margin: 10px 0 0 0; word-break: break-all; text-align: center;">${escapeHtml(zaloUrl)}</p>
-        ` : `
-        <p style="font-size: 13px; color: #334155; margin: 0;">Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi cho b\u1EA1n tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng. N\u1EBFu c\u1EA7n s\u1EDBm h\u01A1n, b\u1EA1n g\u1ECDi s\u1ED1 h\u1ED7 tr\u1EE3 ${escapeHtml(params.supportPhone)}.</p>
-        `}
-      </div>
-
-      <p style="font-size: 14px; color: #334155;">
-        L\u1EDBp h\u1ECDc \u0111\xE3 hi\u1EC3n th\u1ECB trong t\xE0i kho\u1EA3n MCNA LMS c\u1EE7a b\u1EA1n (\u0111\u0103ng nh\u1EADp b\u1EB1ng email <strong>${escapeHtml(params.to)}</strong>). T\u1EA1i \u0111\xF3 c\xF3 t\xE0i li\u1EC7u m\u1EDF \u0111\u1EA7u, slide, file data v\xE0 b\xE0i t\u1EADp v\u1EC1 nh\xE0 c\u1EE7a t\u1EEBng bu\u1ED5i.
-      </p>
-      ${params.firstLoginPending ? `
-      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
-        L\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, b\u1EA1n d\xF9ng m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh trong email "T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn" MCNA \u0111\xE3 g\u1EEDi, sau \u0111\xF3 \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n. N\u1EBFu kh\xF4ng t\xECm th\u1EA5y, b\u1EA1n ch\u1ECDn "Qu\xEAn m\u1EADt kh\u1EA9u" \u1EDF trang \u0111\u0103ng nh\u1EADp.
-      </p>` : ""}
-
-      <div class="btn-container">
-        <a href="${escapeHtml(appUrl)}" class="btn btn-green" target="_blank">V\xE0o l\u1EDBp h\u1ECDc tr\xEAn MCNA LMS</a>
-      </div>
-    `;
-    const plainText = [
-      `Ch\xE0o ${params.name},`,
-      "",
-      `MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc "${params.courseTitle}".`,
-      `T\xEAn l\u1EDBp: ${params.sectionCode}`,
-      params.openingDate ? `Ng\xE0y khai gi\u1EA3ng: ${params.openingDate}` : "",
-      `L\u1ECBch h\u1ECDc: ${schedule}`,
-      params.room ? `H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc: ${params.room}` : "",
-      params.numberOfSessions ? `S\u1ED1 bu\u1ED5i: ${params.numberOfSessions}` : "",
-      `Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch: ${teacher}`,
-      zaloUrl ? `Nh\xF3m Zalo c\u1EE7a l\u1EDBp: ${zaloUrl}` : "Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng.",
-      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
-      "",
-      `\u0110\u0103ng nh\u1EADp MCNA LMS b\u1EB1ng email ${params.to} t\u1EA1i: ${appUrl}`
-    ].filter((line) => line !== "").join("\n");
-    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
-  } catch (err) {
-    console.error("[Email Service] sendClassPlacementEmail error:", err);
-    return "failed";
-  }
-}
-async function sendStudentAccountEmail(params) {
-  try {
-    const subject = "[MCNA] T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n";
-    const appUrl = getAppUrl();
-    const courses = params.courseTitles.filter(Boolean);
-    const courseText = courses.length ? ` kh\xF3a h\u1ECDc <strong>${courses.map(escapeHtml).join(", ")}</strong>` : " kh\xF3a h\u1ECDc";
-    const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml(params.name)},</p>
-      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD${courseText} t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn c\u1EE7a b\u1EA1n tr\xEAn MCNA LMS \u0111\xE3 s\u1EB5n s\xE0ng:</p>
-
-      <div class="info-box">
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("Email \u0111\u0103ng nh\u1EADp:", escapeHtml(params.to))}
-          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
-        </table>
-      </div>
-
-      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
-        \u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.
-      </p>
-      <p style="font-size: 14px; color: #334155;">
-        L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n ngay khi MCNA x\u1EBFp l\u1EDBp xong. Khi \u0111\xF3 b\u1EA1n s\u1EBD nh\u1EADn th\xEAm m\u1ED9t email v\u1EDBi t\xEAn l\u1EDBp, l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch.
-      </p>
-      <p style="font-size: 13px; color: #475569;">C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n g\u1ECDi <strong>${escapeHtml(params.supportPhone)}</strong>.</p>
-
-      <div class="btn-container">
-        <a href="${escapeHtml(appUrl)}" class="btn" target="_blank">\u0110\u0103ng nh\u1EADp MCNA LMS</a>
-      </div>
-    `;
-    const plainText = [
-      `Ch\xE0o ${params.name},`,
-      "",
-      `T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n \u0111\xE3 s\u1EB5n s\xE0ng${courses.length ? ` (kh\xF3a h\u1ECDc: ${courses.join(", ")})` : ""}.`,
-      `Email \u0111\u0103ng nh\u1EADp: ${params.to}`,
-      `M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh: ${params.password}`,
-      "\u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.",
-      "L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n khi MCNA x\u1EBFp l\u1EDBp xong.",
-      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
-      "",
-      `\u0110\u0103ng nh\u1EADp t\u1EA1i: ${appUrl}`
-    ].join("\n");
-    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
-  } catch (err) {
-    console.error("[Email Service] sendStudentAccountEmail error:", err);
-    return "failed";
-  }
-}
-async function sendCourseRegistrationEmail(params) {
-  try {
-    const isPaid = params.price > 0;
-    const studentHex = (params.studentId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "MCNA01";
-    const txHex = (params.transactionId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "ORDER1";
-    const memoText = `MCNA ${studentHex} ${txHex}`;
-    const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${params.price}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
-    const safeName = escapeHtml(params.name);
-    const safeCourseTitle = escapeHtml(params.courseTitle);
-    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
-    const subject = isPaid ? `[MCNA] H\u01B0\u1EDBng d\u1EABn thanh to\xE1n & X\xE1c nh\u1EADn \u0111\u0103ng k\xFD: ${params.courseTitle}` : `[MCNA] X\xE1c nh\u1EADn \u0111\u0103ng k\xFD th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
-    const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
-      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. \u0110\u01A1n \u0111\u0103ng k\xFD h\u1ECDc t\u1EADp c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\xEAn h\u1EC7 th\u1ED1ng.</p>
-
-      <div class="info-box">
-        <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
-          TH\xD4NG TIN KH\xD3A H\u1ECCC \u0110\u0102NG K\xDD
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <tr>
-            <td style="color: #64748b; padding: 4px 0;">Kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${escapeHtml(params.courseTitle)}</td>
-          </tr>
-          <tr>
-            <td style="color: #64748b; padding: 4px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
-            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
-          </tr>
-          <tr>
-            <td style="color: #64748b; padding: 4px 0;">H\u1ECDc ph\xED:</td>
-            <td style="font-weight: 800; color: ${isPaid ? "#059669" : "#4f46e5"}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
-          </tr>
-          <tr>
-            <td style="color: #64748b; padding: 4px 0;">Tr\u1EA1ng th\xE1i:</td>
-            <td style="font-weight: 700; color: ${isPaid ? "#d97706" : "#059669"}; text-align: right; padding: 4px 0;">${isPaid ? "Ch\u1EDD thanh to\xE1n" : "\u0110\xE3 ghi danh"}</td>
-          </tr>
-        </table>
-      </div>
-
-      ${isPaid ? `
-      <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
-          H\u01AF\u1EDANG D\u1EAAN CHUY\u1EC2N KHO\u1EA2N H\u1ECCC PH\xCD
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Ng\xE2n h\xE0ng:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${BANK_NAME}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">S\u1ED1 t\xE0i kho\u1EA3n:</td>
-            <td style="font-weight: 800; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Ch\u1EE7 t\xE0i kho\u1EA3n:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${ACCOUNT_HOLDER}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n c\u1EA7n thanh to\xE1n:</td>
-            <td style="font-weight: 800; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">N\u1ED9i dung chuy\u1EC3n kho\u1EA3n:</td>
-            <td style="font-weight: 800; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
-          </tr>
-        </table>
-
-        <div style="text-align: center; margin-top: 16px;">
-          <p style="font-size: 12px; color: #475569; margin: 0 0 8px 0;">Qu\xE9t m\xE3 VietQR tr\xEAn \u1EE9ng d\u1EE5ng ng\xE2n h\xE0ng \u0111\u1EC3 thanh to\xE1n nhanh:</p>
-          <img src="${vietQrUrl}" alt="VietQR MCNA" style="max-width: 220px; width: 100%; border-radius: 12px; border: 1px solid #bfdbfe; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin: 0 auto; display: block;" />
-        </div>
-
-        <p style="font-size: 12px; color: #64748b; margin: 12px 0 0 0; line-height: 1.5; text-align: center;">
-          <em>* L\u01B0u \xFD quan tr\u1ECDng: Vui l\xF2ng ghi ch\xEDnh x\xE1c n\u1ED9i dung <strong style="color: #b91c1c;">${memoText}</strong> \u0111\u1EC3 h\u1EC7 th\u1ED1ng t\u1EF1 \u0111\u1ED9ng k\xEDch ho\u1EA1t kh\xF3a h\u1ECDc ngay sau khi nh\u1EADn ti\u1EC1n.</em>
-        </p>
-      </div>
-      ` : `
-      <p>Kh\xF3a h\u1ECDc mi\u1EC5n ph\xED \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n. B\u1EA1n c\xF3 th\u1EC3 \u0111\u0103ng nh\u1EADp ngay \u0111\u1EC3 theo d\xF5i \u0111\u1EC1 c\u01B0\u01A1ng v\xE0 l\u1ECBch h\u1ECDc.</p>
-      `}
-
-      <div class="btn-container">
-        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">Xem ph\xF2ng h\u1ECDc & \u0110\u01A1n \u0111\u0103ng k\xFD</a>
-      </div>
-    `;
-    const plainText = `K\xEDnh g\u1EEDi ${params.name},
-
-C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc "${params.courseTitle}" t\u1EA1i MCNA Technology School.
-H\u1ECDc ph\xED: ${formatMoney(params.price)}
-${isPaid ? `
-Th\xF4ng tin chuy\u1EC3n kho\u1EA3n:
-Ng\xE2n h\xE0ng: ${BANK_NAME}
-S\u1ED1 t\xE0i kho\u1EA3n: ${BANK_ACCOUNT_NUMBER}
-Ch\u1EE7 t\xE0i kho\u1EA3n: ${ACCOUNT_HOLDER}
-S\u1ED1 ti\u1EC1n: ${formatMoney(params.price)}
-N\u1ED9i dung: ${memoText}
-` : ""}
-Truy c\u1EADp h\u1EC7 th\u1ED1ng t\u1EA1i: ${getAppUrl()}`;
-    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
-  } catch (err) {
-    console.error("[Email Service] sendCourseRegistrationEmail error:", err);
-  }
-}
-async function sendPaymentConfirmationEmail(params) {
-  try {
-    const subject = `[MCNA] X\xE1c nh\u1EADn thanh to\xE1n th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
-    const safeName = escapeHtml(params.name);
-    const safeCourseTitle = escapeHtml(params.courseTitle);
-    const safeSectionCode = escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
-    const safeTeacherName = params.teacherName ? escapeHtml(params.teacherName) : "";
-    const safeTransactionId = escapeHtml(params.transactionId || "TX-" + Date.now());
-    const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(params.name)},</p>
-      <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
-
-      <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
-          BI\xCAN NH\u1EACN THANH TO\xC1N & TH\xD4NG TIN H\u1ECCC PH\u1EA6N
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.courseTitle)}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n \u0111\xE3 thanh to\xE1n:</td>
-            <td style="font-weight: 800; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">M\xE3 giao d\u1ECBch:</td>
-            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${escapeHtml(params.transactionId || "TX-" + Date.now())}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Th\u1EDDi gian x\xE1c nh\u1EADn:</td>
-            <td style="font-weight: 600; color: #334155; text-align: right; padding: 5px 0;">${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</td>
-          </tr>
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
-            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
-          </tr>
-          ${safeTeacherName ? `
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:</td>
-            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml(params.teacherName)}</td>
-          </tr>` : ""}
-          <tr>
-            <td style="color: #475569; padding: 5px 0;">Tr\u1EA1ng th\xE1i kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 800; color: #15803d; text-align: right; padding: 5px 0;">\u0110\xE3 k\xEDch ho\u1EA1t - S\u1EB5n s\xE0ng v\xE0o h\u1ECDc</td>
-          </tr>
-        </table>
-      </div>
-
-      <p style="font-size: 14px; color: #334155;">
-        B\u1EA1n hi\u1EC7n \u0111\xE3 c\xF3 \u0111\u1EA7y \u0111\u1EE7 quy\u1EC1n truy c\u1EADp v\xE0o t\xE0i li\u1EC7u h\u1ECDc t\u1EADp, b\xE0i gi\u1EA3ng, b\xE0i t\u1EADp v\xE0 ph\xF2ng h\u1ECDc tr\u1EF1c tuy\u1EBFn c\u1EE7a kh\xF3a h\u1ECDc. H\xE3y b\u1EAFt \u0111\u1EA7u h\xE0nh tr\xECnh h\u1ECDc t\u1EADp c\xF9ng MCNA ngay h\xF4m nay!
-      </p>
-
-      <div class="btn-container">
-        <a href="${escapeHtml(getAppUrl())}" class="btn btn-green" target="_blank">V\xE0o h\u1ECDc ngay tr\xEAn MCNA LMS</a>
-      </div>
-    `;
-    const plainText = `K\xEDnh g\u1EEDi ${params.name},
-
-H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA x\xE1c nh\u1EADn \u0111\xE3 nh\u1EADn thanh to\xE1n s\u1ED1 ti\u1EC1n ${formatMoney(params.amount)} cho kh\xF3a h\u1ECDc "${params.courseTitle}".
-M\xE3 giao d\u1ECBch: ${params.transactionId || ""}
-L\u1EDBp h\u1ECDc: ${params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp"}
-Kh\xF3a h\u1ECDc \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t th\xE0nh c\xF4ng!
-Truy c\u1EADp v\xE0o h\u1ECDc ngay t\u1EA1i: ${getAppUrl()}`;
-    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
-  } catch (err) {
-    console.error("[Email Service] sendPaymentConfirmationEmail error:", err);
-  }
-}
-async function sendEmailDirect(recipientEmail, recipientName, message) {
-  try {
-    const subject = `[MCNA LMS] Th\xF4ng b\xE1o m\u1EDBi t\u1EEB h\u1EC7 th\u1ED1ng`;
-    const safeName = escapeHtml(recipientName);
-    const safeMessage = escapeHtml(message);
-    const bodyContent = `
-      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml(recipientName)},</p>
-      <p>H\u1EC7 th\u1ED1ng H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin g\u1EEDi \u0111\u1EBFn b\u1EA1n th\xF4ng b\xE1o m\u1EDBi:</p>
-      <div class="info-box" style="font-size: 14px; color: #1e293b; line-height: 1.6;">
-        ${escapeHtml(message).replace(/\r?\n/g, "<br>")}
-      </div>
-      <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp v\xE0o h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\u1EBFt.</p>
-      <div class="btn-container">
-        <a href="${escapeHtml(getAppUrl())}" class="btn" target="_blank">\u0110i t\u1EDBi MCNA LMS</a>
-      </div>
-    `;
-    const plainText = `K\xEDnh g\u1EEDi ${recipientName},
-
-B\u1EA1n c\xF3 m\u1ED9t th\xF4ng b\xE1o m\u1EDBi t\u1EEB MCNA LMS:
-
-${message}
-
-Truy c\u1EADp h\u1EC7 th\u1ED1ng: ${getAppUrl()}`;
-    await dispatchEmail(recipientEmail, recipientName, subject, renderBaseLayout(subject, bodyContent), plainText);
-  } catch (err) {
-    console.error(`[Email Service Error] Failed to process direct email to ${recipientEmail}:`, err);
-  }
-}
-
-// src/server/emailProvisioning/emailWorker.ts
-import nodemailer2 from "nodemailer";
-import fs3 from "fs";
-import path3 from "path";
 import os from "os";
 
 // src/server/repositories/audit.ts
@@ -3681,7 +3197,7 @@ var activeTransporter = null;
 function hasSmtpConfig() {
   const user = getSmtpUser();
   const pass = getSmtpPass();
-  if (user && pass && !user.includes("your_email") && !pass.includes("your_app_password")) {
+  if (user && pass && !user.includes("your_email") && !user.includes("example.com") && !pass.includes("your_app_password")) {
     return true;
   }
   return hasSmtpOauth2Config();
@@ -3691,7 +3207,7 @@ function hasSmtpOauth2Config() {
   const isPlaceholder = user.includes("your_email") || user.includes("example.com");
   return !isPlaceholder && hasGoogleCredentials() && !!process.env.SMTP_USER;
 }
-function getTransporter2() {
+function getTransporter() {
   if (activeTransporter) return activeTransporter;
   const user = getSmtpUser();
   const pass = getSmtpPass();
@@ -3700,7 +3216,7 @@ function getTransporter2() {
   if (user && pass) {
     console.log(`[EmailWorker] Initializing standard SMTP transport for: ${user}`);
     const isGmail = host === "smtp.gmail.com" || user.endsWith("@gmail.com");
-    activeTransporter = nodemailer2.createTransport(
+    activeTransporter = nodemailer.createTransport(
       isGmail ? {
         service: "gmail",
         auth: {
@@ -3722,7 +3238,7 @@ function getTransporter2() {
   if (hasSmtpOauth2Config()) {
     const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON2);
     console.log(`[EmailWorker] Initializing OAuth2 SMTP transport for user: ${user}`);
-    activeTransporter = nodemailer2.createTransport({
+    activeTransporter = nodemailer.createTransport({
       host,
       port,
       secure: port === 465,
@@ -3737,14 +3253,14 @@ function getTransporter2() {
   }
   throw new Error("SMTP credentials are not configured. Falling back to mock logging.");
 }
-function logEmailMock2(to, name, subject, htmlContent) {
+function logEmailMock(to, name, subject, htmlContent) {
   try {
     const baseDir = process.env.VERCEL ? os.tmpdir() : process.cwd();
-    const scratchDir = path3.join(baseDir, "scratch");
-    if (!fs3.existsSync(scratchDir)) {
-      fs3.mkdirSync(scratchDir, { recursive: true });
+    const scratchDir = path2.join(baseDir, "scratch");
+    if (!fs2.existsSync(scratchDir)) {
+      fs2.mkdirSync(scratchDir, { recursive: true });
     }
-    const logFile = path3.join(scratchDir, "emails.log");
+    const logFile = path2.join(scratchDir, "emails.log");
     const logEntry = `
 ========================================
 [EMAIL MOCK DISPATCHED]
@@ -3756,12 +3272,12 @@ ${htmlContent}
 ========================================
 
 `;
-    fs3.appendFileSync(logFile, logEntry, "utf8");
+    fs2.appendFileSync(logFile, logEntry, "utf8");
   } catch {
   }
   console.log(`[Email Mock] Dispatched to ${to}: ${subject}`);
 }
-function escapeHtml2(value) {
+function escapeHtml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 async function retryWithBackoff(fn, retries = 3, delays = [5e3, 3e4, 12e4]) {
@@ -3916,8 +3432,8 @@ async function sendWelcomeEmail(pool2, userId, params) {
   );
   const action = async () => {
     if (hasSmtpConfig()) {
-      const transporter2 = getTransporter2();
-      await transporter2.sendMail({
+      const transporter = getTransporter();
+      await transporter.sendMail({
         from: getSmtpFrom(),
         to: params.to,
         subject,
@@ -3932,7 +3448,7 @@ Vui l\xF2ng \u0111\u0103ng nh\u1EADp Gmail v\xE0 c\u1ED5ng th\xF4ng tin LMS.`
       });
       console.log(`[EmailWorker] Welcome email dispatched successfully to: ${params.to}`);
     } else {
-      logEmailMock2(params.to, params.name, subject, htmlContent);
+      logEmailMock(params.to, params.name, subject, htmlContent);
     }
   };
   try {
@@ -3970,15 +3486,15 @@ async function sendLmsNotification(pool2, userId, params) {
       <p class="greeting">Ch\xE0o h\u1ECDc vi\xEAn,</p>
       <p>H\u1EC7 th\u1ED1ng LMS th\xF4ng b\xE1o c\u1EADp nh\u1EADt m\u1EDBi li\xEAn quan \u0111\u1EBFn t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n:</p>
       <div class="message-box">
-        ${escapeHtml2(params.body)}
+        ${escapeHtml(params.body)}
       </div>
       <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp c\u1ED5ng th\xF4ng tin LMS \u0111\u1EC3 bi\u1EBFt th\xEAm chi ti\u1EBFt.</p>
     `
   );
   const action = async () => {
     if (hasSmtpConfig()) {
-      const transporter2 = getTransporter2();
-      await transporter2.sendMail({
+      const transporter = getTransporter();
+      await transporter.sendMail({
         from: getSmtpFrom(),
         to: params.to,
         subject: finalSubject,
@@ -3987,7 +3503,7 @@ async function sendLmsNotification(pool2, userId, params) {
       });
       console.log(`[EmailWorker] Notification email dispatched successfully to: ${params.to}`);
     } else {
-      logEmailMock2(params.to, "H\u1ECDc vi\xEAn", finalSubject, htmlContent);
+      logEmailMock(params.to, "H\u1ECDc vi\xEAn", finalSubject, htmlContent);
     }
   };
   try {
@@ -4007,8 +3523,8 @@ async function sendLmsNotification(pool2, userId, params) {
 }
 async function sendPasswordResetLinkEmail(pool2, userId, params) {
   const subject = `[MCNA LMS] Li\xEAn k\u1EBFt \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u`;
-  const safeName = escapeHtml2(params.name);
-  const safeResetUrl = escapeHtml2(params.resetUrl);
+  const safeName = escapeHtml(params.name);
+  const safeResetUrl = escapeHtml(params.resetUrl);
   const expiresAt = new Date(params.expiresAt).toLocaleString("vi-VN");
   const htmlContent = wrapHtmlBody(
     "\u0110\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u t\xE0i kho\u1EA3n",
@@ -4025,8 +3541,8 @@ async function sendPasswordResetLinkEmail(pool2, userId, params) {
   );
   const action = async () => {
     if (hasSmtpConfig()) {
-      const transporter2 = getTransporter2();
-      await transporter2.sendMail({
+      const transporter = getTransporter();
+      await transporter.sendMail({
         from: getSmtpFrom(),
         to: params.to,
         subject,
@@ -4038,7 +3554,7 @@ ${params.resetUrl}`
       });
       console.log(`[EmailWorker] Password reset link email dispatched successfully to: ${params.to}`);
     } else {
-      logEmailMock2(params.to, params.name, subject, htmlContent);
+      logEmailMock(params.to, params.name, subject, htmlContent);
     }
   };
   try {
@@ -4058,18 +3574,18 @@ ${params.resetUrl}`
 }
 async function deliverEmail(params) {
   if (hasSmtpConfig()) {
-    await getTransporter2().sendMail({ from: getSmtpFrom(), to: params.to, subject: params.subject, html: params.html, text: params.text });
+    await getTransporter().sendMail({ from: getSmtpFrom(), to: params.to, subject: params.subject, html: params.html, text: params.text });
     console.log(`[EmailWorker] "${params.subject}" dispatched to: ${params.to}`);
   } else {
-    logEmailMock2(params.to, params.name, params.subject, params.html);
+    logEmailMock(params.to, params.name, params.subject, params.html);
   }
 }
 async function sendTemporaryPasswordEmail(pool2, userId, params) {
   const subject = `[MCNA LMS] Th\xF4ng tin \u0111\u0103ng nh\u1EADp t\xE0i kho\u1EA3n h\u1ECDc vi\xEAn`;
-  const safeName = escapeHtml2(params.name);
-  const safeEmail = escapeHtml2(params.to);
-  const safePassword = escapeHtml2(params.temporaryPassword);
-  const safeLoginUrl = escapeHtml2(params.loginUrl);
+  const safeName = escapeHtml(params.name);
+  const safeEmail = escapeHtml(params.to);
+  const safePassword = escapeHtml(params.temporaryPassword);
+  const safeLoginUrl = escapeHtml(params.loginUrl);
   const html = wrapHtmlBody(
     "Th\xF4ng tin \u0111\u0103ng nh\u1EADp",
     `
@@ -4112,8 +3628,8 @@ B\u1EA1n s\u1EBD \u0111\u01B0\u1EE3c y\xEAu c\u1EA7u \u0111\u1ED5i m\u1EADt kh\u
 }
 async function sendAccountExistsEmail(pool2, userId, params) {
   const subject = `[MCNA LMS] B\u1EA1n \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS`;
-  const safeName = escapeHtml2(params.name);
-  const safeLoginUrl = escapeHtml2(params.loginUrl);
+  const safeName = escapeHtml(params.name);
+  const safeLoginUrl = escapeHtml(params.loginUrl);
   const html = wrapHtmlBody(
     "B\u1EA1n \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n",
     `
@@ -4140,6 +3656,455 @@ Email n\xE0y \u0111\xE3 c\xF3 t\xE0i kho\u1EA3n LMS. H\xE3y \u0111\u0103ng nh\u1
     [3e3]
   );
   await auditRepository.log(pool2, userId, "account_exists_email_sent", "email", `B\xE1o t\xE0i kho\u1EA3n \u0111\xE3 t\u1ED3n t\u1EA1i t\u1EDBi ${params.to}`);
+}
+
+// src/server/services/email.ts
+import fs3 from "fs";
+import path3 from "path";
+var getSmtpConfig = () => ({
+  from: process.env.SMTP_FROM || `"H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA" <${getSmtpUser() || "noreply@mcna.vn"}>`,
+  testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
+  appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
+});
+var BANK_ACCOUNT_NUMBER = "099162438104";
+var BANK_NAME = "MB Bank (Ng\xE2n h\xE0ng Qu\xE2n \u0110\u1ED9i)";
+var ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
+var getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
+async function getTransporter2() {
+  if (!hasSmtpConfig()) return null;
+  return getTransporter();
+}
+function logEmailMock2(to, name, subject, htmlContent) {
+  try {
+    const scratchDir = path3.join(process.cwd(), "scratch");
+    if (!fs3.existsSync(scratchDir)) {
+      fs3.mkdirSync(scratchDir, { recursive: true });
+    }
+    const logFile = path3.join(scratchDir, "emails.log");
+    const logEntry = `
+========================================
+[EMAIL MOCK DISPATCHED] ${(/* @__PURE__ */ new Date()).toISOString()}
+To: "${name}" <${to}>
+Subject: ${subject}
+----------------------------------------
+${htmlContent}
+========================================
+`;
+    fs3.appendFileSync(logFile, logEntry, "utf8");
+  } catch {
+  }
+  console.log(`[Email Mock] Sent to "${name}" <${to}>: ${subject}`);
+}
+var formatMoney = (amount) => amount > 0 ? `${new Intl.NumberFormat("vi-VN").format(amount)} \u0111` : "Mi\u1EC5n ph\xED";
+function renderBaseLayout(title, bodyContent) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml2(title)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
+    .wrapper { width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; }
+    .card { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .header { background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .header p { color: #c7d2fe; margin: 4px 0 0 0; font-size: 12px; font-weight: 500; }
+    .content { padding: 32px 24px; }
+    .info-box { background-color: #f1f5f9; border-radius: 12px; padding: 16px 20px; margin: 20px 0; border: 1px solid #e2e8f0; }
+    .bank-box { background-color: #eff6ff; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bfdbfe; }
+    .success-box { background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .row-label { color: #64748b; font-weight: 500; }
+    .row-value { color: #0f172a; font-weight: 700; text-align: right; }
+    .highlight { color: #4f46e5; font-weight: 800; }
+    .highlight-green { color: #16a34a; font-weight: 800; }
+    .footer { background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; }
+    .btn-container { text-align: center; margin: 28px 0 10px 0; }
+    .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
+    .btn-green { background-color: #16a34a; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3); }
+    .mono { font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
+        <p>H\u1EC7 th\u1ED1ng \u0110\xE0o t\u1EA1o & Qu\u1EA3n l\xFD H\u1ECDc v\u1EE5 Tr\u1EF1c tuy\u1EBFn (MCNA LMS)</p>
+      </div>
+      <div class="content">
+        ${bodyContent}
+      </div>
+      <div class="footer">
+        <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</p>
+        <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: ${getSupportPhone()} \xB7 Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, "")}</a></p>
+        <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+async function dispatchEmail(to, name, subject, html, text2) {
+  const config = getSmtpConfig();
+  let toEmail = to;
+  if (config.testReceiver && !config.testReceiver.includes("your_real_email")) {
+    toEmail = config.testReceiver;
+    console.log(`[Email Service] Overriding recipient from ${to} to test email ${toEmail}`);
+  }
+  const activeTransporter2 = await getTransporter2();
+  if (!activeTransporter2) {
+    logEmailMock2(toEmail, name, subject, html);
+    return "mock";
+  }
+  try {
+    await activeTransporter2.sendMail({
+      from: config.from,
+      to: toEmail,
+      subject,
+      html,
+      text: text2
+    });
+    console.log(`[Email Service] Real email sent to ${toEmail}: ${subject}`);
+    return "sent";
+  } catch (err) {
+    console.warn(`[Email Service] SMTP dispatch failed, fallback to mock log:`, err);
+    logEmailMock2(toEmail, name, subject, html);
+    return "failed";
+  }
+}
+var escapeHtml2 = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+var safeHttpUrl = (value) => {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+};
+var infoRow = (label, value, valueStyle = "font-weight: 700; color: #0f172a;") => `
+          <tr>
+            <td style="color: #64748b; padding: 5px 0; vertical-align: top; width: 38%;">${label}</td>
+            <td style="${valueStyle} text-align: right; padding: 5px 0;">${value}</td>
+          </tr>`;
+async function sendClassPlacementEmail(params) {
+  try {
+    const subject = `[MCNA] Th\xF4ng tin x\u1EBFp l\u1EDBp ${params.sectionCode} \u2013 ${params.courseTitle}`;
+    const zaloUrl = safeHttpUrl(params.groupChatUrl);
+    const schedule = String(params.scheduleText || "").trim() || "MCNA s\u1EBD th\xF4ng b\xE1o trong nh\xF3m l\u1EDBp";
+    const teacher = String(params.teacherName || "").trim() || "\u0110ang c\u1EADp nh\u1EADt";
+    const appUrl = getAppUrl();
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml2(params.name)},</p>
+      <p>MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc <strong>${escapeHtml2(params.courseTitle)}</strong>. D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin l\u1EDBp c\u1EE7a b\u1EA1n:</p>
+
+      <div class="success-box">
+        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          TH\xD4NG TIN L\u1EDAP H\u1ECCC
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("T\xEAn l\u1EDBp:", escapeHtml2(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
+          ${params.openingDate ? infoRow("Ng\xE0y khai gi\u1EA3ng:", escapeHtml2(params.openingDate)) : ""}
+          ${infoRow("L\u1ECBch h\u1ECDc:", escapeHtml2(schedule))}
+          ${params.room ? infoRow("H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc:", escapeHtml2(params.room), "font-weight: 600; color: #334155;") : ""}
+          ${params.numberOfSessions ? infoRow("S\u1ED1 bu\u1ED5i:", `${Number(params.numberOfSessions)} bu\u1ED5i`, "font-weight: 600; color: #334155;") : ""}
+          ${infoRow("Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:", escapeHtml2(teacher))}
+          ${infoRow("S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3:", escapeHtml2(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <div class="bank-box">
+        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
+        ${zaloUrl ? `
+        <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">M\u1ECDi th\xF4ng b\xE1o c\u1EE7a l\u1EDBp v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn di\u1EC5n ra trong nh\xF3m Zalo. B\u1EA1n tham gia nh\xF3m tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng nh\xE9.</p>
+        <div style="text-align: center;">
+          <a href="${escapeHtml2(zaloUrl)}" class="btn" target="_blank" style="background-color: #0068ff;">Tham gia nh\xF3m Zalo l\u1EDBp</a>
+        </div>
+        <p style="font-size: 11px; color: #64748b; margin: 10px 0 0 0; word-break: break-all; text-align: center;">${escapeHtml2(zaloUrl)}</p>
+        ` : `
+        <p style="font-size: 13px; color: #334155; margin: 0;">Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi cho b\u1EA1n tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng. N\u1EBFu c\u1EA7n s\u1EDBm h\u01A1n, b\u1EA1n g\u1ECDi s\u1ED1 h\u1ED7 tr\u1EE3 ${escapeHtml2(params.supportPhone)}.</p>
+        `}
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        L\u1EDBp h\u1ECDc \u0111\xE3 hi\u1EC3n th\u1ECB trong t\xE0i kho\u1EA3n MCNA LMS c\u1EE7a b\u1EA1n (\u0111\u0103ng nh\u1EADp b\u1EB1ng email <strong>${escapeHtml2(params.to)}</strong>). T\u1EA1i \u0111\xF3 c\xF3 t\xE0i li\u1EC7u m\u1EDF \u0111\u1EA7u, slide, file data v\xE0 b\xE0i t\u1EADp v\u1EC1 nh\xE0 c\u1EE7a t\u1EEBng bu\u1ED5i.
+      </p>
+      ${params.firstLoginPending ? `
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        L\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, b\u1EA1n d\xF9ng m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh trong email "T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn" MCNA \u0111\xE3 g\u1EEDi, sau \u0111\xF3 \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n. N\u1EBFu kh\xF4ng t\xECm th\u1EA5y, b\u1EA1n ch\u1ECDn "Qu\xEAn m\u1EADt kh\u1EA9u" \u1EDF trang \u0111\u0103ng nh\u1EADp.
+      </p>` : ""}
+
+      <div class="btn-container">
+        <a href="${escapeHtml2(appUrl)}" class="btn btn-green" target="_blank">V\xE0o l\u1EDBp h\u1ECDc tr\xEAn MCNA LMS</a>
+      </div>
+    `;
+    const plainText = [
+      `Ch\xE0o ${params.name},`,
+      "",
+      `MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc "${params.courseTitle}".`,
+      `T\xEAn l\u1EDBp: ${params.sectionCode}`,
+      params.openingDate ? `Ng\xE0y khai gi\u1EA3ng: ${params.openingDate}` : "",
+      `L\u1ECBch h\u1ECDc: ${schedule}`,
+      params.room ? `H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc: ${params.room}` : "",
+      params.numberOfSessions ? `S\u1ED1 bu\u1ED5i: ${params.numberOfSessions}` : "",
+      `Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch: ${teacher}`,
+      zaloUrl ? `Nh\xF3m Zalo c\u1EE7a l\u1EDBp: ${zaloUrl}` : "Link nh\xF3m Zalo s\u1EBD \u0111\u01B0\u1EE3c MCNA g\u1EEDi tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng.",
+      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
+      "",
+      `\u0110\u0103ng nh\u1EADp MCNA LMS b\u1EB1ng email ${params.to} t\u1EA1i: ${appUrl}`
+    ].filter((line) => line !== "").join("\n");
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendClassPlacementEmail error:", err);
+    return "failed";
+  }
+}
+async function sendStudentAccountEmail(params) {
+  try {
+    const subject = "[MCNA] T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n";
+    const appUrl = getAppUrl();
+    const courses = params.courseTitles.filter(Boolean);
+    const courseText = courses.length ? ` kh\xF3a h\u1ECDc <strong>${courses.map(escapeHtml2).join(", ")}</strong>` : " kh\xF3a h\u1ECDc";
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml2(params.name)},</p>
+      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD${courseText} t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn c\u1EE7a b\u1EA1n tr\xEAn MCNA LMS \u0111\xE3 s\u1EB5n s\xE0ng:</p>
+
+      <div class="info-box">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          ${infoRow("Email \u0111\u0103ng nh\u1EADp:", escapeHtml2(params.to))}
+          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml2(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
+        </table>
+      </div>
+
+      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
+        \u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.
+      </p>
+      <p style="font-size: 14px; color: #334155;">
+        L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n ngay khi MCNA x\u1EBFp l\u1EDBp xong. Khi \u0111\xF3 b\u1EA1n s\u1EBD nh\u1EADn th\xEAm m\u1ED9t email v\u1EDBi t\xEAn l\u1EDBp, l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch.
+      </p>
+      <p style="font-size: 13px; color: #475569;">C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n g\u1ECDi <strong>${escapeHtml2(params.supportPhone)}</strong>.</p>
+
+      <div class="btn-container">
+        <a href="${escapeHtml2(appUrl)}" class="btn" target="_blank">\u0110\u0103ng nh\u1EADp MCNA LMS</a>
+      </div>
+    `;
+    const plainText = [
+      `Ch\xE0o ${params.name},`,
+      "",
+      `T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n \u0111\xE3 s\u1EB5n s\xE0ng${courses.length ? ` (kh\xF3a h\u1ECDc: ${courses.join(", ")})` : ""}.`,
+      `Email \u0111\u0103ng nh\u1EADp: ${params.to}`,
+      `M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh: ${params.password}`,
+      "\u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.",
+      "L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n khi MCNA x\u1EBFp l\u1EDBp xong.",
+      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
+      "",
+      `\u0110\u0103ng nh\u1EADp t\u1EA1i: ${appUrl}`
+    ].join("\n");
+    return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendStudentAccountEmail error:", err);
+    return "failed";
+  }
+}
+async function sendCourseRegistrationEmail(params) {
+  try {
+    const isPaid = params.price > 0;
+    const studentHex = (params.studentId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "MCNA01";
+    const txHex = (params.transactionId || "").replace(/^[^a-f0-9]*/i, "").substring(0, 6).toUpperCase() || "ORDER1";
+    const memoText = `MCNA ${studentHex} ${txHex}`;
+    const vietQrUrl = `https://img.vietqr.io/image/MB-${BANK_ACCOUNT_NUMBER}-compact2.png?amount=${params.price}&addInfo=${encodeURIComponent(memoText)}&accountName=${encodeURIComponent(ACCOUNT_HOLDER)}`;
+    const safeName = escapeHtml2(params.name);
+    const safeCourseTitle = escapeHtml2(params.courseTitle);
+    const safeSectionCode = escapeHtml2(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
+    const subject = isPaid ? `[MCNA] H\u01B0\u1EDBng d\u1EABn thanh to\xE1n & X\xE1c nh\u1EADn \u0111\u0103ng k\xFD: ${params.courseTitle}` : `[MCNA] X\xE1c nh\u1EADn \u0111\u0103ng k\xFD th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml2(params.name)},</p>
+      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. \u0110\u01A1n \u0111\u0103ng k\xFD h\u1ECDc t\u1EADp c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c ghi nh\u1EADn tr\xEAn h\u1EC7 th\u1ED1ng.</p>
+
+      <div class="info-box">
+        <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
+          TH\xD4NG TIN KH\xD3A H\u1ECCC \u0110\u0102NG K\xDD
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">Kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 4px 0;">${escapeHtml2(params.courseTitle)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
+            <td style="font-weight: 600; color: #4338ca; text-align: right; padding: 4px 0;">${escapeHtml2(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">H\u1ECDc ph\xED:</td>
+            <td style="font-weight: 800; color: ${isPaid ? "#059669" : "#4f46e5"}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b; padding: 4px 0;">Tr\u1EA1ng th\xE1i:</td>
+            <td style="font-weight: 700; color: ${isPaid ? "#d97706" : "#059669"}; text-align: right; padding: 4px 0;">${isPaid ? "Ch\u1EDD thanh to\xE1n" : "\u0110\xE3 ghi danh"}</td>
+          </tr>
+        </table>
+      </div>
+
+      ${isPaid ? `
+      <div class="bank-box">
+        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
+          H\u01AF\u1EDANG D\u1EAAN CHUY\u1EC2N KHO\u1EA2N H\u1ECCC PH\xCD
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Ng\xE2n h\xE0ng:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${BANK_NAME}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 t\xE0i kho\u1EA3n:</td>
+            <td style="font-weight: 800; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Ch\u1EE7 t\xE0i kho\u1EA3n:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${ACCOUNT_HOLDER}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n c\u1EA7n thanh to\xE1n:</td>
+            <td style="font-weight: 800; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">N\u1ED9i dung chuy\u1EC3n kho\u1EA3n:</td>
+            <td style="font-weight: 800; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
+          </tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 16px;">
+          <p style="font-size: 12px; color: #475569; margin: 0 0 8px 0;">Qu\xE9t m\xE3 VietQR tr\xEAn \u1EE9ng d\u1EE5ng ng\xE2n h\xE0ng \u0111\u1EC3 thanh to\xE1n nhanh:</p>
+          <img src="${vietQrUrl}" alt="VietQR MCNA" style="max-width: 220px; width: 100%; border-radius: 12px; border: 1px solid #bfdbfe; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin: 0 auto; display: block;" />
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; margin: 12px 0 0 0; line-height: 1.5; text-align: center;">
+          <em>* L\u01B0u \xFD quan tr\u1ECDng: Vui l\xF2ng ghi ch\xEDnh x\xE1c n\u1ED9i dung <strong style="color: #b91c1c;">${memoText}</strong> \u0111\u1EC3 h\u1EC7 th\u1ED1ng t\u1EF1 \u0111\u1ED9ng k\xEDch ho\u1EA1t kh\xF3a h\u1ECDc ngay sau khi nh\u1EADn ti\u1EC1n.</em>
+        </p>
+      </div>
+      ` : `
+      <p>Kh\xF3a h\u1ECDc mi\u1EC5n ph\xED \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn t\xE0i kho\u1EA3n c\u1EE7a b\u1EA1n. B\u1EA1n c\xF3 th\u1EC3 \u0111\u0103ng nh\u1EADp ngay \u0111\u1EC3 theo d\xF5i \u0111\u1EC1 c\u01B0\u01A1ng v\xE0 l\u1ECBch h\u1ECDc.</p>
+      `}
+
+      <div class="btn-container">
+        <a href="${escapeHtml2(getAppUrl())}" class="btn" target="_blank">Xem ph\xF2ng h\u1ECDc & \u0110\u01A1n \u0111\u0103ng k\xFD</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${params.name},
+
+C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD kh\xF3a h\u1ECDc "${params.courseTitle}" t\u1EA1i MCNA Technology School.
+H\u1ECDc ph\xED: ${formatMoney(params.price)}
+${isPaid ? `
+Th\xF4ng tin chuy\u1EC3n kho\u1EA3n:
+Ng\xE2n h\xE0ng: ${BANK_NAME}
+S\u1ED1 t\xE0i kho\u1EA3n: ${BANK_ACCOUNT_NUMBER}
+Ch\u1EE7 t\xE0i kho\u1EA3n: ${ACCOUNT_HOLDER}
+S\u1ED1 ti\u1EC1n: ${formatMoney(params.price)}
+N\u1ED9i dung: ${memoText}
+` : ""}
+Truy c\u1EADp h\u1EC7 th\u1ED1ng t\u1EA1i: ${getAppUrl()}`;
+    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendCourseRegistrationEmail error:", err);
+  }
+}
+async function sendPaymentConfirmationEmail(params) {
+  try {
+    const subject = `[MCNA] X\xE1c nh\u1EADn thanh to\xE1n th\xE0nh c\xF4ng kh\xF3a h\u1ECDc: ${params.courseTitle}`;
+    const safeName = escapeHtml2(params.name);
+    const safeCourseTitle = escapeHtml2(params.courseTitle);
+    const safeSectionCode = escapeHtml2(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp");
+    const safeTeacherName = params.teacherName ? escapeHtml2(params.teacherName) : "";
+    const safeTransactionId = escapeHtml2(params.transactionId || "TX-" + Date.now());
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml2(params.name)},</p>
+      <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
+
+      <div class="success-box">
+        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          BI\xCAN NH\u1EACN THANH TO\xC1N & TH\xD4NG TIN H\u1ECCC PH\u1EA6N
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 700; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml2(params.courseTitle)}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n \u0111\xE3 thanh to\xE1n:</td>
+            <td style="font-weight: 800; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">M\xE3 giao d\u1ECBch:</td>
+            <td style="font-weight: 700; color: #334155; text-align: right; padding: 5px 0;" class="mono">${escapeHtml2(params.transactionId || "TX-" + Date.now())}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Th\u1EDDi gian x\xE1c nh\u1EADn:</td>
+            <td style="font-weight: 600; color: #334155; text-align: right; padding: 5px 0;">${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</td>
+          </tr>
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">L\u1EDBp h\u1ECDc ph\u1EA7n:</td>
+            <td style="font-weight: 700; color: #4338ca; text-align: right; padding: 5px 0;">${escapeHtml2(params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp")}</td>
+          </tr>
+          ${safeTeacherName ? `
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:</td>
+            <td style="font-weight: 600; color: #0f172a; text-align: right; padding: 5px 0;">${escapeHtml2(params.teacherName)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="color: #475569; padding: 5px 0;">Tr\u1EA1ng th\xE1i kh\xF3a h\u1ECDc:</td>
+            <td style="font-weight: 800; color: #15803d; text-align: right; padding: 5px 0;">\u0110\xE3 k\xEDch ho\u1EA1t - S\u1EB5n s\xE0ng v\xE0o h\u1ECDc</td>
+          </tr>
+        </table>
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">
+        B\u1EA1n hi\u1EC7n \u0111\xE3 c\xF3 \u0111\u1EA7y \u0111\u1EE7 quy\u1EC1n truy c\u1EADp v\xE0o t\xE0i li\u1EC7u h\u1ECDc t\u1EADp, b\xE0i gi\u1EA3ng, b\xE0i t\u1EADp v\xE0 ph\xF2ng h\u1ECDc tr\u1EF1c tuy\u1EBFn c\u1EE7a kh\xF3a h\u1ECDc. H\xE3y b\u1EAFt \u0111\u1EA7u h\xE0nh tr\xECnh h\u1ECDc t\u1EADp c\xF9ng MCNA ngay h\xF4m nay!
+      </p>
+
+      <div class="btn-container">
+        <a href="${escapeHtml2(getAppUrl())}" class="btn btn-green" target="_blank">V\xE0o h\u1ECDc ngay tr\xEAn MCNA LMS</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${params.name},
+
+H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA x\xE1c nh\u1EADn \u0111\xE3 nh\u1EADn thanh to\xE1n s\u1ED1 ti\u1EC1n ${formatMoney(params.amount)} cho kh\xF3a h\u1ECDc "${params.courseTitle}".
+M\xE3 giao d\u1ECBch: ${params.transactionId || ""}
+L\u1EDBp h\u1ECDc: ${params.sectionCode || "\u0110ang x\u1EBFp l\u1EDBp"}
+Kh\xF3a h\u1ECDc \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t th\xE0nh c\xF4ng!
+Truy c\u1EADp v\xE0o h\u1ECDc ngay t\u1EA1i: ${getAppUrl()}`;
+    await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error("[Email Service] sendPaymentConfirmationEmail error:", err);
+  }
+}
+async function sendEmailDirect(recipientEmail, recipientName, message) {
+  try {
+    const subject = `[MCNA LMS] Th\xF4ng b\xE1o m\u1EDBi t\u1EEB h\u1EC7 th\u1ED1ng`;
+    const safeName = escapeHtml2(recipientName);
+    const safeMessage = escapeHtml2(message);
+    const bodyContent = `
+      <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">K\xEDnh g\u1EEDi ${escapeHtml2(recipientName)},</p>
+      <p>H\u1EC7 th\u1ED1ng H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin g\u1EEDi \u0111\u1EBFn b\u1EA1n th\xF4ng b\xE1o m\u1EDBi:</p>
+      <div class="info-box" style="font-size: 14px; color: #1e293b; line-height: 1.6;">
+        ${escapeHtml2(message).replace(/\r?\n/g, "<br>")}
+      </div>
+      <p>Vui l\xF2ng \u0111\u0103ng nh\u1EADp v\xE0o h\u1EC7 th\u1ED1ng \u0111\u1EC3 xem chi ti\u1EBFt.</p>
+      <div class="btn-container">
+        <a href="${escapeHtml2(getAppUrl())}" class="btn" target="_blank">\u0110i t\u1EDBi MCNA LMS</a>
+      </div>
+    `;
+    const plainText = `K\xEDnh g\u1EEDi ${recipientName},
+
+B\u1EA1n c\xF3 m\u1ED9t th\xF4ng b\xE1o m\u1EDBi t\u1EEB MCNA LMS:
+
+${message}
+
+Truy c\u1EADp h\u1EC7 th\u1ED1ng: ${getAppUrl()}`;
+    await dispatchEmail(recipientEmail, recipientName, subject, renderBaseLayout(subject, bodyContent), plainText);
+  } catch (err) {
+    console.error(`[Email Service Error] Failed to process direct email to ${recipientEmail}:`, err);
+  }
 }
 
 // src/server/emailProvisioning/provisioningService.ts
@@ -7403,7 +7368,7 @@ Ph\xF2ng h\u1ECDc: ${row.meeting_url || "Ch\u01B0a c\u1EADp nh\u1EADt"}.
 H\u1ED7 tr\u1EE3: ${getSupportPhone()}.`;
     if (row.assignment_notice_key !== noticeKey) await db.query("INSERT INTO notifications(id,user_id,type,message,is_read,created_at,related_entity_type,related_entity_id) VALUES($1,$2,'info',$3,false,CURRENT_TIMESTAMP,'section',$4)", [generateId2("noti"), row.teacher_id, message, sectionId]);
     await db.query("COMMIT");
-    const status = await dispatchEmail(row.teacher_email, row.teacher_name, `[MCNA] Ph\xE2n c\xF4ng gi\u1EA3ng d\u1EA1y l\u1EDBp ${row.section_code}`, `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml2(message)}</div>`, message);
+    const status = await dispatchEmail(row.teacher_email, row.teacher_name, `[MCNA] Ph\xE2n c\xF4ng gi\u1EA3ng d\u1EA1y l\u1EDBp ${row.section_code}`, `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml(message)}</div>`, message);
     await pool.query("UPDATE course_sections SET assignment_email_status=$1 WHERE id=$2 AND assignment_notice_key=$3", [status, sectionId, noticeKey]);
     return { status };
   } catch (error) {
@@ -11104,8 +11069,8 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
     });
   }
   try {
-    const transporter2 = getTransporter2();
-    const info = await transporter2.sendMail({
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
       from: getSmtpFrom(),
       to: targetEmail,
       subject: `[MCNA LMS] Th\u1EED nghi\u1EC7m g\u1EEDi email h\u1EC7 th\u1ED1ng`,
@@ -11115,14 +11080,14 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
             <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h2>
             <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ki\u1EC3m tra k\u1EBFt n\u1ED1i g\u1EEDi email h\u1EC7 th\u1ED1ng</p>
           </div>
-          <p style="font-size: 14px; color: #1e293b;">Xin ch\xE0o <strong>${escapeHtml2(req.user?.name || "Qu\u1EA3n tr\u1ECB vi\xEAn")}</strong>,</p>
+          <p style="font-size: 14px; color: #1e293b;">Xin ch\xE0o <strong>${escapeHtml(req.user?.name || "Qu\u1EA3n tr\u1ECB vi\xEAn")}</strong>,</p>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">
             Email n\xE0y \u0111\u01B0\u1EE3c g\u1EEDi th\u1EED nghi\u1EC7m t\u1EEB h\u1EC7 th\u1ED1ng LMS MCNA t\u1EA1i domain: <a href="${lmsBaseUrl(req)}" style="color: #4f46e5; font-weight: 600;">${lmsBaseUrl(req)}</a>.
           </p>
           <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 6px 0;"><strong>Th\u1EDDi gian g\u1EEDi:</strong> ${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
             <p style="margin: 0 0 6px 0;"><strong>T\xE0i kho\u1EA3n g\u1EEDi:</strong> ${getSmtpFrom()}</p>
-            <p style="margin: 0;"><strong>\u0110\u1ECBa ch\u1EC9 nh\u1EADn:</strong> ${escapeHtml2(targetEmail)}</p>
+            <p style="margin: 0;"><strong>\u0110\u1ECBa ch\u1EC9 nh\u1EADn:</strong> ${escapeHtml(targetEmail)}</p>
           </div>
           <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
             \u2713 M\xE1y ch\u1EE7 SMTP ho\u1EA1t \u0111\u1ED9ng b\xECnh th\u01B0\u1EDDng v\xE0 s\u1EB5n s\xE0ng g\u1EEDi email t\u1EDBi h\u1ECDc vi\xEAn.

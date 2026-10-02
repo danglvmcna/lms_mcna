@@ -1,15 +1,12 @@
 import nodemailer from "nodemailer";
 import { getSupportPhone } from "../config";
 import { Queryable } from "../db";
+import { getSmtpUser, getTransporter as getSmtpTransporter, hasSmtpConfig } from "../emailProvisioning/emailWorker";
 import fs from "fs";
 import path from "path";
 
 const getSmtpConfig = () => ({
-  host: (process.env.SMTP_HOST || "").trim(),
-  port: Number(process.env.SMTP_PORT) || 587,
-  user: (process.env.SMTP_USER || "").trim(),
-  pass: (process.env.SMTP_PASS || "").trim().replace(/\s+/g, ""),
-  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <${(process.env.SMTP_USER || "noreply@mcna.vn").trim()}>`,
+  from: process.env.SMTP_FROM || `"Học Viện Công Nghệ MCNA" <${getSmtpUser() || "noreply@mcna.vn"}>`,
   testReceiver: (process.env.TEST_RECEIVER_EMAIL || "").trim(),
   appUrl: (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "")
 });
@@ -19,47 +16,13 @@ const BANK_NAME = "MB Bank (Ngân hàng Quân Đội)";
 const ACCOUNT_HOLDER = "HOC VIEN CONG NGHE MCNA";
 const getAppUrl = () => (process.env.APP_URL || process.env.LMS_LOGIN_URL || "https://lms.mcna.vn").replace(/\/$/, "");
 
-export const isPlaceholderSmtp = () => {
-  const config = getSmtpConfig();
-  return (
-    !config.user ||
-    config.user.includes("your_email") ||
-    config.user.includes("example.com") ||
-    config.pass.includes("your_app_password")
-  );
-};
+export const isPlaceholderSmtp = () => !hasSmtpConfig();
 
-let transporter: nodemailer.Transporter | null = null;
-
+// One SMTP definition for the whole server (emailWorker): SMTP_HOST is optional there (Gmail by default),
+// so the system status, the account emails and the class placement emails agree on whether mail can be sent.
 async function getTransporter(): Promise<nodemailer.Transporter | null> {
-  const config = getSmtpConfig();
-  if (config.host && config.user && config.pass && !isPlaceholderSmtp()) {
-    if (!transporter) {
-      const isGmail = config.host === "smtp.gmail.com" || config.user.endsWith("@gmail.com");
-      transporter = nodemailer.createTransport(
-        isGmail
-          ? {
-              service: "gmail",
-              auth: {
-                user: config.user,
-                pass: config.pass,
-              },
-            }
-          : {
-              host: config.host,
-              port: config.port,
-              secure: config.port === 465,
-              auth: {
-                user: config.user,
-                pass: config.pass,
-              },
-            }
-      );
-    }
-    return transporter;
-  }
-
-  return null;
+  if (!hasSmtpConfig()) return null;
+  return getSmtpTransporter();
 }
 
 function logEmailMock(to: string, name: string, subject: string, htmlContent: string) {
