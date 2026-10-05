@@ -7054,7 +7054,7 @@ async function importPaidEnrollments(input) {
     accountEmailsNotSent: 0
   };
   const results = [];
-  const newAccounts = /* @__PURE__ */ new Map();
+  const notifiedAccounts = /* @__PURE__ */ new Map();
   const plannedNewEmails = /* @__PURE__ */ new Set();
   for (const [index, row] of input.rows.entries()) {
     let plan;
@@ -7097,11 +7097,24 @@ async function importPaidEnrollments(input) {
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;
         summary.accountsCreated++;
-        newAccounts.set(user.email, { user, courseTitles: [], rows: [] });
+        notifiedAccounts.set(user.email, { user, isNew: true, courseTitles: [], rows: [] });
       } else {
         result.accountCreated = false;
         if (plan.input.phone && !plan.existingUser?.phone) {
           await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [plan.input.phone, studentId]);
+        }
+        if (!notifiedAccounts.has(plan.input.email) && plan.existingUser) {
+          notifiedAccounts.set(plan.input.email, {
+            user: {
+              id: plan.existingUser.id,
+              email: plan.existingUser.email,
+              name: plan.existingUser.name,
+              must_change_password: Boolean(plan.existingUser.must_change_password)
+            },
+            isNew: false,
+            courseTitles: [],
+            rows: []
+          });
         }
       }
       const settled = await settleEnrollment(plan, studentId, input.actorName);
@@ -7119,7 +7132,7 @@ async function importPaidEnrollments(input) {
         result.accountCreated ? "\u0110\xE3 t\u1EA1o t\xE0i kho\u1EA3n" : "D\xF9ng t\xE0i kho\u1EA3n c\xF3 s\u1EB5n",
         settled.created ? "\u0111\xE3 ghi danh, ch\u1EDD x\u1EBFp l\u1EDBp" : "\u0111\xE3 x\xE1c nh\u1EADn thanh to\xE1n, ch\u1EDD x\u1EBFp l\u1EDBp"
       ].join(" \xB7 ");
-      const account = newAccounts.get(plan.input.email);
+      const account = notifiedAccounts.get(plan.input.email);
       if (account) {
         account.courseTitles.push(plan.course.title);
         account.rows.push(result);
@@ -7131,13 +7144,14 @@ async function importPaidEnrollments(input) {
     }
   }
   if (!input.dryRun && input.sendAccountEmail) {
-    for (const account of newAccounts.values()) {
+    for (const account of notifiedAccounts.values()) {
+      if (!account.courseTitles.length) continue;
       const courseTitles = Array.from(new Set(account.courseTitles));
       const courseSchedules = await lookupCourseSchedules(pool, courseTitles);
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
-        password: String(input.defaultPassword),
+        password: account.isNew || account.user.must_change_password ? String(input.defaultPassword) : null,
         courseTitles,
         courseSchedules,
         supportPhone: getSupportPhone()

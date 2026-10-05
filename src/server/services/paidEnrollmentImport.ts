@@ -209,8 +209,14 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
     accountEmailsNotSent: 0
   };
   const results: PaidImportRowResult[] = [];
-  // Accounts created by this import, so a learner with several rows gets one login email listing every course.
-  const newAccounts = new Map<string, { user: User; courseTitles: string[]; rows: PaidImportRowResult[] }>();
+  // Accounts receiving the notification email (both newly created and existing learners enrolled in courses)
+  type AccountNotification = {
+    user: { id: string; email: string; name: string; must_change_password?: boolean };
+    isNew: boolean;
+    courseTitles: string[];
+    rows: PaidImportRowResult[];
+  };
+  const notifiedAccounts = new Map<string, AccountNotification>();
   // Emails that will get a new account earlier in this batch (used by the preview).
   const plannedNewEmails = new Set<string>();
 
@@ -252,11 +258,24 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;
         summary.accountsCreated++;
-        newAccounts.set(user.email, { user, courseTitles: [], rows: [] });
+        notifiedAccounts.set(user.email, { user, isNew: true, courseTitles: [], rows: [] });
       } else {
         result.accountCreated = false;
         if (plan.input.phone && !plan.existingUser?.phone) {
           await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [plan.input.phone, studentId]);
+        }
+        if (!notifiedAccounts.has(plan.input.email) && plan.existingUser) {
+          notifiedAccounts.set(plan.input.email, {
+            user: {
+              id: plan.existingUser.id,
+              email: plan.existingUser.email,
+              name: plan.existingUser.name,
+              must_change_password: Boolean(plan.existingUser.must_change_password)
+            },
+            isNew: false,
+            courseTitles: [],
+            rows: []
+          });
         }
       }
 
@@ -276,7 +295,7 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
         settled.created ? "đã ghi danh, chờ xếp lớp" : "đã xác nhận thanh toán, chờ xếp lớp"
       ].join(" · ");
 
-      const account = newAccounts.get(plan.input.email);
+      const account = notifiedAccounts.get(plan.input.email);
       if (account) {
         account.courseTitles.push(plan.course!.title);
         account.rows.push(result);
@@ -289,13 +308,14 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
   }
 
   if (!input.dryRun && input.sendAccountEmail) {
-    for (const account of newAccounts.values()) {
+    for (const account of notifiedAccounts.values()) {
+      if (!account.courseTitles.length) continue;
       const courseTitles = Array.from(new Set(account.courseTitles));
       const courseSchedules = await lookupCourseSchedules(pool, courseTitles);
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
-        password: String(input.defaultPassword),
+        password: account.isNew || account.user.must_change_password ? String(input.defaultPassword) : null,
         courseTitles,
         courseSchedules,
         supportPhone: getSupportPhone()
