@@ -3388,16 +3388,16 @@ function wrapHtmlBody(title, contentHtml) {
     }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-      <div class="header">
-        <h1>MCNA Technology School</h1>
+<body style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6;">
+  <div class="wrapper" style="width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+    <div class="card" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+      <div class="header" style="background-color: #4f46e5; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; letter-spacing: 0.3px; text-transform: uppercase;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
       </div>
-      <div class="content">
+      <div class="content" style="padding: 32px 24px; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         ${contentHtml}
       </div>
-      <div class="footer">
+      <div class="footer" style="background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School \xB7 mcna.vn</p>
         <p>Email t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng h\u1ECDc tr\u1EF1c tuy\u1EBFn MCNA LMS, vui l\xF2ng kh\xF4ng tr\u1EA3 l\u1EDDi th\u01B0 n\xE0y. C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n nh\u1EAFn MCNA qua Zalo 0939 866 825.</p>
       </div>
@@ -3726,17 +3726,17 @@ function renderBaseLayout(title, bodyContent) {
     .mono { font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-      <div class="header">
-        <h1>H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
-        <p>H\u1EC7 th\u1ED1ng \u0110\xE0o t\u1EA1o & Qu\u1EA3n l\xFD H\u1ECDc v\u1EE5 Tr\u1EF1c tuy\u1EBFn (MCNA LMS)</p>
+<body style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6;">
+  <div class="wrapper" style="width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+    <div class="card" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+      <div class="header" style="background: #312e81; background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; letter-spacing: 0.3px; text-transform: uppercase; line-height: 1.3;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h1>
+        <p style="color: #c7d2fe; margin: 6px 0 0 0; font-size: 12px; font-weight: 500; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">H\u1EC7 th\u1ED1ng \u0110\xE0o t\u1EA1o & Qu\u1EA3n l\xFD H\u1ECDc v\u1EE5 Tr\u1EF1c tuy\u1EBFn (MCNA LMS)</p>
       </div>
-      <div class="content">
+      <div class="content" style="padding: 32px 24px; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; color: #1e293b; font-size: 14px; line-height: 1.6;">
         ${bodyContent}
       </div>
-      <div class="footer">
+      <div class="footer" style="background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</p>
         <p style="margin: 0 0 4px 0;">Hotline / H\u1ED7 tr\u1EE3 h\u1ECDc v\u1EE5: ${getSupportPhone()} \xB7 Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, "")}</a></p>
         <p style="margin: 0; color: #94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} MCNA Technology School. M\u1ECDi quy\u1EC1n \u0111\u01B0\u1EE3c b\u1EA3o l\u01B0u.</p>
@@ -3799,7 +3799,7 @@ async function sendClassPlacementEmail(params) {
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml2(params.name)},</p>
       <p>MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc <strong>${escapeHtml2(params.courseTitle)}</strong>. D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin l\u1EDBp c\u1EE7a b\u1EA1n:</p>
 
-      <div class="success-box">
+      <div class="success-box" style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0;">
         <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           TH\xD4NG TIN L\u1EDAP H\u1ECCC
         </div>
@@ -3814,7 +3814,7 @@ async function sendClassPlacementEmail(params) {
         </table>
       </div>
 
-      <div class="bank-box">
+      <div class="bank-box" style="background-color: #eff6ff; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bfdbfe;">
         <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
         ${zaloUrl ? `
         <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">M\u1ECDi th\xF4ng b\xE1o c\u1EE7a l\u1EDBp v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn di\u1EC5n ra trong nh\xF3m Zalo. B\u1EA1n tham gia nh\xF3m tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng nh\xE9.</p>

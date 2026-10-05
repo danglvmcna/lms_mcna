@@ -73,17 +73,17 @@ function renderBaseLayout(title: string, bodyContent: string): string {
     .mono { font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-      <div class="header">
-        <h1>HỌC VIỆN CÔNG NGHỆ MCNA</h1>
-        <p>Hệ thống Đào tạo & Quản lý Học vụ Trực tuyến (MCNA LMS)</p>
+<body style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6;">
+  <div class="wrapper" style="width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+    <div class="card" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+      <div class="header" style="background: #312e81; background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; letter-spacing: 0.3px; text-transform: uppercase; line-height: 1.3;">HỌC VIỆN CÔNG NGHỆ MCNA</h1>
+        <p style="color: #c7d2fe; margin: 6px 0 0 0; font-size: 12px; font-weight: 500; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">Hệ thống Đào tạo & Quản lý Học vụ Trực tuyến (MCNA LMS)</p>
       </div>
-      <div class="content">
+      <div class="content" style="padding: 32px 24px; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; color: #1e293b; font-size: 14px; line-height: 1.6;">
         ${bodyContent}
       </div>
-      <div class="footer">
+      <div class="footer" style="background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #334155;">HỌC VIỆN CÔNG NGHỆ MCNA</p>
         <p style="margin: 0 0 4px 0;">Hotline / Hỗ trợ học vụ: ${getSupportPhone()} · Website: <a href="${getSmtpConfig().appUrl}" style="color: #4f46e5; text-decoration: none;">${getSmtpConfig().appUrl.replace(/^https?:\/\//, '')}</a></p>
         <p style="margin: 0; color: #94a3b8;">© ${new Date().getFullYear()} MCNA Technology School. Mọi quyền được bảo lưu.</p>
@@ -181,7 +181,7 @@ export async function sendClassPlacementEmail(params: ClassPlacementEmailParams)
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Chào ${escapeHtml(params.name)},</p>
       <p>MCNA đã xếp bạn vào lớp của khóa học <strong>${escapeHtml(params.courseTitle)}</strong>. Dưới đây là thông tin lớp của bạn:</p>
 
-      <div class="success-box">
+      <div class="success-box" style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0;">
         <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           THÔNG TIN LỚP HỌC
         </div>
@@ -196,7 +196,7 @@ export async function sendClassPlacementEmail(params: ClassPlacementEmailParams)
         </table>
       </div>
 
-      <div class="bank-box">
+      <div class="bank-box" style="background-color: #eff6ff; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bfdbfe;">
         <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NHÓM ZALO CỦA LỚP</div>
         ${zaloUrl ? `
         <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">Mọi thông báo của lớp và trao đổi với giảng viên diễn ra trong nhóm Zalo. Bạn tham gia nhóm trước buổi khai giảng nhé.</p>

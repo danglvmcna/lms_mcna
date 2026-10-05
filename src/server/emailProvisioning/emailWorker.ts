@@ -258,16 +258,16 @@ function wrapHtmlBody(title: string, contentHtml: string): string {
     }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-      <div class="header">
-        <h1>MCNA Technology School</h1>
+<body style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6;">
+  <div class="wrapper" style="width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+    <div class="card" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
+      <div class="header" style="background-color: #4f46e5; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; letter-spacing: 0.3px; text-transform: uppercase;">HỌC VIỆN CÔNG NGHỆ MCNA</h1>
       </div>
-      <div class="content">
+      <div class="content" style="padding: 32px 24px; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         ${contentHtml}
       </div>
-      <div class="footer">
+      <div class="footer" style="background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;">
         <p>© ${new Date().getFullYear()} MCNA Technology School · mcna.vn</p>
         <p>Email tự động từ hệ thống học trực tuyến MCNA LMS, vui lòng không trả lời thư này. Cần hỗ trợ, bạn nhắn MCNA qua Zalo 0939 866 825.</p>
       </div>
