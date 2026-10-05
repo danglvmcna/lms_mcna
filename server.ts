@@ -2149,7 +2149,7 @@ async function handleSupabaseRevenueWebhook(req: express.Request, res: express.R
     dryRun: false,
     actorId: "supabase-webhook",
     actorName: "Supabase Webhook",
-    defaultPassword: getDefaultStudentPassword()
+    defaultPassword: getDefaultStudentPassword() || "Mcna@2026"
   });
 
   return res.json({

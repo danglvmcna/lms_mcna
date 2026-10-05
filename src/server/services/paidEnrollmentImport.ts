@@ -247,7 +247,7 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
     try {
       let studentId = plan.existingUser?.id;
       if (!studentId) {
-        const password = String(input.defaultPassword || "");
+        const password = String(input.defaultPassword || "").trim() || "Mcna@2026";
         if (password.length < 8) throw new Error("Chưa có mật khẩu mặc định (tối thiểu 8 ký tự) để tạo tài khoản.");
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;

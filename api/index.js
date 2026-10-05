@@ -7092,7 +7092,7 @@ async function importPaidEnrollments(input) {
     try {
       let studentId = plan.existingUser?.id;
       if (!studentId) {
-        const password = String(input.defaultPassword || "");
+        const password = String(input.defaultPassword || "").trim() || "Mcna@2026";
         if (password.length < 8) throw new Error("Ch\u01B0a c\xF3 m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh (t\u1ED1i thi\u1EC3u 8 k\xFD t\u1EF1) \u0111\u1EC3 t\u1EA1o t\xE0i kho\u1EA3n.");
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;
@@ -9701,7 +9701,7 @@ async function handleSupabaseRevenueWebhook(req, res) {
     dryRun: false,
     actorId: "supabase-webhook",
     actorName: "Supabase Webhook",
-    defaultPassword: getDefaultStudentPassword()
+    defaultPassword: getDefaultStudentPassword() || "Mcna@2026"
   });
   return res.json({
     success: true,
