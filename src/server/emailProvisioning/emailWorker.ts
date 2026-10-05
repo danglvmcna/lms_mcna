@@ -174,7 +174,7 @@ function wrapHtmlBody(title: string, contentHtml: string): string {
   <meta charset="utf-8">
   <style>
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;
       background-color: #f8fafc;
       color: #1e293b;
       margin: 0;
@@ -205,8 +205,8 @@ function wrapHtmlBody(title: string, contentHtml: string): string {
       color: #ffffff;
       margin: 0;
       font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
       text-transform: uppercase;
     }
     .content {

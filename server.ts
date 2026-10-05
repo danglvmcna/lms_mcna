@@ -122,7 +122,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { getInitialStore } from "./src/store";
 import { hashPassword, verifyPassword } from "./src/authHash";
-import { IntroMaterialCategory, LMSDataStore, SessionMaterial, User, SystemStatus } from "./src/types";
+import { IntroMaterialCategory, LMSDataStore, SessionMaterial, SmtpTestInfo, User, SystemStatus } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
@@ -3793,10 +3793,19 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
     return res.status(400).json({ error: "Địa chỉ email nhận thử nghiệm không hợp lệ." });
   }
 
+  // Which mailbox and mail server this server sends with. Not secrets, and the only way for an admin
+  // to see them when the hosting panel hides stored values.
+  const smtpHost = (process.env.SMTP_HOST || "").trim() || "smtp.gmail.com";
+  // A Gmail mailbox is always sent through Gmail, whatever SMTP_HOST says (see getTransporter).
+  const smtp: SmtpTestInfo = getSmtpUser().endsWith("@gmail.com") || smtpHost === "smtp.gmail.com"
+    ? { mailbox: getSmtpUser(), host: "smtp.gmail.com", port: 465 }
+    : { mailbox: getSmtpUser(), host: smtpHost, port: Number(process.env.SMTP_PORT) || 465 };
+
   const configured = hasSmtpConfig();
   if (!configured) {
     return res.status(400).json({
-      error: "Hệ thống chưa được cấu hình biến môi trường SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      error: "Máy chủ chưa có SMTP_USER và SMTP_PASS hợp lệ nên chưa gửi được email.",
+      smtp,
       details: {
         configured: false,
         smtpHost: process.env.SMTP_HOST || "Chưa cấu hình",
@@ -3814,9 +3823,9 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       to: targetEmail,
       subject: `[MCNA LMS] Thử nghiệm gửi email hệ thống`,
       html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+        <div style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto; line-height: 1.6;">
           <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">HỌC VIỆN CÔNG NGHỆ MCNA</h2>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">HỌC VIỆN CÔNG NGHỆ MCNA</h2>
             <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Kiểm tra kết nối gửi email hệ thống</p>
           </div>
           <p style="font-size: 14px; color: #1e293b;">Xin chào <strong>${escapeHtml(req.user?.name || "Quản trị viên")}</strong>,</p>
@@ -3825,7 +3834,7 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
           </p>
           <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 6px 0;"><strong>Thời gian gửi:</strong> ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
-            <p style="margin: 0 0 6px 0;"><strong>Tài khoản gửi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Tài khoản gửi:</strong> ${escapeHtml(getSmtpFrom())}</p>
             <p style="margin: 0;"><strong>Địa chỉ nhận:</strong> ${escapeHtml(targetEmail)}</p>
           </div>
           <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
@@ -3841,7 +3850,8 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       message: `Đã gửi thành công email thử nghiệm tới ${targetEmail}!`,
       messageId: info.messageId,
       sender: getSmtpFrom(),
-      targetEmail
+      targetEmail,
+      smtp
     });
   } catch (err: any) {
     console.error("[admin/email/test] SMTP send error:", err);
@@ -3849,6 +3859,7 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       ok: false,
       error: `Gửi mail thất bại: ${err.message || String(err)}`,
       code: err.code || "SMTP_ERROR",
+      smtp,
       tip: "Vui lòng kiểm tra lại SMTP_USER và SMTP_PASS (App Password), hoặc cấu hình bảo mật 2FA của tài khoản gửi."
     });
   }

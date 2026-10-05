@@ -1,4 +1,4 @@
-import { CrmOutboxStatus, IntroMaterialCategory, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SystemStatus } from "./types";
+import { CrmOutboxStatus, IntroMaterialCategory, LMSDataStore, PublicCourseDetail, PublicCourseSummary, SessionMaterial, SmtpTestInfo, SystemStatus } from "./types";
 import { PaidImportResponse, PaidImportRow, PaidTableParseResult } from "./paidImport";
 import { CrmPaidPull } from "./crmPaidSource";
 
@@ -252,6 +252,8 @@ export const api = {
   updateAttendanceSession: (id: string, payload: unknown) => apiFetch(`/api/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   getCrmOutboxStatus: () => apiFetch<CrmOutboxStatus>("/api/admin/crm/outbox"),
   getSystemStatus: () => apiFetch<SystemStatus>("/api/admin/system/status"),
+  sendTestEmail: (targetEmail: string) =>
+    apiFetch<{ ok: true; message: string; sender: string; targetEmail: string; smtp?: SmtpTestInfo }>("/api/admin/email/test", { method: "POST", body: JSON.stringify({ targetEmail }) }),
   syncCrmOutbox: (payload?: { retryFailed?: boolean }) =>
     apiFetch<{ success: boolean; configured: boolean; sent: number; failed: number }>("/api/admin/crm/outbox/sync", {
       method: "POST",

@@ -416,6 +416,13 @@ export interface SystemStatus {
   defaultStudentPassword: boolean;
 }
 
+/** Mailbox and mail server the LMS sends with, as reported by the SMTP test (no secrets). */
+export interface SmtpTestInfo {
+  mailbox: string;
+  host: string;
+  port: number;
+}
+
 export interface CrmOutboxStatus {
   configured: boolean;
   webhookUrl: string | null;

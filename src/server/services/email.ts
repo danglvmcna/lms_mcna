@@ -51,11 +51,11 @@ function renderBaseLayout(title: string, bodyContent: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
+    body { font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
     .wrapper { width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; }
     .card { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
     .header { background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center; }
-    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
     .header p { color: #c7d2fe; margin: 4px 0 0 0; font-size: 12px; font-weight: 500; }
     .content { padding: 32px 24px; }
     .info-box { background-color: #f1f5f9; border-radius: 12px; padding: 16px 20px; margin: 20px 0; border: 1px solid #e2e8f0; }
@@ -64,8 +64,8 @@ function renderBaseLayout(title: string, bodyContent: string): string {
     .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
     .row-label { color: #64748b; font-weight: 500; }
     .row-value { color: #0f172a; font-weight: 700; text-align: right; }
-    .highlight { color: #4f46e5; font-weight: 800; }
-    .highlight-green { color: #16a34a; font-weight: 800; }
+    .highlight { color: #4f46e5; font-weight: 700; }
+    .highlight-green { color: #16a34a; font-weight: 700; }
     .footer { background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; }
     .btn-container { text-align: center; margin: 28px 0 10px 0; }
     .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
@@ -182,22 +182,22 @@ export async function sendClassPlacementEmail(params: ClassPlacementEmailParams)
       <p>MCNA đã xếp bạn vào lớp của khóa học <strong>${escapeHtml(params.courseTitle)}</strong>. Dưới đây là thông tin lớp của bạn:</p>
 
       <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           THÔNG TIN LỚP HỌC
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("Tên lớp:", escapeHtml(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
+          ${infoRow("Tên lớp:", escapeHtml(params.sectionCode), "font-weight: 700; color: #4338ca; font-size: 15px;")}
           ${params.openingDate ? infoRow("Ngày khai giảng:", escapeHtml(params.openingDate)) : ""}
           ${infoRow("Lịch học:", escapeHtml(schedule))}
           ${params.room ? infoRow("Hình thức / phòng học:", escapeHtml(params.room), "font-weight: 600; color: #334155;") : ""}
           ${params.numberOfSessions ? infoRow("Số buổi:", `${Number(params.numberOfSessions)} buổi`, "font-weight: 600; color: #334155;") : ""}
           ${infoRow("Giảng viên phụ trách:", escapeHtml(teacher))}
-          ${infoRow("Số điện thoại hỗ trợ:", escapeHtml(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
+          ${infoRow("Số điện thoại hỗ trợ:", escapeHtml(params.supportPhone), "font-weight: 700; color: #b91c1c;")}
         </table>
       </div>
 
       <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NHÓM ZALO CỦA LỚP</div>
+        <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NHÓM ZALO CỦA LỚP</div>
         ${zaloUrl ? `
         <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">Mọi thông báo của lớp và trao đổi với giảng viên diễn ra trong nhóm Zalo. Bạn tham gia nhóm trước buổi khai giảng nhé.</p>
         <div style="text-align: center;">
@@ -268,7 +268,7 @@ export async function sendStudentAccountEmail(params: StudentAccountEmailParams)
       <div class="info-box">
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           ${infoRow("Email đăng nhập:", escapeHtml(params.to))}
-          ${infoRow("Mật khẩu mặc định:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
+          ${infoRow("Mật khẩu mặc định:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 700; color: #b91c1c;")}
         </table>
       </div>
 
@@ -353,7 +353,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Học phí:</td>
-            <td style="font-weight: 800; color: ${isPaid ? '#059669' : '#4f46e5'}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
+            <td style="font-weight: 700; color: ${isPaid ? '#059669' : '#4f46e5'}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Trạng thái:</td>
@@ -364,7 +364,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
 
       ${isPaid ? `
       <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
           HƯỚNG DẪN CHUYỂN KHOẢN HỌC PHÍ
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -374,7 +374,7 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Số tài khoản:</td>
-            <td style="font-weight: 800; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
+            <td style="font-weight: 700; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Chủ tài khoản:</td>
@@ -382,11 +382,11 @@ export async function sendCourseRegistrationEmail(params: CourseRegistrationEmai
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Số tiền cần thanh toán:</td>
-            <td style="font-weight: 800; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
+            <td style="font-weight: 700; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Nội dung chuyển khoản:</td>
-            <td style="font-weight: 800; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
+            <td style="font-weight: 700; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
           </tr>
         </table>
 
@@ -444,7 +444,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
       <p>Học Viện Công Nghệ MCNA xin trân trọng thông báo: Khoản thanh toán học phí của bạn đã được <strong>xác nhận thành công</strong>! Khóa học của bạn đã được kích hoạt trên hệ thống.</p>
 
       <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           BIÊN NHẬN THANH TOÁN & THÔNG TIN HỌC PHẦN
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -454,7 +454,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Số tiền đã thanh toán:</td>
-            <td style="font-weight: 800; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
+            <td style="font-weight: 700; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Mã giao dịch:</td>
@@ -475,7 +475,7 @@ export async function sendPaymentConfirmationEmail(params: PaymentConfirmationEm
           </tr>` : ""}
           <tr>
             <td style="color: #475569; padding: 5px 0;">Trạng thái khóa học:</td>
-            <td style="font-weight: 800; color: #15803d; text-align: right; padding: 5px 0;">Đã kích hoạt - Sẵn sàng vào học</td>
+            <td style="font-weight: 700; color: #15803d; text-align: right; padding: 5px 0;">Đã kích hoạt - Sẵn sàng vào học</td>
           </tr>
         </table>
       </div>
