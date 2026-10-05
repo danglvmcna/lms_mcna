@@ -682,8 +682,8 @@ function requireCsrf(req: AuthRequest, res: express.Response, next: express.Next
   if (req.path === "/auth/reset-password/complete" || req.path === "/api/auth/reset-password/complete") return next();
   if (req.path === "/auth/register" || req.path === "/api/auth/register") return next();
   if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
-  // CRM server-to-server calls authenticate with an API key and an HMAC signature instead of cookies.
-  if (req.path.startsWith("/integrations/crm/")) return next();
+  // External integrations (CRM, Supabase webhooks) authenticate server-to-server, not via CSRF cookie.
+  if (req.path.startsWith("/integrations/") || req.path.startsWith("/api/integrations/")) return next();
   if (
     req.path === "/payments/webhook" ||
     req.path === "/webhooks/payment" ||

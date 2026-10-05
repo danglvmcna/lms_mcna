@@ -8466,7 +8466,7 @@ function requireCsrf(req, res, next) {
   if (req.path === "/auth/reset-password/complete" || req.path === "/api/auth/reset-password/complete") return next();
   if (req.path === "/auth/register" || req.path === "/api/auth/register") return next();
   if (req.path === "/auth/forgot-password" || req.path === "/api/auth/forgot-password") return next();
-  if (req.path.startsWith("/integrations/crm/")) return next();
+  if (req.path.startsWith("/integrations/") || req.path.startsWith("/api/integrations/")) return next();
   if (req.path === "/payments/webhook" || req.path === "/webhooks/payment" || req.path === "/api/payments/webhook" || req.path === "/api/webhooks/payment" || req.path === "/api/payments/sepay/webhook" || req.path === "/api/webhooks/sepay" || req.path === "/payments/sepay/webhook" || req.path === "/webhooks/sepay") return next();
   const secFetchSite = req.header("Sec-Fetch-Site");
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
