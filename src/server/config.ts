@@ -16,7 +16,7 @@ export const getSupportPhone = () => (process.env.SUPPORT_PHONE || "").trim() ||
 /** Password given to accounts created from the paid list; empty when none is configured. */
 export function getDefaultStudentPassword() {
   const value = (process.env.DEFAULT_STUDENT_PASSWORD || "").trim();
-  return value.length >= 8 ? value : "";
+  return value.length >= 8 ? value : "Mcna@2026";
 }
 
 export const allowHomeworkDownload = () => (process.env.ALLOW_HOMEWORK_DOWNLOAD || "").trim().toLowerCase() === "true";

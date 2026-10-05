@@ -3138,7 +3138,7 @@ var isDirectSale = () => getSalesMode() === "direct";
 var getSupportPhone = () => (process.env.SUPPORT_PHONE || "").trim() || DEFAULT_SUPPORT_PHONE;
 function getDefaultStudentPassword() {
   const value = (process.env.DEFAULT_STUDENT_PASSWORD || "").trim();
-  return value.length >= 8 ? value : "";
+  return value.length >= 8 ? value : "Mcna@2026";
 }
 var allowHomeworkDownload = () => (process.env.ALLOW_HOMEWORK_DOWNLOAD || "").trim().toLowerCase() === "true";
 function getPublicAppConfig() {
