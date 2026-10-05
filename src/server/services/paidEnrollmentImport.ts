@@ -9,6 +9,7 @@ import { courseFromRow, DbUserRow } from "../mappers";
 import { auditRepository } from "../repositories/audit";
 import { usersRepository } from "../repositories/users";
 import { sendStudentAccountEmail } from "./email";
+import { lookupCourseSchedules } from "./courseScheduleLookup";
 import { confirmCoursePayment, isServiceError, requestEnrollment } from "./enrollmentService";
 
 // Direct-sale intake: each row of the "paid customers" table (from the CRM or typed by hand) becomes a
@@ -289,11 +290,14 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
 
   if (!input.dryRun && input.sendAccountEmail) {
     for (const account of newAccounts.values()) {
+      const courseTitles = Array.from(new Set(account.courseTitles));
+      const courseSchedules = await lookupCourseSchedules(pool, courseTitles);
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
         password: String(input.defaultPassword),
-        courseTitles: Array.from(new Set(account.courseTitles)),
+        courseTitles,
+        courseSchedules,
         supportPhone: getSupportPhone()
       });
       for (const row of account.rows) row.accountEmail = status;

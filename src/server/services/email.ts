@@ -245,58 +245,142 @@ export async function sendClassPlacementEmail(params: ClassPlacementEmailParams)
   }
 }
 
+export interface CourseSectionScheduleItem {
+  sectionCode: string;
+  openingDate?: string | null;
+  scheduleText?: string | null;
+  room?: string | null;
+  status?: string | null;
+}
+
+export interface CourseScheduleInfo {
+  courseTitle: string;
+  courseId?: string;
+  sections: CourseSectionScheduleItem[];
+}
+
 export interface StudentAccountEmailParams {
   to: string;
   name: string;
-  password: string;
+  password?: string | null;
   courseTitles: string[];
+  courseSchedules?: CourseScheduleInfo[];
   supportPhone: string;
 }
 
-/** Login details for an account created from the paid list: personal email plus the default password. */
+/** Login details & course schedules for an account confirmed from payment or paid list. */
 export async function sendStudentAccountEmail(params: StudentAccountEmailParams): Promise<EmailDeliveryStatus> {
   try {
-    const subject = "[MCNA] Tài khoản học viên MCNA LMS của bạn";
+    const subject = "[MCNA] Tài khoản học viên MCNA LMS của bạn – Xác nhận thanh toán thành công";
     const appUrl = getAppUrl();
     const courses = params.courseTitles.filter(Boolean);
-    const courseText = courses.length ? ` khóa học <strong>${courses.map(escapeHtml).join(", ")}</strong>` : " khóa học";
+    const courseText = courses.length ? ` các khóa học <strong>${courses.map(escapeHtml).join(", ")}</strong>` : " khóa học";
+
+    const schedules: CourseScheduleInfo[] = params.courseSchedules && params.courseSchedules.length
+      ? params.courseSchedules
+      : courses.map(title => ({ courseTitle: title, sections: [] }));
+
+    const schedulesHtml = schedules.map(c => `
+      <div style="margin-bottom: 16px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1e293b; margin-bottom: 8px;">
+          📚 Khóa học: <span style="color: #4338ca;">${escapeHtml(c.courseTitle)}</span>
+        </div>
+        ${c.sections.length > 0 ? `
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; background: #ffffff; border-radius: 8px; border: 1px solid #bbf7d0; overflow: hidden; margin-top: 4px;">
+            <thead>
+              <tr style="background-color: #ecfdf5; color: #166534; font-weight: 700; text-align: left;">
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">Mã lớp</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">Khai giảng</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">Lịch học</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">Hình thức</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${c.sections.map(s => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 10px; font-weight: 700; color: #4338ca;">${escapeHtml(s.sectionCode)}</td>
+                  <td style="padding: 8px 10px; color: #0f172a; font-weight: 600;">${escapeHtml(s.openingDate || "Sắp mở")}</td>
+                  <td style="padding: 8px 10px; color: #334155;">${escapeHtml(s.scheduleText || "Thông báo sau")}</td>
+                  <td style="padding: 8px 10px; color: #15803d; font-weight: 600;">${escapeHtml(s.room || "Online (Zoom)")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `
+          <div style="font-size: 12px; color: #64748b; background: #ffffff; padding: 10px 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+            Lịch khai giảng các lớp mới đang được cập nhật và MCNA sẽ sớm thông báo tới bạn.
+          </div>
+        `}
+      </div>
+    `).join("");
 
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Chào ${escapeHtml(params.name)},</p>
-      <p>Cảm ơn bạn đã đăng ký${courseText} tại <strong>Học Viện Công Nghệ MCNA</strong>. Tài khoản học viên của bạn trên MCNA LMS đã sẵn sàng:</p>
+      <p>
+        Học Viện Công Nghệ MCNA xin trân trọng thông báo: Khoản thanh toán học phí cho${courseText} của bạn đã được <strong>xác nhận thành công</strong>!
+      </p>
+      <p>Dưới đây là thông tin tài khoản học tập và lịch các lớp học đang có / sắp mở:</p>
 
-      <div class="info-box">
+      <div class="info-box" style="background-color: #f1f5f9; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #e2e8f0;">
+        <div style="font-weight: 700; font-size: 14px; color: #4338ca; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
+          THÔNG TIN TÀI KHOẢN HỌC TẬP (MCNA LMS)
+        </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("Email đăng nhập:", escapeHtml(params.to))}
-          ${infoRow("Mật khẩu mặc định:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 700; color: #b91c1c;")}
+          ${infoRow("Trang học trực tuyến:", `<a href="${escapeHtml(appUrl)}" style="color: #4f46e5; font-weight: 700; text-decoration: none;" target="_blank">${escapeHtml(appUrl)}</a>`)}
+          ${infoRow("Tên đăng nhập (Email):", escapeHtml(params.to), "font-weight: 700; color: #0f172a;")}
+          ${params.password ? infoRow("Mật khẩu tạm thời:", `<span class="mono" style="font-size: 15px;">${escapeHtml(params.password)}</span>`, "font-weight: 700; color: #b91c1c;") : infoRow("Mật khẩu:", "Sử dụng mật khẩu của bạn (hoặc bấm Quên mật khẩu)")}
         </table>
+        ${params.password ? `
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px;">
+          * Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đổi sang mật khẩu mới của riêng bạn để đảm bảo an toàn.
+        </p>` : ""}
       </div>
 
-      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
-        Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đặt mật khẩu của riêng bạn.
-      </p>
-      <p style="font-size: 14px; color: #334155;">
-        Lớp học sẽ xuất hiện trong tài khoản ngay khi MCNA xếp lớp xong. Khi đó bạn sẽ nhận thêm một email với tên lớp, lịch học, nhóm Zalo và giảng viên phụ trách.
-      </p>
-      <p style="font-size: 13px; color: #475569;">Cần hỗ trợ, bạn gọi <strong>${escapeHtml(params.supportPhone)}</strong>.</p>
+      <div class="success-box" style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          KHÓA HỌC ĐÃ ĐĂNG KÝ & LỊCH LỚP HỌC ĐANG CÓ / SẮP MỞ
+        </div>
+        ${schedulesHtml}
+      </div>
 
-      <div class="btn-container">
-        <a href="${escapeHtml(appUrl)}" class="btn" target="_blank">Đăng nhập MCNA LMS</a>
+      <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+        Ban học vụ MCNA sẽ liên hệ để xác nhận ca học phù hợp nhất với bạn và gửi email xếp lớp chính thức (kèm link nhóm Zalo lớp và link phòng học Zoom) trước ngày khai giảng.
+      </p>
+      <p style="font-size: 13px; color: #475569;">
+        Cần hỗ trợ, bạn vui lòng liên hệ hotline: <strong style="color: #b91c1c;">${escapeHtml(params.supportPhone)}</strong>.
+      </p>
+
+      <div class="btn-container" style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${escapeHtml(appUrl)}" class="btn btn-green" target="_blank" style="display: inline-block; background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase;">
+          Đăng nhập vào MCNA LMS
+        </a>
       </div>
     `;
+
+    const plainSchedules = schedules.map(c => {
+      const secLines = c.sections.length
+        ? c.sections.map(s => `  - Lớp ${s.sectionCode} | Khai giảng: ${s.openingDate || "Sắp mở"} | Lịch: ${s.scheduleText || "Thông báo sau"} | Hình thức: ${s.room || "Online (Zoom)"}`).join("\n")
+        : "  - Lịch khai giảng lớp mới đang được cập nhật.";
+      return `Khóa: ${c.courseTitle}\n${secLines}`;
+    }).join("\n\n");
 
     const plainText = [
       `Chào ${params.name},`,
       "",
-      `Tài khoản học viên MCNA LMS của bạn đã sẵn sàng${courses.length ? ` (khóa học: ${courses.join(", ")})` : ""}.`,
+      `Khoản thanh toán cho khóa học tại MCNA của bạn đã được xác nhận thành công!`,
+      `Trang học trực tuyến: ${appUrl}`,
       `Email đăng nhập: ${params.to}`,
-      `Mật khẩu mặc định: ${params.password}`,
-      "Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đặt mật khẩu của riêng bạn.",
-      "Lớp học sẽ xuất hiện trong tài khoản khi MCNA xếp lớp xong.",
-      `Số điện thoại hỗ trợ: ${params.supportPhone}`,
+      params.password ? `Mật khẩu tạm thời: ${params.password}` : "Mật khẩu: Sử dụng mật khẩu bạn đã tạo.",
+      params.password ? "(Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu bạn đổi sang mật khẩu mới.)" : "",
+      "",
+      "--- CÁC KHÓA HỌC & LỊCH LỚP HỌC ---",
+      plainSchedules,
+      "",
+      "Ban học vụ MCNA sẽ liên hệ xếp lớp theo ca học phù hợp với bạn trước ngày khai giảng.",
+      `Hotline hỗ trợ: ${params.supportPhone}`,
       "",
       `Đăng nhập tại: ${appUrl}`
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
   } catch (err) {

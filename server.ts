@@ -173,7 +173,8 @@ import { registerEventHandlers } from "./src/server/eventHandlers";
 import { startScheduler, runCrmOutboxJob } from "./src/server/scheduler";
 import { percentToLetterGrade as toLetterGrade, percentToGradePoint as toGradePoint } from "./src/gradeUtils";
 import { getGradebookReportRows, toCsv, toXlsx } from "./src/server/reporting";
-import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail } from "./src/server/services/email";
+import { sendCourseRegistrationEmail, sendPaymentConfirmationEmail, sendStudentAccountEmail } from "./src/server/services/email";
+import { lookupCourseSchedules } from "./src/server/services/courseScheduleLookup";
 import { getDefaultStudentPassword, getPublicAppConfig, getSalesMode, getSupportPhone, isDirectSale } from "./src/server/config";
 import { notifyTeacherOfPlacements, sendClassPlacementNotice } from "./src/server/services/placementNotice";
 import { importPaidEnrollments } from "./src/server/services/paidEnrollmentImport";
@@ -2163,10 +2164,10 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
 
     void (async () => {
       try {
-        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
+        const studentUser = (await pool.query("SELECT name, email, must_change_password FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
         if (!studentUser?.email) return;
 
-        const courseRow = (await pool.query("SELECT title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
+        const courseRow = (await pool.query("SELECT id, title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
         let sectionCode: string | null = null;
         let teacherName: string | null = null;
         if (placedSectionId) {
@@ -2181,15 +2182,28 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
           teacherName = secRow?.teacher_name || null;
         }
 
-        await sendPaymentConfirmationEmail({
+        // When payment is confirmed: send the account login details and current & upcoming class schedules
+        const schedules = await lookupCourseSchedules(pool, [courseRow.id]);
+        await sendStudentAccountEmail({
           to: studentUser.email,
           name: studentUser.name || "Học viên",
-          courseTitle: courseRow?.title || "Khóa học",
-          amount: Number(req.body.amount || courseRow?.price || 0),
-          transactionId: transactionId || enrollmentRow.id,
-          sectionCode,
-          teacherName
+          password: studentUser.must_change_password ? getDefaultStudentPassword() : null,
+          courseTitles: [courseRow.title],
+          courseSchedules: schedules,
+          supportPhone: getSupportPhone()
         });
+
+        if (Number(req.body.amount || courseRow?.price || 0) > 0) {
+          await sendPaymentConfirmationEmail({
+            to: studentUser.email,
+            name: studentUser.name || "Học viên",
+            courseTitle: courseRow?.title || "Khóa học",
+            amount: Number(req.body.amount || courseRow?.price || 0),
+            transactionId: transactionId || enrollmentRow.id,
+            sectionCode,
+            teacherName
+          });
+        }
       } catch (emailErr) {
         console.error("[CRM Payment] Failed to send payment confirmation email:", emailErr);
       }

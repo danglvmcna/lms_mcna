@@ -3862,45 +3862,108 @@ async function sendClassPlacementEmail(params) {
 }
 async function sendStudentAccountEmail(params) {
   try {
-    const subject = "[MCNA] T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n";
+    const subject = "[MCNA] T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n \u2013 X\xE1c nh\u1EADn thanh to\xE1n th\xE0nh c\xF4ng";
     const appUrl = getAppUrl();
     const courses = params.courseTitles.filter(Boolean);
-    const courseText = courses.length ? ` kh\xF3a h\u1ECDc <strong>${courses.map(escapeHtml2).join(", ")}</strong>` : " kh\xF3a h\u1ECDc";
+    const courseText = courses.length ? ` c\xE1c kh\xF3a h\u1ECDc <strong>${courses.map(escapeHtml2).join(", ")}</strong>` : " kh\xF3a h\u1ECDc";
+    const schedules = params.courseSchedules && params.courseSchedules.length ? params.courseSchedules : courses.map((title) => ({ courseTitle: title, sections: [] }));
+    const schedulesHtml = schedules.map((c) => `
+      <div style="margin-bottom: 16px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1e293b; margin-bottom: 8px;">
+          \u{1F4DA} Kh\xF3a h\u1ECDc: <span style="color: #4338ca;">${escapeHtml2(c.courseTitle)}</span>
+        </div>
+        ${c.sections.length > 0 ? `
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; background: #ffffff; border-radius: 8px; border: 1px solid #bbf7d0; overflow: hidden; margin-top: 4px;">
+            <thead>
+              <tr style="background-color: #ecfdf5; color: #166534; font-weight: 700; text-align: left;">
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">M\xE3 l\u1EDBp</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">Khai gi\u1EA3ng</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">L\u1ECBch h\u1ECDc</th>
+                <th style="padding: 8px 10px; border-bottom: 1px solid #bbf7d0;">H\xECnh th\u1EE9c</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${c.sections.map((s) => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 8px 10px; font-weight: 700; color: #4338ca;">${escapeHtml2(s.sectionCode)}</td>
+                  <td style="padding: 8px 10px; color: #0f172a; font-weight: 600;">${escapeHtml2(s.openingDate || "S\u1EAFp m\u1EDF")}</td>
+                  <td style="padding: 8px 10px; color: #334155;">${escapeHtml2(s.scheduleText || "Th\xF4ng b\xE1o sau")}</td>
+                  <td style="padding: 8px 10px; color: #15803d; font-weight: 600;">${escapeHtml2(s.room || "Online (Zoom)")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `
+          <div style="font-size: 12px; color: #64748b; background: #ffffff; padding: 10px 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+            L\u1ECBch khai gi\u1EA3ng c\xE1c l\u1EDBp m\u1EDBi \u0111ang \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt v\xE0 MCNA s\u1EBD s\u1EDBm th\xF4ng b\xE1o t\u1EDBi b\u1EA1n.
+          </div>
+        `}
+      </div>
+    `).join("");
     const bodyContent = `
       <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Ch\xE0o ${escapeHtml2(params.name)},</p>
-      <p>C\u1EA3m \u01A1n b\u1EA1n \u0111\xE3 \u0111\u0103ng k\xFD${courseText} t\u1EA1i <strong>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA</strong>. T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn c\u1EE7a b\u1EA1n tr\xEAn MCNA LMS \u0111\xE3 s\u1EB5n s\xE0ng:</p>
+      <p>
+        H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED cho${courseText} c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>!
+      </p>
+      <p>D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin t\xE0i kho\u1EA3n h\u1ECDc t\u1EADp v\xE0 l\u1ECBch c\xE1c l\u1EDBp h\u1ECDc \u0111ang c\xF3 / s\u1EAFp m\u1EDF:</p>
 
-      <div class="info-box">
+      <div class="info-box" style="background-color: #f1f5f9; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #e2e8f0;">
+        <div style="font-weight: 700; font-size: 14px; color: #4338ca; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">
+          TH\xD4NG TIN T\xC0I KHO\u1EA2N H\u1ECCC T\u1EACP (MCNA LMS)
+        </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("Email \u0111\u0103ng nh\u1EADp:", escapeHtml2(params.to))}
-          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml2(params.password)}</span>`, "font-weight: 700; color: #b91c1c;")}
+          ${infoRow("Trang h\u1ECDc tr\u1EF1c tuy\u1EBFn:", `<a href="${escapeHtml2(appUrl)}" style="color: #4f46e5; font-weight: 700; text-decoration: none;" target="_blank">${escapeHtml2(appUrl)}</a>`)}
+          ${infoRow("T\xEAn \u0111\u0103ng nh\u1EADp (Email):", escapeHtml2(params.to), "font-weight: 700; color: #0f172a;")}
+          ${params.password ? infoRow("M\u1EADt kh\u1EA9u t\u1EA1m th\u1EDDi:", `<span class="mono" style="font-size: 15px;">${escapeHtml2(params.password)}</span>`, "font-weight: 700; color: #b91c1c;") : infoRow("M\u1EADt kh\u1EA9u:", "S\u1EED d\u1EE5ng m\u1EADt kh\u1EA9u c\u1EE7a b\u1EA1n (ho\u1EB7c b\u1EA5m Qu\xEAn m\u1EADt kh\u1EA9u)")}
         </table>
+        ${params.password ? `
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px;">
+          * \u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1ED5i sang m\u1EADt kh\u1EA9u m\u1EDBi c\u1EE7a ri\xEAng b\u1EA1n \u0111\u1EC3 \u0111\u1EA3m b\u1EA3o an to\xE0n.
+        </p>` : ""}
       </div>
 
-      <p style="font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px;">
-        \u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.
-      </p>
-      <p style="font-size: 14px; color: #334155;">
-        L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n ngay khi MCNA x\u1EBFp l\u1EDBp xong. Khi \u0111\xF3 b\u1EA1n s\u1EBD nh\u1EADn th\xEAm m\u1ED9t email v\u1EDBi t\xEAn l\u1EDBp, l\u1ECBch h\u1ECDc, nh\xF3m Zalo v\xE0 gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch.
-      </p>
-      <p style="font-size: 13px; color: #475569;">C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n g\u1ECDi <strong>${escapeHtml2(params.supportPhone)}</strong>.</p>
+      <div class="success-box" style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1.5px solid #bbf7d0;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+          KH\xD3A H\u1ECCC \u0110\xC3 \u0110\u0102NG K\xDD & L\u1ECACH L\u1EDAP H\u1ECCC \u0110ANG C\xD3 / S\u1EAEP M\u1EDE
+        </div>
+        ${schedulesHtml}
+      </div>
 
-      <div class="btn-container">
-        <a href="${escapeHtml2(appUrl)}" class="btn" target="_blank">\u0110\u0103ng nh\u1EADp MCNA LMS</a>
+      <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+        Ban h\u1ECDc v\u1EE5 MCNA s\u1EBD li\xEAn h\u1EC7 \u0111\u1EC3 x\xE1c nh\u1EADn ca h\u1ECDc ph\xF9 h\u1EE3p nh\u1EA5t v\u1EDBi b\u1EA1n v\xE0 g\u1EEDi email x\u1EBFp l\u1EDBp ch\xEDnh th\u1EE9c (k\xE8m link nh\xF3m Zalo l\u1EDBp v\xE0 link ph\xF2ng h\u1ECDc Zoom) tr\u01B0\u1EDBc ng\xE0y khai gi\u1EA3ng.
+      </p>
+      <p style="font-size: 13px; color: #475569;">
+        C\u1EA7n h\u1ED7 tr\u1EE3, b\u1EA1n vui l\xF2ng li\xEAn h\u1EC7 hotline: <strong style="color: #b91c1c;">${escapeHtml2(params.supportPhone)}</strong>.
+      </p>
+
+      <div class="btn-container" style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${escapeHtml2(appUrl)}" class="btn btn-green" target="_blank" style="display: inline-block; background-color: #16a34a; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase;">
+          \u0110\u0103ng nh\u1EADp v\xE0o MCNA LMS
+        </a>
       </div>
     `;
+    const plainSchedules = schedules.map((c) => {
+      const secLines = c.sections.length ? c.sections.map((s) => `  - L\u1EDBp ${s.sectionCode} | Khai gi\u1EA3ng: ${s.openingDate || "S\u1EAFp m\u1EDF"} | L\u1ECBch: ${s.scheduleText || "Th\xF4ng b\xE1o sau"} | H\xECnh th\u1EE9c: ${s.room || "Online (Zoom)"}`).join("\n") : "  - L\u1ECBch khai gi\u1EA3ng l\u1EDBp m\u1EDBi \u0111ang \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt.";
+      return `Kh\xF3a: ${c.courseTitle}
+${secLines}`;
+    }).join("\n\n");
     const plainText = [
       `Ch\xE0o ${params.name},`,
       "",
-      `T\xE0i kho\u1EA3n h\u1ECDc vi\xEAn MCNA LMS c\u1EE7a b\u1EA1n \u0111\xE3 s\u1EB5n s\xE0ng${courses.length ? ` (kh\xF3a h\u1ECDc: ${courses.join(", ")})` : ""}.`,
+      `Kho\u1EA3n thanh to\xE1n cho kh\xF3a h\u1ECDc t\u1EA1i MCNA c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c x\xE1c nh\u1EADn th\xE0nh c\xF4ng!`,
+      `Trang h\u1ECDc tr\u1EF1c tuy\u1EBFn: ${appUrl}`,
       `Email \u0111\u0103ng nh\u1EADp: ${params.to}`,
-      `M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh: ${params.password}`,
-      "\u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1EB7t m\u1EADt kh\u1EA9u c\u1EE7a ri\xEAng b\u1EA1n.",
-      "L\u1EDBp h\u1ECDc s\u1EBD xu\u1EA5t hi\u1EC7n trong t\xE0i kho\u1EA3n khi MCNA x\u1EBFp l\u1EDBp xong.",
-      `S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
+      params.password ? `M\u1EADt kh\u1EA9u t\u1EA1m th\u1EDDi: ${params.password}` : "M\u1EADt kh\u1EA9u: S\u1EED d\u1EE5ng m\u1EADt kh\u1EA9u b\u1EA1n \u0111\xE3 t\u1EA1o.",
+      params.password ? "(\u1EDE l\u1EA7n \u0111\u0103ng nh\u1EADp \u0111\u1EA7u ti\xEAn, h\u1EC7 th\u1ED1ng s\u1EBD y\xEAu c\u1EA7u b\u1EA1n \u0111\u1ED5i sang m\u1EADt kh\u1EA9u m\u1EDBi.)" : "",
+      "",
+      "--- C\xC1C KH\xD3A H\u1ECCC & L\u1ECACH L\u1EDAP H\u1ECCC ---",
+      plainSchedules,
+      "",
+      "Ban h\u1ECDc v\u1EE5 MCNA s\u1EBD li\xEAn h\u1EC7 x\u1EBFp l\u1EDBp theo ca h\u1ECDc ph\xF9 h\u1EE3p v\u1EDBi b\u1EA1n tr\u01B0\u1EDBc ng\xE0y khai gi\u1EA3ng.",
+      `Hotline h\u1ED7 tr\u1EE3: ${params.supportPhone}`,
       "",
       `\u0110\u0103ng nh\u1EADp t\u1EA1i: ${appUrl}`
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     return await dispatchEmail(params.to, params.name, subject, renderBaseLayout(subject, bodyContent), plainText);
   } catch (err) {
     console.error("[Email Service] sendStudentAccountEmail error:", err);
@@ -6655,6 +6718,47 @@ async function toXlsx(sheetName, headers, rows, keys) {
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
+// src/server/services/courseScheduleLookup.ts
+async function lookupCourseSchedules(db, courseIdsOrTitles) {
+  const cleanInputs = courseIdsOrTitles.map((t) => String(t || "").trim()).filter(Boolean);
+  if (!cleanInputs.length) return [];
+  const coursesRes = await db.query(
+    "SELECT id, title FROM courses WHERE id = ANY($1) OR title = ANY($1)",
+    [cleanInputs]
+  );
+  const courses = coursesRes.rows;
+  if (!courses.length) {
+    return cleanInputs.map((title) => ({ courseTitle: title, sections: [] }));
+  }
+  const courseIds = courses.map((c) => c.id);
+  const sectionsRes = await db.query(
+    `SELECT cs.id, cs.course_id, cs.section_code, cs.opening_date, cs.schedule, cs.schedule_json, cs.status, cs.meeting_url
+     FROM course_sections cs
+     WHERE cs.course_id = ANY($1) AND cs.status IN ('open', 'planned', 'upcoming')
+     ORDER BY cs.opening_date ASC NULLS LAST, cs.section_code ASC`,
+    [courseIds]
+  );
+  const sectionsByCourse = /* @__PURE__ */ new Map();
+  for (const row of sectionsRes.rows) {
+    const schedule = parseSchedule(row);
+    const item = {
+      sectionCode: row.section_code,
+      openingDate: formatDateVi(row.opening_date),
+      scheduleText: formatScheduleSummary(schedule),
+      room: commonScheduleRoom(schedule) || "Online (Zoom)",
+      status: row.status
+    };
+    const list = sectionsByCourse.get(row.course_id) || [];
+    list.push(item);
+    sectionsByCourse.set(row.course_id, list);
+  }
+  return courses.map((c) => ({
+    courseId: c.id,
+    courseTitle: c.title,
+    sections: sectionsByCourse.get(c.id) || []
+  }));
+}
+
 // src/paidImport.ts
 function normalizeText(value) {
   return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -7028,11 +7132,14 @@ async function importPaidEnrollments(input) {
   }
   if (!input.dryRun && input.sendAccountEmail) {
     for (const account of newAccounts.values()) {
+      const courseTitles = Array.from(new Set(account.courseTitles));
+      const courseSchedules = await lookupCourseSchedules(pool, courseTitles);
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
         password: String(input.defaultPassword),
-        courseTitles: Array.from(new Set(account.courseTitles)),
+        courseTitles,
+        courseSchedules,
         supportPhone: getSupportPhone()
       });
       for (const row of account.rows) row.accountEmail = status;
@@ -9611,9 +9718,9 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
     }
     void (async () => {
       try {
-        const studentUser = (await pool.query("SELECT name, email FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
+        const studentUser = (await pool.query("SELECT name, email, must_change_password FROM users WHERE id = $1", [enrollmentRow.student_id])).rows[0];
         if (!studentUser?.email) return;
-        const courseRow = (await pool.query("SELECT title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
+        const courseRow = (await pool.query("SELECT id, title, price FROM courses WHERE id = $1", [enrollmentRow.course_id])).rows[0];
         let sectionCode = null;
         let teacherName = null;
         if (placedSectionId) {
@@ -9627,15 +9734,26 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
           sectionCode = secRow?.section_code || null;
           teacherName = secRow?.teacher_name || null;
         }
-        await sendPaymentConfirmationEmail({
+        const schedules = await lookupCourseSchedules(pool, [courseRow.id]);
+        await sendStudentAccountEmail({
           to: studentUser.email,
           name: studentUser.name || "H\u1ECDc vi\xEAn",
-          courseTitle: courseRow?.title || "Kh\xF3a h\u1ECDc",
-          amount: Number(req.body.amount || courseRow?.price || 0),
-          transactionId: transactionId || enrollmentRow.id,
-          sectionCode,
-          teacherName
+          password: studentUser.must_change_password ? getDefaultStudentPassword() : null,
+          courseTitles: [courseRow.title],
+          courseSchedules: schedules,
+          supportPhone: getSupportPhone()
         });
+        if (Number(req.body.amount || courseRow?.price || 0) > 0) {
+          await sendPaymentConfirmationEmail({
+            to: studentUser.email,
+            name: studentUser.name || "H\u1ECDc vi\xEAn",
+            courseTitle: courseRow?.title || "Kh\xF3a h\u1ECDc",
+            amount: Number(req.body.amount || courseRow?.price || 0),
+            transactionId: transactionId || enrollmentRow.id,
+            sectionCode,
+            teacherName
+          });
+        }
       } catch (emailErr) {
         console.error("[CRM Payment] Failed to send payment confirmation email:", emailErr);
       }
