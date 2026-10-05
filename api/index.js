@@ -3304,7 +3304,7 @@ function wrapHtmlBody(title, contentHtml) {
   <meta charset="utf-8">
   <style>
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif;
       background-color: #f8fafc;
       color: #1e293b;
       margin: 0;
@@ -3335,8 +3335,8 @@ function wrapHtmlBody(title, contentHtml) {
       color: #ffffff;
       margin: 0;
       font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
       text-transform: uppercase;
     }
     .content {
@@ -3704,11 +3704,11 @@ function renderBaseLayout(title, bodyContent) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml2(title)}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
+    body { font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; line-height: 1.6; }
     .wrapper { width: 100%; background-color: #f8fafc; padding: 30px 15px; box-sizing: border-box; }
     .card { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
     .header { background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #4f46e5 100%); padding: 26px 24px; text-align: center; }
-    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
     .header p { color: #c7d2fe; margin: 4px 0 0 0; font-size: 12px; font-weight: 500; }
     .content { padding: 32px 24px; }
     .info-box { background-color: #f1f5f9; border-radius: 12px; padding: 16px 20px; margin: 20px 0; border: 1px solid #e2e8f0; }
@@ -3717,8 +3717,8 @@ function renderBaseLayout(title, bodyContent) {
     .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
     .row-label { color: #64748b; font-weight: 500; }
     .row-value { color: #0f172a; font-weight: 700; text-align: right; }
-    .highlight { color: #4f46e5; font-weight: 800; }
-    .highlight-green { color: #16a34a; font-weight: 800; }
+    .highlight { color: #4f46e5; font-weight: 700; }
+    .highlight-green { color: #16a34a; font-weight: 700; }
     .footer { background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.6; }
     .btn-container { text-align: center; margin: 28px 0 10px 0; }
     .btn { display: inline-block; background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 10px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
@@ -3800,22 +3800,22 @@ async function sendClassPlacementEmail(params) {
       <p>MCNA \u0111\xE3 x\u1EBFp b\u1EA1n v\xE0o l\u1EDBp c\u1EE7a kh\xF3a h\u1ECDc <strong>${escapeHtml2(params.courseTitle)}</strong>. D\u01B0\u1EDBi \u0111\xE2y l\xE0 th\xF4ng tin l\u1EDBp c\u1EE7a b\u1EA1n:</p>
 
       <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           TH\xD4NG TIN L\u1EDAP H\u1ECCC
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          ${infoRow("T\xEAn l\u1EDBp:", escapeHtml2(params.sectionCode), "font-weight: 800; color: #4338ca; font-size: 15px;")}
+          ${infoRow("T\xEAn l\u1EDBp:", escapeHtml2(params.sectionCode), "font-weight: 700; color: #4338ca; font-size: 15px;")}
           ${params.openingDate ? infoRow("Ng\xE0y khai gi\u1EA3ng:", escapeHtml2(params.openingDate)) : ""}
           ${infoRow("L\u1ECBch h\u1ECDc:", escapeHtml2(schedule))}
           ${params.room ? infoRow("H\xECnh th\u1EE9c / ph\xF2ng h\u1ECDc:", escapeHtml2(params.room), "font-weight: 600; color: #334155;") : ""}
           ${params.numberOfSessions ? infoRow("S\u1ED1 bu\u1ED5i:", `${Number(params.numberOfSessions)} bu\u1ED5i`, "font-weight: 600; color: #334155;") : ""}
           ${infoRow("Gi\u1EA3ng vi\xEAn ph\u1EE5 tr\xE1ch:", escapeHtml2(teacher))}
-          ${infoRow("S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3:", escapeHtml2(params.supportPhone), "font-weight: 800; color: #b91c1c;")}
+          ${infoRow("S\u1ED1 \u0111i\u1EC7n tho\u1EA1i h\u1ED7 tr\u1EE3:", escapeHtml2(params.supportPhone), "font-weight: 700; color: #b91c1c;")}
         </table>
       </div>
 
       <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
+        <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 8px; text-transform: uppercase;">NH\xD3M ZALO C\u1EE6A L\u1EDAP</div>
         ${zaloUrl ? `
         <p style="font-size: 13px; color: #334155; margin: 0 0 12px 0;">M\u1ECDi th\xF4ng b\xE1o c\u1EE7a l\u1EDBp v\xE0 trao \u0111\u1ED5i v\u1EDBi gi\u1EA3ng vi\xEAn di\u1EC5n ra trong nh\xF3m Zalo. B\u1EA1n tham gia nh\xF3m tr\u01B0\u1EDBc bu\u1ED5i khai gi\u1EA3ng nh\xE9.</p>
         <div style="text-align: center;">
@@ -3873,7 +3873,7 @@ async function sendStudentAccountEmail(params) {
       <div class="info-box">
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           ${infoRow("Email \u0111\u0103ng nh\u1EADp:", escapeHtml2(params.to))}
-          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml2(params.password)}</span>`, "font-weight: 800; color: #b91c1c;")}
+          ${infoRow("M\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh:", `<span class="mono" style="font-size: 15px;">${escapeHtml2(params.password)}</span>`, "font-weight: 700; color: #b91c1c;")}
         </table>
       </div>
 
@@ -3937,7 +3937,7 @@ async function sendCourseRegistrationEmail(params) {
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">H\u1ECDc ph\xED:</td>
-            <td style="font-weight: 800; color: ${isPaid ? "#059669" : "#4f46e5"}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
+            <td style="font-weight: 700; color: ${isPaid ? "#059669" : "#4f46e5"}; text-align: right; padding: 4px 0;">${formatMoney(params.price)}</td>
           </tr>
           <tr>
             <td style="color: #64748b; padding: 4px 0;">Tr\u1EA1ng th\xE1i:</td>
@@ -3948,7 +3948,7 @@ async function sendCourseRegistrationEmail(params) {
 
       ${isPaid ? `
       <div class="bank-box">
-        <div style="font-weight: 800; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #1e40af; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bfdbfe; padding-bottom: 6px;">
           H\u01AF\u1EDANG D\u1EAAN CHUY\u1EC2N KHO\u1EA2N H\u1ECCC PH\xCD
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -3958,7 +3958,7 @@ async function sendCourseRegistrationEmail(params) {
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">S\u1ED1 t\xE0i kho\u1EA3n:</td>
-            <td style="font-weight: 800; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
+            <td style="font-weight: 700; color: #1e40af; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${BANK_ACCOUNT_NUMBER}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">Ch\u1EE7 t\xE0i kho\u1EA3n:</td>
@@ -3966,11 +3966,11 @@ async function sendCourseRegistrationEmail(params) {
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n c\u1EA7n thanh to\xE1n:</td>
-            <td style="font-weight: 800; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
+            <td style="font-weight: 700; color: #059669; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.price)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">N\u1ED9i dung chuy\u1EC3n kho\u1EA3n:</td>
-            <td style="font-weight: 800; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
+            <td style="font-weight: 700; color: #b91c1c; font-size: 15px; text-align: right; padding: 5px 0;" class="mono">${memoText}</td>
           </tr>
         </table>
 
@@ -4022,7 +4022,7 @@ async function sendPaymentConfirmationEmail(params) {
       <p>H\u1ECDc Vi\u1EC7n C\xF4ng Ngh\u1EC7 MCNA xin tr\xE2n tr\u1ECDng th\xF4ng b\xE1o: Kho\u1EA3n thanh to\xE1n h\u1ECDc ph\xED c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c <strong>x\xE1c nh\u1EADn th\xE0nh c\xF4ng</strong>! Kh\xF3a h\u1ECDc c\u1EE7a b\u1EA1n \u0111\xE3 \u0111\u01B0\u1EE3c k\xEDch ho\u1EA1t tr\xEAn h\u1EC7 th\u1ED1ng.</p>
 
       <div class="success-box">
-        <div style="font-weight: 800; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
+        <div style="font-weight: 700; font-size: 14px; color: #15803d; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 6px;">
           BI\xCAN NH\u1EACN THANH TO\xC1N & TH\xD4NG TIN H\u1ECCC PH\u1EA6N
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -4032,7 +4032,7 @@ async function sendPaymentConfirmationEmail(params) {
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">S\u1ED1 ti\u1EC1n \u0111\xE3 thanh to\xE1n:</td>
-            <td style="font-weight: 800; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
+            <td style="font-weight: 700; color: #15803d; font-size: 15px; text-align: right; padding: 5px 0;">${formatMoney(params.amount)}</td>
           </tr>
           <tr>
             <td style="color: #475569; padding: 5px 0;">M\xE3 giao d\u1ECBch:</td>
@@ -4053,7 +4053,7 @@ async function sendPaymentConfirmationEmail(params) {
           </tr>` : ""}
           <tr>
             <td style="color: #475569; padding: 5px 0;">Tr\u1EA1ng th\xE1i kh\xF3a h\u1ECDc:</td>
-            <td style="font-weight: 800; color: #15803d; text-align: right; padding: 5px 0;">\u0110\xE3 k\xEDch ho\u1EA1t - S\u1EB5n s\xE0ng v\xE0o h\u1ECDc</td>
+            <td style="font-weight: 700; color: #15803d; text-align: right; padding: 5px 0;">\u0110\xE3 k\xEDch ho\u1EA1t - S\u1EB5n s\xE0ng v\xE0o h\u1ECDc</td>
           </tr>
         </table>
       </div>
@@ -11055,10 +11055,13 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
   if (!targetEmail || !targetEmail.includes("@")) {
     return res.status(400).json({ error: "\u0110\u1ECBa ch\u1EC9 email nh\u1EADn th\u1EED nghi\u1EC7m kh\xF4ng h\u1EE3p l\u1EC7." });
   }
+  const smtpHost = (process.env.SMTP_HOST || "").trim() || "smtp.gmail.com";
+  const smtp = getSmtpUser().endsWith("@gmail.com") || smtpHost === "smtp.gmail.com" ? { mailbox: getSmtpUser(), host: "smtp.gmail.com", port: 465 } : { mailbox: getSmtpUser(), host: smtpHost, port: Number(process.env.SMTP_PORT) || 465 };
   const configured = hasSmtpConfig();
   if (!configured) {
     return res.status(400).json({
-      error: "H\u1EC7 th\u1ED1ng ch\u01B0a \u0111\u01B0\u1EE3c c\u1EA5u h\xECnh bi\u1EBFn m\xF4i tr\u01B0\u1EDDng SMTP (SMTP_USER, SMTP_PASS, SMTP_HOST).",
+      error: "M\xE1y ch\u1EE7 ch\u01B0a c\xF3 SMTP_USER v\xE0 SMTP_PASS h\u1EE3p l\u1EC7 n\xEAn ch\u01B0a g\u1EEDi \u0111\u01B0\u1EE3c email.",
+      smtp,
       details: {
         configured: false,
         smtpHost: process.env.SMTP_HOST || "Ch\u01B0a c\u1EA5u h\xECnh",
@@ -11075,9 +11078,9 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       to: targetEmail,
       subject: `[MCNA LMS] Th\u1EED nghi\u1EC7m g\u1EEDi email h\u1EC7 th\u1ED1ng`,
       html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto;">
+        <div style="font-family: Arial, 'Segoe UI', Tahoma, Helvetica, sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; max-width: 540px; margin: 0 auto; line-height: 1.6;">
           <div style="background: #4f46e5; color: #ffffff; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h2>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">H\u1ECCC VI\u1EC6N C\xD4NG NGH\u1EC6 MCNA</h2>
             <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ki\u1EC3m tra k\u1EBFt n\u1ED1i g\u1EEDi email h\u1EC7 th\u1ED1ng</p>
           </div>
           <p style="font-size: 14px; color: #1e293b;">Xin ch\xE0o <strong>${escapeHtml(req.user?.name || "Qu\u1EA3n tr\u1ECB vi\xEAn")}</strong>,</p>
@@ -11086,7 +11089,7 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
           </p>
           <div style="background: #f1f5f9; padding: 14px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 6px 0;"><strong>Th\u1EDDi gian g\u1EEDi:</strong> ${(/* @__PURE__ */ new Date()).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
-            <p style="margin: 0 0 6px 0;"><strong>T\xE0i kho\u1EA3n g\u1EEDi:</strong> ${getSmtpFrom()}</p>
+            <p style="margin: 0 0 6px 0;"><strong>T\xE0i kho\u1EA3n g\u1EEDi:</strong> ${escapeHtml(getSmtpFrom())}</p>
             <p style="margin: 0;"><strong>\u0110\u1ECBa ch\u1EC9 nh\u1EADn:</strong> ${escapeHtml(targetEmail)}</p>
           </div>
           <p style="font-size: 13px; color: #16a34a; font-weight: 600;">
@@ -11101,7 +11104,8 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       message: `\u0110\xE3 g\u1EEDi th\xE0nh c\xF4ng email th\u1EED nghi\u1EC7m t\u1EDBi ${targetEmail}!`,
       messageId: info.messageId,
       sender: getSmtpFrom(),
-      targetEmail
+      targetEmail,
+      smtp
     });
   } catch (err) {
     console.error("[admin/email/test] SMTP send error:", err);
@@ -11109,6 +11113,7 @@ app.post("/api/admin/email/test", requireAuth, requireRole(["admin"]), asyncHand
       ok: false,
       error: `G\u1EEDi mail th\u1EA5t b\u1EA1i: ${err.message || String(err)}`,
       code: err.code || "SMTP_ERROR",
+      smtp,
       tip: "Vui l\xF2ng ki\u1EC3m tra l\u1EA1i SMTP_USER v\xE0 SMTP_PASS (App Password), ho\u1EB7c c\u1EA5u h\xECnh b\u1EA3o m\u1EADt 2FA c\u1EE7a t\xE0i kho\u1EA3n g\u1EEDi."
     });
   }

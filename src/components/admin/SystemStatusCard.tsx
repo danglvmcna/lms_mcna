@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, RefreshCw, Send } from "lucide-react";
 import { api } from "../../api";
-import { SystemStatus } from "../../types";
-import { Badge, Button, Card, Callout, SectionTitle, Skeleton } from "../ui";
+import { SmtpTestInfo, SystemStatus } from "../../types";
+import { Badge, Button, Card, Callout, inputClass, SectionTitle, Skeleton } from "../ui";
 
 type State = "ok" | "missing" | "optional";
 
@@ -102,6 +102,62 @@ const BADGE: Record<State, { tone: "success" | "warning" | "neutral"; label: str
   optional: { tone: "neutral", label: "Không bắt buộc" }
 };
 
+/**
+ * Sends one real email through the server's mailbox. The hosting panel hides stored values, so this is how
+ * an admin learns which mailbox and mail server are in use and why sending fails.
+ */
+function EmailTest() {
+  const [target, setTarget] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string; smtp?: SmtpTestInfo } | null>(null);
+
+  const send = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setResult(null);
+    try {
+      const sent = await api.sendTestEmail(target.trim());
+      setResult({ ok: true, text: `Máy chủ thư đã nhận email gửi tới ${sent.targetEmail}. Kiểm tra hộp thư, kể cả mục Spam.`, smtp: sent.smtp });
+    } catch (err: any) {
+      setResult({ ok: false, text: err.message || "Không gửi được email thử.", smtp: err.payload?.smtp });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-3 p-4 md:p-5">
+      <div>
+        <h3 className="text-[15px] font-semibold text-slate-900">Gửi email thử</h3>
+        <p className="text-sm leading-relaxed text-slate-500">Gửi một email thật để biết máy chủ này đang dùng hộp thư nào và có gửi được không.</p>
+      </div>
+      <form onSubmit={send} className="flex flex-col gap-2 sm:flex-row">
+        <input
+          id="system-email-test-target"
+          type="email"
+          required
+          value={target}
+          onChange={event => setTarget(event.target.value)}
+          placeholder="Email nhận thử, ví dụ email của bạn"
+          aria-label="Email nhận thử"
+          className={`${inputClass} sm:max-w-sm`}
+        />
+        <Button type="submit" size="sm" variant="secondary" icon={<Send className="h-4 w-4" />} loading={busy}>Gửi thử</Button>
+      </form>
+      {result && (
+        <Callout tone={result.ok ? "success" : "danger"} title={result.ok ? "Đã gửi" : "Chưa gửi được"}>
+          {result.text}
+          {result.smtp && (
+            <span className="mt-1 block break-all font-mono text-xs">
+              Hộp thư gửi: {result.smtp.mailbox || "(chưa đặt)"} · máy chủ thư: {result.smtp.host}:{result.smtp.port}
+            </span>
+          )}
+        </Callout>
+      )}
+    </Card>
+  );
+}
+
 /** Admin overview card: which integrations this server has settings for. */
 export default function SystemStatusCard() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -147,6 +203,7 @@ export default function SystemStatusCard() {
           ))}
         </Card>
       )}
+      {status && <EmailTest />}
     </section>
   );
 }
