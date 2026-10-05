@@ -7161,9 +7161,6 @@ async function importPaidEnrollments(input) {
   return { results, summary };
 }
 
-// src/server/services/crmPaidSource.ts
-import pg2 from "pg";
-
 // src/crmPaidSource.ts
 var text = (value) => String(value ?? "").trim();
 function isFullyPaid(record) {
@@ -7235,6 +7232,7 @@ function crmRecordsToPaidRows(records) {
 }
 
 // src/server/services/crmPaidSource.ts
+import pg2 from "pg";
 var MAX_RECORDS = 500;
 var isCrmSourceConfigured = () => Boolean((process.env.CRM_DATABASE_URL || "").trim());
 var crmPool = null;
@@ -9520,6 +9518,9 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
   });
 }));
 function requireCrmIntegration(req, res, next) {
+  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
+    return next();
+  }
   const apiKey = process.env.CRM_API_KEY;
   const secret = process.env.CRM_INBOUND_SECRET;
   if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
@@ -9673,7 +9674,53 @@ app.post("/api/integrations/crm/enrollments", rateLimitCrmIntegration, requireCr
     };
   });
 }));
-app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requireCrmIntegration, validateBody(schemas.crmConfirmPayment), asyncHandler(async (req, res) => {
+async function handleSupabaseRevenueWebhook(req, res) {
+  const body2 = req.body || {};
+  const record = body2.record || body2;
+  if (!record || typeof record !== "object") {
+    return res.status(400).json({ error: "Missing record payload from Supabase." });
+  }
+  if (!isFullyPaid(record)) {
+    return res.json({
+      success: true,
+      status: "skipped",
+      reason: `Record is not fully paid yet (debt: ${record.debt}, paymentMethod: ${record.paymentMethod})`
+    });
+  }
+  const pull = crmRecordsToPaidRows([record]);
+  if (!pull.rows.length) {
+    return res.json({
+      success: true,
+      status: "skipped",
+      reason: pull.skipped[0]?.reason || "No eligible rows to import."
+    });
+  }
+  const result = await importPaidEnrollments({
+    rows: pull.rows,
+    sendAccountEmail: true,
+    dryRun: false,
+    actorId: "supabase-webhook",
+    actorName: "Supabase Webhook",
+    defaultPassword: getDefaultStudentPassword()
+  });
+  return res.json({
+    success: true,
+    status: "processed",
+    summary: result.summary,
+    results: result.results
+  });
+}
+app.post("/api/integrations/supabase/revenue-webhook", rateLimitCrmIntegration, asyncHandler(async (req, res) => {
+  return handleSupabaseRevenueWebhook(req, res);
+}));
+app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requireCrmIntegration, asyncHandler(async (req, res) => {
+  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
+    return handleSupabaseRevenueWebhook(req, res);
+  }
+  const parsed = schemas.crmConfirmPayment.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid payment confirmation payload.", details: parsed.error.issues });
+  }
   await runIdempotentCrmCall(req, res, "payments.confirm", async () => {
     const enrollmentRow = req.body.enrollmentId ? (await pool.query("SELECT * FROM enrollments WHERE id = $1", [req.body.enrollmentId])).rows[0] : (await pool.query("SELECT * FROM enrollments WHERE crm_deal_id = $1 ORDER BY enrolled_at DESC LIMIT 1", [req.body.crmDealId])).rows[0];
     if (!enrollmentRow) return { status: 404, body: { error: "Enrollment not found." } };
