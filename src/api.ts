@@ -80,6 +80,43 @@ async function postMultipart<T>(url: string, formData: FormData, fallbackError: 
   return response.json() as Promise<T>;
 }
 
+type DirectMaterialOwner = { kind: "session"; sessionId: string } | { kind: "intro"; courseId: string; category: IntroMaterialCategory };
+
+async function uploadMaterial(owner: DirectMaterialOwner, type: "slide" | "document" | "data", file: File, title?: string): Promise<UploadedMaterial> {
+  const start = await apiFetch<
+    | { mode: "server"; maxBytes: number }
+    | { mode: "direct"; signedUrl: string; grant: string; contentType: string }
+  >("/api/materials/direct-upload/start", {
+    method: "POST",
+    body: JSON.stringify({ owner, type, fileName: file.name, sizeBytes: file.size, title })
+  });
+  if (start.mode === "direct") {
+    const response = await fetch(start.signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": start.contentType },
+      body: file
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.message || payload.error || `Kho tài liệu từ chối tệp (HTTP ${response.status}).`);
+    }
+    return apiFetch<UploadedMaterial>("/api/materials/direct-upload/complete", {
+      method: "POST",
+      body: JSON.stringify({ grant: start.grant })
+    });
+  }
+  if (file.size > start.maxBytes) throw new Error("Tệp lớn cần cấu hình Supabase Storage trên máy chủ để tải trực tiếp, hoặc nén xuống dưới 4 MB.");
+  const formData = new FormData();
+  formData.append("type", type);
+  if (owner.kind === "intro") formData.append("category", owner.category);
+  if (title) formData.append("title", title);
+  formData.append("file", file);
+  const url = owner.kind === "session"
+    ? `/api/sessions/${encodeURIComponent(owner.sessionId)}/materials`
+    : `/api/courses/${encodeURIComponent(owner.courseId)}/intro-materials`;
+  return postMultipart<UploadedMaterial>(url, formData, "Tải tài liệu lên thất bại.");
+}
+
 export const api = {
   getStore: () => apiFetch<LMSDataStore>("/api/store"),
   getAdminDashboard: () => apiFetch("/api/dashboard/admin"),
@@ -132,25 +169,14 @@ export const api = {
     });
   },
   listSessionMaterials: (sessionId: string) => apiFetch<SessionMaterial[]>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`),
-  uploadSessionMaterial: (sessionId: string, type: "slide" | "document" | "data", file: File, title?: string) => {
-    const formData = new FormData();
-    formData.append("type", type);
-    if (title) formData.append("title", title);
-    formData.append("file", file);
-    return postMultipart<UploadedMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, formData, "Tải tài liệu lên thất bại.");
-  },
+  uploadSessionMaterial: (sessionId: string, type: "slide" | "document" | "data", file: File, title?: string) =>
+    uploadMaterial({ kind: "session", sessionId }, type, file, title),
   addLinkMaterial: (sessionId: string, payload: { type: "youtube" | "link"; url: string; title?: string }) =>
     apiFetch<SessionMaterial>(`/api/sessions/${encodeURIComponent(sessionId)}/materials`, { method: "POST", body: JSON.stringify(payload) }),
   // Course opening materials: reference reading and practice exercises shown before the first session.
   listIntroMaterials: (courseId: string) => apiFetch<SessionMaterial[]>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`),
-  uploadIntroMaterial: (courseId: string, category: IntroMaterialCategory, type: "document" | "data", file: File, title?: string) => {
-    const formData = new FormData();
-    formData.append("category", category);
-    formData.append("type", type);
-    if (title) formData.append("title", title);
-    formData.append("file", file);
-    return postMultipart<UploadedMaterial>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`, formData, "Tải tài liệu lên thất bại.");
-  },
+  uploadIntroMaterial: (courseId: string, category: IntroMaterialCategory, type: "document" | "data", file: File, title?: string) =>
+    uploadMaterial({ kind: "intro", courseId, category }, type, file, title),
   addIntroLink: (courseId: string, payload: { category: IntroMaterialCategory; type: "youtube" | "link"; url: string; title?: string }) =>
     apiFetch<SessionMaterial>(`/api/courses/${encodeURIComponent(courseId)}/intro-materials`, { method: "POST", body: JSON.stringify(payload) }),
   reorderIntroMaterials: (courseId: string, category: IntroMaterialCategory, materialIds: string[]) =>

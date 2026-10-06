@@ -58,6 +58,8 @@ Thêm vào `.env` trên máy chủ rồi **khởi động lại ứng dụng** (
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | `mail.mcna.vn`, `465`, `noreply@mcna.vn`, … | Hộp thư `@mcna.vn` nằm trên OneMail. **Thiếu SMTP thì email không được gửi**, chỉ ghi vào `scratch/emails.log`. |
 | `APP_URL` / `LMS_LOGIN_URL` | `https://lms.mcna.vn` | Link "Vào lớp học" trong email. |
 
+Để tải slide, tài liệu mở đầu và file data lớn trên Vercel, cấu hình `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY` trong môi trường Production, rồi Redeploy. Bucket `SUPABASE_STORAGE_BUCKET` (mặc định `lms-materials`) phải là **private**. LMS cấp URL tải lên có chữ ký sau khi kiểm tra quyền; trình duyệt gửi tệp thẳng tới Supabase và LMS chỉ lưu thông tin tệp sau khi xác nhận dung lượng. Không đưa service role key vào trình duyệt. Khi chưa cấu hình Supabase, file nhỏ vẫn đi qua API; trên Vercel file lớn hơn 4 MB sẽ được báo cần cấu hình Storage. PDF lớn được trình xem của LMS đọc theo các phần 2 MB sau khi kiểm tra quyền.
+
 Lưu ý khi cập nhật bản mới:
 
 1. **Sao lưu database trước** (xem [backup-restore-policy.md](backup-restore-policy.md)).
@@ -68,7 +70,7 @@ Lưu ý khi cập nhật bản mới:
    * **Email đã gửi**: máy chủ thư đã nhận email.
    * **Email chưa gửi (chưa có SMTP)**: máy chủ chưa cấu hình SMTP.
    * **Email gửi lỗi**: máy chủ thư từ chối; xem log ứng dụng (`SMTP dispatch failed`).
-6. Nếu tải slide lớn bị lỗi 413, tăng `client_max_body_size` trong cấu hình nginx.
+6. Nếu tải slide lớn trên Vercel bị lỗi, kiểm tra hai biến Supabase Production và bucket private. Với VPS/nginx, kiểm tra thêm `client_max_body_size`.
 
 ## 4. Chạy thử một lớp thật (ví dụ AI Automation)
 

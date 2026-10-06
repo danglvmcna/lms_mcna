@@ -6,7 +6,7 @@ import { ZipArchive } from "archiver";
 import ExcelJS2 from "exceljs";
 import fs5 from "fs";
 import os3 from "os";
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 import dotenv2 from "dotenv";
 
 // src/utils.ts
@@ -5370,6 +5370,19 @@ function getClient() {
 function bucket() {
   return process.env.SUPABASE_STORAGE_BUCKET || "lms-materials";
 }
+async function ensurePrivateBucket(supabase) {
+  if (bucketVerified) return;
+  const bucketName = bucket();
+  const { data: buckets, error } = await supabase.storage.listBuckets();
+  if (error) throw error;
+  const existing = (buckets || []).find((item) => item.name === bucketName);
+  if (existing?.public) throw new Error("Material storage bucket must be private.");
+  if (!existing) {
+    const created = await supabase.storage.createBucket(bucketName, { public: false });
+    if (created.error) throw created.error;
+  }
+  bucketVerified = true;
+}
 function getStorageRoot() {
   if (process.env.MATERIALS_DIR && !process.env.VERCEL) {
     return path4.resolve(process.env.MATERIALS_DIR);
@@ -5391,19 +5404,27 @@ var materialStorage = {
   isRemote() {
     return Boolean(getClient());
   },
+  async createDirectUpload(objectPath) {
+    const supabase = getClient();
+    if (!supabase) return null;
+    await ensurePrivateBucket(supabase);
+    const { data, error } = await supabase.storage.from(bucket()).createSignedUploadUrl(objectPath);
+    if (error || !data) throw error || new Error("Could not create a signed upload URL.");
+    return data.signedUrl;
+  },
+  async getDirectUploadInfo(objectPath) {
+    const supabase = getClient();
+    if (!supabase) return null;
+    const { data, error } = await supabase.storage.from(bucket()).info(objectPath);
+    if (error || !data) return null;
+    return { sizeBytes: data.size ?? data.metadata?.size, contentType: data.contentType ?? data.metadata?.mimetype };
+  },
   async put(objectPath, body2, contentType) {
     const supabase = getClient();
     if (supabase) {
       const bucketName = bucket();
       try {
-        if (!bucketVerified) {
-          const { data: buckets } = await supabase.storage.listBuckets();
-          const exists = (buckets || []).some((b) => b.name === bucketName);
-          if (!exists) {
-            await supabase.storage.createBucket(bucketName, { public: false }).catch(() => void 0);
-          }
-          bucketVerified = true;
-        }
+        await ensurePrivateBucket(supabase);
         const { error } = await supabase.storage.from(bucketName).upload(objectPath, body2, { contentType, upsert: true });
         if (!error) return;
         if (error.message?.toLowerCase().includes("not found") || error.statusCode === 404) {
@@ -5491,10 +5512,39 @@ var materialStorage = {
   }
 };
 
-// src/server/crm/signature.ts
+// src/server/services/materialUploadGrant.ts
 import crypto2 from "crypto";
+function signMaterialUploadGrant(grant, secret) {
+  const payload = Buffer.from(JSON.stringify(grant)).toString("base64url");
+  const signature = crypto2.createHmac("sha256", secret).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+function verifyMaterialUploadGrant(token, secret, now = Date.now()) {
+  const parts = token.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const expected = crypto2.createHmac("sha256", secret).update(parts[0]).digest();
+  let actual;
+  try {
+    actual = Buffer.from(parts[1], "base64url");
+  } catch {
+    return null;
+  }
+  if (actual.length !== expected.length || !crypto2.timingSafeEqual(actual, expected)) return null;
+  try {
+    const grant = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    if (!grant || !Number.isSafeInteger(grant.expiresAt) || grant.expiresAt < now || grant.expiresAt > now + 60 * 6e4) return null;
+    if (typeof grant.createdBy !== "string" || typeof grant.materialId !== "string" || typeof grant.storagePath !== "string") return null;
+    if (typeof grant.fileName !== "string" || typeof grant.sizeBytes !== "number" || !grant.owner) return null;
+    return grant;
+  } catch {
+    return null;
+  }
+}
+
+// src/server/crm/signature.ts
+import crypto3 from "crypto";
 function signCrmPayload(secret, timestamp, body2) {
-  return crypto2.createHmac("sha256", secret).update(`${timestamp}.${body2}`).digest("hex");
+  return crypto3.createHmac("sha256", secret).update(`${timestamp}.${body2}`).digest("hex");
 }
 function verifyCrmSignature(secret, timestampHeader, signatureHeader, rawBody, toleranceSeconds) {
   if (!timestampHeader || !signatureHeader) {
@@ -5507,7 +5557,7 @@ function verifyCrmSignature(secret, timestampHeader, signatureHeader, rawBody, t
   }
   const expected = Buffer.from(signCrmPayload(secret, timestampHeader, rawBody), "utf8");
   const received = Buffer.from(signatureHeader.startsWith("sha256=") ? signatureHeader.slice("sha256=".length) : signatureHeader, "utf8");
-  if (expected.length !== received.length || !crypto2.timingSafeEqual(expected, received)) {
+  if (expected.length !== received.length || !crypto3.timingSafeEqual(expected, received)) {
     return { status: 401, error: "Invalid request signature." };
   }
   return null;
@@ -5959,7 +6009,7 @@ async function confirmCoursePayment(client2, enrollmentId, input, origin) {
 }
 
 // src/server/services/sepayService.ts
-import crypto3 from "crypto";
+import crypto4 from "crypto";
 
 // src/scheduleText.ts
 var clean = (value) => String(value ?? "").trim();
@@ -6111,7 +6161,7 @@ function teacherTier(courses, rules) {
 
 // src/server/services/sepayService.ts
 function sha256Hex(input) {
-  return crypto3.createHash("sha256").update(input).digest("hex");
+  return crypto4.createHash("sha256").update(input).digest("hex");
 }
 function extractPaymentCodes(content, codeField) {
   const text2 = `${codeField || ""} ${content || ""}`.trim();
@@ -6495,7 +6545,7 @@ function registerEventHandlers() {
 }
 
 // src/server/services/certificateEligibility.ts
-import crypto4 from "crypto";
+import crypto5 from "crypto";
 async function getCertificateEligibility(db, enrollmentId, sectionId) {
   const row = (await db.query(`SELECT e.*,cs.id section_id,cs.number_of_sessions,cs.status section_status
     FROM enrollments e JOIN course_registrations cr ON cr.student_id=e.student_id AND cr.status='registered'
@@ -6526,7 +6576,7 @@ async function autoIssueCertificates(_db, sectionId) {
       const existing = (await client2.query("SELECT 1 FROM certificates WHERE student_id=$1 AND course_id=$2", [enrollment.student_id, enrollment.course_id])).rowCount;
       const decision = await getCertificateEligibility(client2, item.id, sectionId);
       if (!existing && decision.eligible && enrollment.status === "active") {
-        const id2 = generateId2("cert"), code = crypto4.randomBytes(5).toString("hex").toUpperCase();
+        const id2 = generateId2("cert"), code = crypto5.randomBytes(5).toString("hex").toUpperCase();
         await client2.query("INSERT INTO certificates(id,enrollment_id,student_id,course_id,issued_at,certificate_code,section_id) VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP,$5,$6)", [id2, item.id, enrollment.student_id, enrollment.course_id, code, sectionId]);
         await client2.query("UPDATE enrollments SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE id=$1", [item.id]);
         await enqueueCourseCompletedEvent(client2, item.id);
@@ -7461,7 +7511,7 @@ async function uploadAccess(db, user, filename, viewer) {
 import { z as z2 } from "zod";
 
 // src/server/services/teacherAssignmentNotice.ts
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 async function sendTeacherAssignmentNotice(sectionId, force = false) {
   const db = await pool.connect();
   let row, noticeKey = "";
@@ -7473,7 +7523,7 @@ async function sendTeacherAssignmentNotice(sectionId, force = false) {
       await db.query("ROLLBACK");
       return { status: "skipped" };
     }
-    noticeKey = crypto5.createHash("sha256").update(JSON.stringify([row.teacher_id, row.section_code, row.opening_date, parseSchedule(row), row.group_chat_url, row.meeting_url])).digest("hex");
+    noticeKey = crypto6.createHash("sha256").update(JSON.stringify([row.teacher_id, row.section_code, row.opening_date, parseSchedule(row), row.group_chat_url, row.meeting_url])).digest("hex");
     if (!force && row.assignment_notice_key === noticeKey) {
       await db.query("ROLLBACK");
       return { status: row.assignment_email_status };
@@ -8075,7 +8125,7 @@ var PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET;
 var PAYMENT_WEBHOOK_SECRET_VALUE = PAYMENT_WEBHOOK_SECRET;
 if (!PAYMENT_WEBHOOK_SECRET) {
   if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") {
-    PAYMENT_WEBHOOK_SECRET_VALUE = crypto6.randomBytes(32).toString("hex");
+    PAYMENT_WEBHOOK_SECRET_VALUE = crypto7.randomBytes(32).toString("hex");
     console.warn("WARNING: PAYMENT_WEBHOOK_SECRET environment variable is not set. Using a secure random value generated at runtime; payment webhooks will be rejected.");
   } else {
     PAYMENT_WEBHOOK_SECRET_VALUE = "dev-only-payment-webhook-secret-do-not-use-in-prod";
@@ -8211,7 +8261,7 @@ async function createUserAccount(db, input, password) {
   return usersRepository.create(db, user);
 }
 function generateTemporaryPassword() {
-  return `Lms-${crypto6.randomBytes(8).toString("base64url")}-1`;
+  return `Lms-${crypto7.randomBytes(8).toString("base64url")}-1`;
 }
 async function createStudentWithTemporaryPassword(input, source, loginUrl) {
   const temporaryPassword = source === "crm" && isDirectSale() ? getDefaultStudentPassword() || generateTemporaryPassword() : generateTemporaryPassword();
@@ -8262,10 +8312,10 @@ async function createStudentWithTemporaryPassword(input, source, loginUrl) {
   return { user, temporaryPassword };
 }
 function sha256Hex2(input) {
-  return crypto6.createHash("sha256").update(input).digest("hex");
+  return crypto7.createHash("sha256").update(input).digest("hex");
 }
 function generatePasswordResetToken() {
-  return crypto6.randomBytes(32).toString("base64url");
+  return crypto7.randomBytes(32).toString("base64url");
 }
 function lmsBaseUrl(req) {
   return (process.env.LMS_LOGIN_URL || `${req.protocol}://${req.get("host") || "localhost:3000"}`).replace(/\/$/, "");
@@ -8333,7 +8383,7 @@ function signToken(user) {
     exp: Math.floor(Date.now() / 1e3) + 60 * 60 * 8
   }));
   const unsigned = `${header}.${payload}`;
-  const signature = crypto6.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
+  const signature = crypto7.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
   return `${unsigned}.${signature}`;
 }
 async function verifyToken(token) {
@@ -8341,11 +8391,11 @@ async function verifyToken(token) {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expected = crypto6.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
+  const expected = crypto7.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
   const sigBuffer = Buffer.from(signature, "base64url");
   const expBuffer = Buffer.from(expected, "base64url");
   if (sigBuffer.byteLength !== expBuffer.byteLength) return null;
-  if (!crypto6.timingSafeEqual(sigBuffer, expBuffer)) return null;
+  if (!crypto7.timingSafeEqual(sigBuffer, expBuffer)) return null;
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1e3)) return null;
   return parsed;
@@ -8541,7 +8591,7 @@ function certificateFromRow(row) {
 }
 async function generateCertificateCode(db) {
   for (let attempt = 0; attempt < 8; attempt++) {
-    const raw = crypto6.randomBytes(4).toString("hex").toUpperCase();
+    const raw = crypto7.randomBytes(4).toString("hex").toUpperCase();
     const code = `MCNA-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
     const existing = await db.query("SELECT 1 FROM certificates WHERE certificate_code = $1", [code]);
     if (existing.rowCount === 0) return code;
@@ -9097,7 +9147,7 @@ function requireInternalJobSecret(req, res, next) {
   const supplied = req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.get("x-cron-secret");
   const suppliedBuffer = Buffer.from(supplied || "");
   const configuredBuffer = Buffer.from(configured || "");
-  const matches = suppliedBuffer.length === configuredBuffer.length && crypto6.timingSafeEqual(suppliedBuffer, configuredBuffer);
+  const matches = suppliedBuffer.length === configuredBuffer.length && crypto7.timingSafeEqual(suppliedBuffer, configuredBuffer);
   if (!configured || !supplied || !matches) {
     return res.status(configured ? 401 : 503).json({ error: configured ? "Unauthorized cron request." : "CRON_SECRET is not configured." });
   }
@@ -9151,7 +9201,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
       createdAt: userItem.createdAt
     };
     setAuthCookie(res, signToken(user2));
-    const csrfToken2 = crypto6.randomBytes(24).toString("base64url");
+    const csrfToken2 = crypto7.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken2);
     return res.json({ user: user2, csrfToken: csrfToken2 });
   }
@@ -9173,7 +9223,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
   }
   const user = toPublicUser(row);
   setAuthCookie(res, signToken(user));
-  const csrfToken = crypto6.randomBytes(24).toString("base64url");
+  const csrfToken = crypto7.randomBytes(24).toString("base64url");
   setCsrfCookie(res, csrfToken);
   await auditRepository.log(pool, user.id, "authentication_login", "security", `Authenticated role ${user.role}.`);
   res.json({ user, csrfToken });
@@ -9266,7 +9316,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   let csrfToken = cookieToken;
   if (!csrfToken) {
-    csrfToken = crypto6.randomBytes(24).toString("base64url");
+    csrfToken = crypto7.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken);
   }
   res.json({
@@ -9540,9 +9590,9 @@ function requireCrmIntegration(req, res, next) {
   if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
   const authorization = req.header("Authorization") || "";
   const provided = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
-  const keyMatches = crypto6.timingSafeEqual(
-    crypto6.createHash("sha256").update(provided).digest(),
-    crypto6.createHash("sha256").update(apiKey).digest()
+  const keyMatches = crypto7.timingSafeEqual(
+    crypto7.createHash("sha256").update(provided).digest(),
+    crypto7.createHash("sha256").update(apiKey).digest()
   );
   if (!provided || !keyMatches) return res.status(401).json({ error: "Invalid CRM API key." });
   const configuredTolerance = Number(process.env.CRM_SIGNATURE_TOLERANCE_SECONDS || 300);
@@ -11777,11 +11827,11 @@ var paymentWebhookHandler = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Missing webhook signature header." });
   }
   const payload = req.rawBody || JSON.stringify(req.body);
-  const expectedSignature = crypto6.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
+  const expectedSignature = crypto7.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
   const receivedSignature = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
   const sigBuffer = Buffer.from(receivedSignature, "utf8");
   const expBuffer = Buffer.from(expectedSignature, "utf8");
-  if (sigBuffer.length !== expBuffer.length || !crypto6.timingSafeEqual(sigBuffer, expBuffer)) {
+  if (sigBuffer.length !== expBuffer.length || !crypto7.timingSafeEqual(sigBuffer, expBuffer)) {
     return res.status(401).json({ error: "Invalid webhook signature." });
   }
   const { eventId, timestamp, transactionId, status, notes } = req.body;
@@ -11886,7 +11936,7 @@ var sepayWebhookHandler = asyncHandler(async (req, res) => {
   const token = match?.[2]?.trim() || "";
   const supplied = Buffer.from(token);
   const expected = Buffer.from(expectedApiKey);
-  if (!token || supplied.length !== expected.length || !crypto6.timingSafeEqual(supplied, expected)) {
+  if (!token || supplied.length !== expected.length || !crypto7.timingSafeEqual(supplied, expected)) {
     return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
   }
   const rawPayload = req.rawBody || JSON.stringify(req.body);
@@ -12045,6 +12095,83 @@ async function materialRowAccess(user, row) {
   const canManage = canManageSessionMaterials(user, session);
   return { canManage, canView: canManage || await canViewSessionMaterials(user, session) };
 }
+async function directMaterialDestination(user, owner) {
+  if (owner?.kind === "session" && typeof owner.sessionId === "string") {
+    const session = await findSessionWithOwners(owner.sessionId);
+    if (!session) throw Object.assign(new Error("Kh\xF4ng t\xECm th\u1EA5y bu\u1ED5i h\u1ECDc."), { status: 404 });
+    if (!canManageSessionMaterials(user, session)) throw Object.assign(new Error("Kh\xF4ng c\xF3 quy\u1EC1n s\u1EEDa t\xE0i li\u1EC7u bu\u1ED5i h\u1ECDc."), { status: 403 });
+    return {
+      storageDir: `${session.course_id}/${session.section_id || "course"}/${session.id}`,
+      base: { sessionId: session.id, sectionId: session.section_id, courseId: session.course_id, createdBy: user.id }
+    };
+  }
+  if (owner?.kind === "intro" && typeof owner.courseId === "string" && (owner.category === "reference" || owner.category === "practice")) {
+    const course = await coursesRepository.findById(pool, owner.courseId);
+    if (!course) throw Object.assign(new Error("Kh\xF4ng t\xECm th\u1EA5y kh\xF3a h\u1ECDc."), { status: 404 });
+    if (!await canManageCourseContent(user, course.id)) throw Object.assign(new Error("Kh\xF4ng c\xF3 quy\u1EC1n s\u1EEDa t\xE0i li\u1EC7u m\u1EDF \u0111\u1EA7u."), { status: 403 });
+    return {
+      storageDir: `${course.id}/intro`,
+      base: { courseId: course.id, category: owner.category, createdBy: user.id }
+    };
+  }
+  throw Object.assign(new Error("N\u01A1i l\u01B0u t\xE0i li\u1EC7u kh\xF4ng h\u1EE3p l\u1EC7."), { status: 400 });
+}
+app.post("/api/materials/direct-upload/start", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json({ mode: "server", maxBytes: MAX_UPLOAD_FILE_BYTES2 });
+  const owner = req.body?.owner;
+  const destination = await directMaterialDestination(req.user, owner);
+  const requestedType = req.body?.type;
+  const rawFileName = req.body?.fileName;
+  const sizeBytes = req.body?.sizeBytes;
+  const title = req.body?.title;
+  if (!isFileMaterialType(requestedType) || owner.kind === "intro" && requestedType === "slide" || typeof rawFileName !== "string" || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_UPLOAD_FILE_BYTES2) {
+    return res.status(400).json({ error: "Lo\u1EA1i t\xE0i li\u1EC7u, t\xEAn t\u1EC7p ho\u1EB7c dung l\u01B0\u1EE3ng kh\xF4ng h\u1EE3p l\u1EC7 (t\u1ED1i \u0111a 50 MB)." });
+  }
+  const fileName = path6.basename(rawFileName.replace(/\\/g, "/")).trim();
+  if (!fileName || fileName.length > 255) return res.status(400).json({ error: "T\xEAn t\u1EC7p kh\xF4ng h\u1EE3p l\u1EC7." });
+  if (title !== void 0 && (typeof title !== "string" || title.length > 200)) return res.status(400).json({ error: "Ti\xEAu \u0111\u1EC1 t\xE0i li\u1EC7u qu\xE1 d\xE0i." });
+  const type = resolveUploadType(requestedType, fileName);
+  const ext = path6.extname(fileName).toLowerCase();
+  if (!MATERIAL_EXTENSIONS[type].includes(ext)) return res.status(400).json({ error: MATERIAL_TYPE_ERROR[type] });
+  if (!materialStorage.isRemote()) return res.json({ mode: "server", maxBytes: process.env.VERCEL ? 4 * 1024 * 1024 : MAX_UPLOAD_FILE_BYTES2 });
+  const materialId = sessionMaterialsRepository.newId();
+  const storagePath = `${destination.storageDir}/${materialId}${ext}`;
+  const signedUrl = await materialStorage.createDirectUpload(storagePath);
+  if (!signedUrl) return res.status(503).json({ error: "Ch\u01B0a c\u1EA5u h\xECnh Supabase Storage \u0111\u1EC3 t\u1EA3i t\u1EC7p l\u1EDBn." });
+  const grant = signMaterialUploadGrant({ owner, createdBy: req.user.id, materialId, storagePath, fileName, title: title?.trim() || void 0, sizeBytes, type, expiresAt: Date.now() + 60 * 6e4 }, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  res.json({ mode: "direct", signedUrl, grant, contentType: MATERIAL_MIME_BY_EXT[ext] });
+}));
+app.post("/api/materials/direct-upload/complete", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  const token = req.body?.grant;
+  if (typeof token !== "string" || token.length > 5e3 || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(400).json({ error: "Phi\xEAn t\u1EA3i t\u1EC7p kh\xF4ng h\u1EE3p l\u1EC7." });
+  const grant = verifyMaterialUploadGrant(token, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!grant || grant.createdBy !== req.user.id) return res.status(403).json({ error: "Phi\xEAn t\u1EA3i t\u1EC7p \u0111\xE3 h\u1EBFt h\u1EA1n ho\u1EB7c kh\xF4ng thu\u1ED9c t\xE0i kho\u1EA3n n\xE0y." });
+  const destination = await directMaterialDestination(req.user, grant.owner);
+  if (!grant.storagePath.startsWith(`${destination.storageDir}/`) || !MATERIAL_EXTENSIONS[grant.type]?.includes(path6.extname(grant.fileName).toLowerCase())) {
+    return res.status(400).json({ error: "\u0110\u01B0\u1EDDng d\u1EABn t\xE0i li\u1EC7u kh\xF4ng h\u1EE3p l\u1EC7." });
+  }
+  const existing = await sessionMaterialsRepository.findRowById(pool, grant.materialId);
+  if (existing) {
+    if (existing.storage_path !== grant.storagePath || existing.created_by !== req.user.id) return res.status(409).json({ error: "T\xE0i li\u1EC7u \u0111\xE3 t\u1ED3n t\u1EA1i." });
+    return res.json(sessionMaterialFromRow(existing));
+  }
+  const uploaded = await materialStorage.getDirectUploadInfo(grant.storagePath);
+  if (!uploaded || uploaded.sizeBytes !== grant.sizeBytes) return res.status(400).json({ error: "T\u1EC7p ch\u01B0a \u0111\u01B0\u1EE3c t\u1EA3i l\xEAn \u0111\u1EA7y \u0111\u1EE7 ho\u1EB7c dung l\u01B0\u1EE3ng kh\xF4ng kh\u1EDBp." });
+  const warning = grant.type !== "data" && path6.extname(grant.fileName).toLowerCase() !== ".pdf" ? NON_PDF_WARNING : void 0;
+  const material = await sessionMaterialsRepository.create(pool, {
+    ...destination.base,
+    id: grant.materialId,
+    type: grant.type,
+    title: grant.title || path6.basename(grant.fileName, path6.extname(grant.fileName)),
+    storagePath: grant.storagePath,
+    fileName: grant.fileName,
+    mimeType: MATERIAL_MIME_BY_EXT[path6.extname(grant.fileName).toLowerCase()],
+    sizeBytes: grant.sizeBytes
+  });
+  invalidateStoreCache();
+  await audit(req, grant.owner.kind === "session" ? "create_session_material" : "create_intro_material", material.id, `${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
+}));
 app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
@@ -12268,6 +12395,39 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "manager",
   res.status(204).send();
 }));
 var contentDisposition = (disposition, fileName) => `${disposition}; filename="${fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+var MATERIAL_VIEW_CHUNK_BYTES = 2 * 1024 * 1024;
+app.get("/api/materials/:id/view-chunk", requireAuth, asyncHandler(async (req, res) => {
+  const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
+  if (!row?.storage_path) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\u1EC7p t\xE0i li\u1EC7u." });
+  const access = await materialRowAccess(req.user, row);
+  if (!access.canView || !isPdfFile(row.mime_type, row.file_name) || !access.canManage && learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name }) !== "view") {
+    return res.status(403).json({ error: "Kh\xF4ng c\xF3 quy\u1EC1n xem t\xE0i li\u1EC7u n\xE0y." });
+  }
+  if (req.get("X-LMS-Viewer") !== "1" || !/^\d+$/.test(String(req.query.index ?? ""))) return res.status(400).json({ error: "Y\xEAu c\u1EA7u xem t\xE0i li\u1EC7u kh\xF4ng h\u1EE3p l\u1EC7." });
+  const index = Number(req.query.index);
+  const size = Number(row.size_bytes);
+  const start = index * MATERIAL_VIEW_CHUNK_BYTES;
+  if (!Number.isSafeInteger(index) || !Number.isSafeInteger(size) || size < 1 || start >= size) return res.status(416).json({ error: "Ph\u1EA7n t\xE0i li\u1EC7u kh\xF4ng h\u1EE3p l\u1EC7." });
+  const end = Math.min(size, start + MATERIAL_VIEW_CHUNK_BYTES) - 1;
+  const download = await materialStorage.getDownload(row.storage_path, row.file_name || row.title, { inline: true });
+  let bytes;
+  if (download.kind === "redirect") {
+    const upstream = await fetch(download.url, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(6e4) });
+    if (!upstream.ok) return res.status(502).json({ error: "Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c t\xE0i li\u1EC7u t\u1EEB kho l\u01B0u tr\u1EEF." });
+    const received = Buffer.from(await upstream.arrayBuffer());
+    bytes = upstream.status === 206 ? received : received.subarray(start, end + 1);
+  } else if (download.kind === "buffer") {
+    bytes = download.buffer.subarray(start, end + 1);
+  } else {
+    if (!fs5.existsSync(download.absolutePath)) return res.status(404).json({ error: "Kh\xF4ng t\xECm th\u1EA5y t\u1EC7p t\xE0i li\u1EC7u." });
+    bytes = (await fs5.promises.readFile(download.absolutePath)).subarray(start, end + 1);
+  }
+  if (bytes.length !== end - start + 1) return res.status(502).json({ error: "T\xE0i li\u1EC7u nh\u1EADn \u0111\u01B0\u1EE3c kh\xF4ng \u0111\u1EA7y \u0111\u1EE7." });
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(bytes);
+}));
 async function sendMaterialForViewing(res, row, fileName) {
   const download = await materialStorage.getDownload(row.storage_path, fileName, { inline: true });
   res.setHeader("Content-Type", "application/pdf");
@@ -12291,6 +12451,9 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   const fileName = row.file_name || path6.basename(row.storage_path);
   const isPdf = isPdfFile(row.mime_type, row.file_name);
   const wantsInline = req.query.inline === "true" && isPdf;
+  if (wantsInline && Number(row.size_bytes) > 4 * 1024 * 1024 && req.get("X-LMS-Viewer") === "1") {
+    return res.status(409).json({ error: "T\xE0i li\u1EC7u l\u1EDBn c\u1EA7n t\u1EA3i theo t\u1EEBng ph\u1EA7n.", code: "CHUNK_REQUIRED", sizeBytes: Number(row.size_bytes) });
+  }
   if (!access.canManage) {
     const learnerAccess = learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name });
     if (learnerAccess === "unavailable") {
