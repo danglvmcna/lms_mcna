@@ -170,12 +170,24 @@ export type CourseMatch<T extends MatchableCourse> =
 /** The part of a title before its tagline: "AI for Work: Tối ưu hiệu suất..." -> "AI for Work". */
 const titleHead = (title: string) => title.split(/[:–—|]| - /)[0];
 
-/** Normalised text without its separators: "AI_AGENT", "AI Agent" and "AIAGENT" all give "aiagent". */
-const compact = (value: string) => normalizeText(value).replace(/ /g, "");
+/** Normalised text without any separators: "AI_AGENT", "AI Agent" and "AIAGENT" all give "aiagent". */
+const compact = (value: string) => normalizeText(value).replace(/[^a-z0-9]/g, "");
 
 // Course codes the CRM writes in a way the rules below cannot derive from the catalogue code or title.
 const COURSE_CODE_ALIASES: Record<string, string> = {
-  ai4work: "aiwork"
+  ai4work: "aiforwork",
+  aiwork: "aiforwork",
+  aiagent: "aiagent",
+  aiautomation: "aiautomation",
+  aiauto: "aiautomation",
+  ailead: "aicholanhdao",
+  aileader: "aicholanhdao",
+  airsearch: "aiforresearch",
+  airesearch: "aiforresearch",
+  pbi1: "powerbilevel1",
+  pbilv1: "powerbilevel1",
+  pbi2: "powerbilevel2",
+  pbilv2: "powerbilevel2"
 };
 
 /**
@@ -187,15 +199,26 @@ export function matchCourse<T extends MatchableCourse>(input: string, courses: T
   const raw = String(input || "").trim();
   const wanted = normalizeText(raw);
   if (!wanted) return { course: null, candidates: [], reason: "none" };
-  const wantedCompact = COURSE_CODE_ALIASES[compact(raw)] || compact(raw);
+  const rawCompact = compact(raw);
+  const wantedCompact = COURSE_CODE_ALIASES[rawCompact] || rawCompact;
 
   const rules: Array<(course: T) => boolean> = [
     course => course.id === raw,
     course => (course.tags || []).some(tag => normalizeText(tag) === wanted && normalizeText(tag) !== "mcna"),
     course => normalizeText(course.title) === wanted,
     course => normalizeText(titleHead(course.title)) === wanted,
-    course => (course.tags || []).some(tag => compact(tag) === wantedCompact && compact(tag) !== "mcna"),
-    course => compact(titleHead(course.title)) === wantedCompact,
+    course => (course.tags || []).some(tag => {
+      const c = compact(tag);
+      return (c === wantedCompact || (COURSE_CODE_ALIASES[c] || c) === wantedCompact) && c !== "mcna";
+    }),
+    course => {
+      const h = compact(titleHead(course.title));
+      return h === wantedCompact || (COURSE_CODE_ALIASES[h] || h) === wantedCompact;
+    },
+    course => {
+      const full = compact(course.title);
+      return full.startsWith(wantedCompact) || full.includes(wantedCompact);
+    },
     course => ` ${normalizeText(course.title)} `.includes(` ${wanted} `)
   ];
 

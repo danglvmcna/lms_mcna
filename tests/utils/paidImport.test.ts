@@ -4,6 +4,7 @@ import { matchCourse, normalizeText, parseAmount, parsePaidTable } from "../../s
 const courses = [
   { id: "course_mcna_ai_for_work", title: "AI for Work: Tối ưu hiệu suất & tự động hóa công việc", tags: ["mcna", "AI_WORK"] },
   { id: "course_mcna_ai_automation", title: "AI Automation: Xây dựng hệ thống tự động hóa doanh nghiệp", tags: ["mcna", "AI_AUTO"] },
+  { id: "course_mcna_ai_agent", title: "AI Agent Masterclass: Xây dựng trợ lý ảo tự động 24/7", tags: ["mcna", "AI_AGENT"] },
   { id: "course_mcna_pbi_1", title: "Power BI Level 1: Phân tích & trực quan hóa dữ liệu", tags: ["mcna", "PBI_LV1"] },
   { id: "course_mcna_pbi_2", title: "Power BI Level 2: Giải pháp Business Intelligence", tags: ["mcna", "PBI_LV2"] }
 ];
@@ -78,6 +79,10 @@ describe("matchCourse", () => {
     expect(matchCourse("AI for Work: Tối ưu hiệu suất & tự động hóa công việc", courses).course?.id).toBe("course_mcna_ai_for_work");
     expect(matchCourse("AI Automation", courses).course?.id).toBe("course_mcna_ai_automation");
     expect(matchCourse("  ai   for work ", courses).course?.id).toBe("course_mcna_ai_for_work");
+    expect(matchCourse("AI4WORK", courses).course?.id).toBe("course_mcna_ai_for_work");
+    expect(matchCourse("AIAGENT", courses).course?.id).toBe("course_mcna_ai_agent");
+    expect(matchCourse("AIAUTOMATION", courses).course?.id).toBe("course_mcna_ai_automation");
+    expect(matchCourse("AIAUTO", courses).course?.id).toBe("course_mcna_ai_automation");
   });
 
   it("ignores Vietnamese diacritics and letter case", () => {

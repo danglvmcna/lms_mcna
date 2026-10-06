@@ -233,7 +233,28 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
     results.push(result);
 
     if (result.status === "error") { summary.errors++; continue; }
-    if (result.status === "skipped") { summary.skipped++; continue; }
+    if (result.status === "skipped") {
+      summary.skipped++;
+      if (plan.existingUser && !notifiedAccounts.has(plan.input.email)) {
+        notifiedAccounts.set(plan.input.email, {
+          user: {
+            id: plan.existingUser.id,
+            email: plan.existingUser.email,
+            name: plan.existingUser.name,
+            must_change_password: Boolean(plan.existingUser.must_change_password)
+          },
+          isNew: false,
+          courseTitles: [],
+          rows: []
+        });
+      }
+      const account = notifiedAccounts.get(plan.input.email);
+      if (account && plan.course?.title) {
+        account.courseTitles.push(plan.course.title);
+        account.rows.push(result);
+      }
+      continue;
+    }
 
     if (input.dryRun) {
       if (result.accountCreated) {
