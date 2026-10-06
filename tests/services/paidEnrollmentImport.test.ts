@@ -209,4 +209,42 @@ describe("paid enrollment import safety guarantees", () => {
     // User count remains strictly 1 (no duplicate user account created)
     expect(fakeDb.createdUsers).toHaveLength(1);
   });
+
+  it("includes both new and already-enrolled (skipped) courses in student confirmation email", async () => {
+    const { importPaidEnrollments } = await import("../../src/server/services/paidEnrollmentImport");
+
+    fakeDb.users.set("student@gmail.com", {
+      id: "user_student",
+      email: "student@gmail.com",
+      name: "Học Viên",
+      role: "student",
+      is_active: true
+    });
+    fakeDb.enrollments.set("user_student|course_ai_auto", {
+      id: "enroll_existing",
+      status: "active"
+    });
+
+    const rows = [
+      { name: "Học Viên", email: "student@gmail.com", course: "AI Automation", amount: 3500000, crmRef: "rev_multi_1" },
+      { name: "Học Viên", email: "student@gmail.com", course: "AI for Work", amount: 2990000, crmRef: "rev_multi_2" }
+    ];
+
+    const result = await importPaidEnrollments({
+      rows,
+      defaultPassword: "TemporaryPassword123",
+      sendAccountEmail: true,
+      dryRun: false,
+      actorId: "manager_1",
+      actorName: "Quản lý lớp"
+    });
+
+    expect(result.summary.skipped).toBe(1);
+    expect(result.summary.enrollmentsCreated).toBe(1);
+    expect(fakeDb.sentEmails).toHaveLength(1);
+    expect(fakeDb.sentEmails[0].courseTitles).toEqual(
+      expect.arrayContaining(["AI Automation", "AI for Work"])
+    );
+  });
 });
+

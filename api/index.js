@@ -6921,22 +6921,45 @@ function parsePaidTable(text2) {
   return result;
 }
 var titleHead = (title) => title.split(/[:–—|]| - /)[0];
-var compact = (value) => normalizeText(value).replace(/ /g, "");
+var compact = (value) => normalizeText(value).replace(/[^a-z0-9]/g, "");
 var COURSE_CODE_ALIASES = {
-  ai4work: "aiwork"
+  ai4work: "aiforwork",
+  aiwork: "aiforwork",
+  aiagent: "aiagent",
+  aiautomation: "aiautomation",
+  aiauto: "aiautomation",
+  ailead: "aicholanhdao",
+  aileader: "aicholanhdao",
+  airsearch: "aiforresearch",
+  airesearch: "aiforresearch",
+  pbi1: "powerbilevel1",
+  pbilv1: "powerbilevel1",
+  pbi2: "powerbilevel2",
+  pbilv2: "powerbilevel2"
 };
 function matchCourse(input, courses) {
   const raw = String(input || "").trim();
   const wanted = normalizeText(raw);
   if (!wanted) return { course: null, candidates: [], reason: "none" };
-  const wantedCompact = COURSE_CODE_ALIASES[compact(raw)] || compact(raw);
+  const rawCompact = compact(raw);
+  const wantedCompact = COURSE_CODE_ALIASES[rawCompact] || rawCompact;
   const rules = [
     (course) => course.id === raw,
     (course) => (course.tags || []).some((tag) => normalizeText(tag) === wanted && normalizeText(tag) !== "mcna"),
     (course) => normalizeText(course.title) === wanted,
     (course) => normalizeText(titleHead(course.title)) === wanted,
-    (course) => (course.tags || []).some((tag) => compact(tag) === wantedCompact && compact(tag) !== "mcna"),
-    (course) => compact(titleHead(course.title)) === wantedCompact,
+    (course) => (course.tags || []).some((tag) => {
+      const c = compact(tag);
+      return (c === wantedCompact || (COURSE_CODE_ALIASES[c] || c) === wantedCompact) && c !== "mcna";
+    }),
+    (course) => {
+      const h = compact(titleHead(course.title));
+      return h === wantedCompact || (COURSE_CODE_ALIASES[h] || h) === wantedCompact;
+    },
+    (course) => {
+      const full = compact(course.title);
+      return full.startsWith(wantedCompact) || full.includes(wantedCompact);
+    },
     (course) => ` ${normalizeText(course.title)} `.includes(` ${wanted} `)
   ];
   for (const rule of rules) {
@@ -7123,6 +7146,24 @@ async function importPaidEnrollments(input) {
     }
     if (result.status === "skipped") {
       summary.skipped++;
+      if (plan.existingUser && !notifiedAccounts.has(plan.input.email)) {
+        notifiedAccounts.set(plan.input.email, {
+          user: {
+            id: plan.existingUser.id,
+            email: plan.existingUser.email,
+            name: plan.existingUser.name,
+            must_change_password: Boolean(plan.existingUser.must_change_password)
+          },
+          isNew: false,
+          courseTitles: [],
+          rows: []
+        });
+      }
+      const account = notifiedAccounts.get(plan.input.email);
+      if (account && plan.course?.title) {
+        account.courseTitles.push(plan.course.title);
+        account.rows.push(result);
+      }
       continue;
     }
     if (input.dryRun) {
