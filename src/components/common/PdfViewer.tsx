@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
+import { fetchMaterialPdf } from "../../materialChunks";
 
 // Read-only PDF viewer: pages are drawn on canvases, so there is no browser PDF toolbar
 // (no download or print button) and it also works on phones, where a PDF in an iframe is not shown.
@@ -48,13 +49,7 @@ export default function PdfViewer({ url, title }: PdfViewerProps) {
 
     (async () => {
       try {
-        // The header marks the request as coming from this viewer; the API refuses plain browser navigation.
-        const response = await fetch(url, { credentials: "include", headers: { "X-LMS-Viewer": "1" } });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.error || `Không tải được tài liệu (HTTP ${response.status}).`);
-        }
-        const data = new Uint8Array(await response.arrayBuffer());
+        const data = await fetchMaterialPdf(url);
         const pdfjs = await loadPdfjs();
         if (cancelled) return;
         loadingTask = pdfjs.getDocument({ data });

@@ -105,7 +105,7 @@ Lưu ý môi trường demo:
 
 ## 7. Giới hạn hiện tại
 
-* Bản Vercel từ chối tệp tải lên lớn hơn khoảng 4,5 MB (giới hạn của Vercel). Slide lớn hơn cần nén, hoặc cần làm thêm phần tải thẳng lên Supabase Storage. Tài liệu hiện lưu trong database.
+* Bản Vercel từ chối request tải lên qua Function lớn hơn 4,5 MB. Mã nguồn mới hỗ trợ tải slide/tài liệu trực tiếp lên Supabase Storage và xem PDF lớn theo từng phần; cần cấu hình `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` và bucket private trên Production rồi kiểm thử với tệp lớn. Khi chưa cấu hình, giữ tệp dưới 4 MB; tài liệu vẫn lưu trong database.
 * `lms-mcna.vercel.app` và `lms.mcna.vn` là hai bản riêng với hai database riêng; dữ liệu nhập ở bản này không có ở bản kia.
 * Chặn tải là chặn ở mức phần mềm; học viên vẫn chụp màn hình được.
 * Tệp đề bài/lời giải chặn truy cập trực tiếp ở máy chủ và đúng lớp, không còn chỉ ẩn nút ở giao diện. Người có quyền xem vẫn có thể lấy byte bằng công cụ kỹ thuật; không phải DRM.

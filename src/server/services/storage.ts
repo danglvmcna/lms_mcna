@@ -46,6 +46,20 @@ function bucket() {
   return process.env.SUPABASE_STORAGE_BUCKET || "lms-materials";
 }
 
+async function ensurePrivateBucket(supabase: SupabaseClient) {
+  if (bucketVerified) return;
+  const bucketName = bucket();
+  const { data: buckets, error } = await supabase.storage.listBuckets();
+  if (error) throw error;
+  const existing = (buckets || []).find(item => item.name === bucketName);
+  if (existing?.public) throw new Error("Material storage bucket must be private.");
+  if (!existing) {
+    const created = await supabase.storage.createBucket(bucketName, { public: false });
+    if (created.error) throw created.error;
+  }
+  bucketVerified = true;
+}
+
 function getStorageRoot(): string {
   // On Vercel / serverless without explicit MATERIALS_DIR, use os.tmpdir() because cwd is read-only
   if (process.env.MATERIALS_DIR && !process.env.VERCEL) {
@@ -76,19 +90,29 @@ export const materialStorage = {
     return Boolean(getClient());
   },
 
+  async createDirectUpload(objectPath: string) {
+    const supabase = getClient();
+    if (!supabase) return null;
+    await ensurePrivateBucket(supabase);
+    const { data, error } = await supabase.storage.from(bucket()).createSignedUploadUrl(objectPath);
+    if (error || !data) throw error || new Error("Could not create a signed upload URL.");
+    return data.signedUrl;
+  },
+
+  async getDirectUploadInfo(objectPath: string) {
+    const supabase = getClient();
+    if (!supabase) return null;
+    const { data, error } = await supabase.storage.from(bucket()).info(objectPath);
+    if (error || !data) return null;
+    return { sizeBytes: data.size ?? data.metadata?.size, contentType: data.contentType ?? data.metadata?.mimetype };
+  },
+
   async put(objectPath: string, body: Buffer, contentType: string) {
     const supabase = getClient();
     if (supabase) {
       const bucketName = bucket();
       try {
-        if (!bucketVerified) {
-          const { data: buckets } = await supabase.storage.listBuckets();
-          const exists = (buckets || []).some(b => b.name === bucketName);
-          if (!exists) {
-            await supabase.storage.createBucket(bucketName, { public: false }).catch(() => undefined);
-          }
-          bucketVerified = true;
-        }
+        await ensurePrivateBucket(supabase);
 
         const { error } = await supabase.storage.from(bucketName).upload(objectPath, body, { contentType, upsert: true });
         if (!error) return;
