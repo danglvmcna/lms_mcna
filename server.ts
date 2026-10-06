@@ -127,7 +127,7 @@ import { runMigrations } from "./src/dbMigrations";
 import { pool, Queryable, isLocalDb } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
-import { DbUserRow, toPublicUser, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow } from "./src/server/mappers";
+import { DbUserRow, toPublicUser, parseSchedule, courseSectionFromRow, publicCourseFromRow, publicCourseSectionFromRow, sessionMaterialFromRow } from "./src/server/mappers";
 import { validateBody, schemas } from "./src/server/validation";
 import { seedAuthUsers, seedCoreLearningData } from "./src/server/seedCore";
 import { usersRepository } from "./src/server/repositories/users";
@@ -146,6 +146,7 @@ import { forumRepository } from "./src/server/repositories/forum";
 import { sectionsRepository } from "./src/server/repositories/sections";
 import { sessionMaterialsRepository } from "./src/server/repositories/sessionMaterials";
 import { materialStorage } from "./src/server/services/storage";
+import { MaterialUploadOwner, signMaterialUploadGrant, verifyMaterialUploadGrant } from "./src/server/services/materialUploadGrant";
 import {
   dayOfWeekIndex,
   ensureCourseLessonsForSchedule,
@@ -4784,6 +4785,88 @@ async function materialRowAccess(user: User, row: any): Promise<{ canView: boole
   return { canManage, canView: canManage || await canViewSessionMaterials(user, session) };
 }
 
+async function directMaterialDestination(user: User, owner: MaterialUploadOwner) {
+  if (owner?.kind === "session" && typeof owner.sessionId === "string") {
+    const session = await findSessionWithOwners(owner.sessionId);
+    if (!session) throw Object.assign(new Error("Không tìm thấy buổi học."), { status: 404 });
+    if (!canManageSessionMaterials(user, session)) throw Object.assign(new Error("Không có quyền sửa tài liệu buổi học."), { status: 403 });
+    return {
+      storageDir: `${session.course_id}/${session.section_id || "course"}/${session.id}`,
+      base: { sessionId: session.id, sectionId: session.section_id, courseId: session.course_id, createdBy: user.id }
+    };
+  }
+  if (owner?.kind === "intro" && typeof owner.courseId === "string" && (owner.category === "reference" || owner.category === "practice")) {
+    const course = await coursesRepository.findById(pool, owner.courseId);
+    if (!course) throw Object.assign(new Error("Không tìm thấy khóa học."), { status: 404 });
+    if (!await canManageCourseContent(user, course.id)) throw Object.assign(new Error("Không có quyền sửa tài liệu mở đầu."), { status: 403 });
+    return {
+      storageDir: `${course.id}/intro`,
+      base: { courseId: course.id, category: owner.category, createdBy: user.id }
+    };
+  }
+  throw Object.assign(new Error("Nơi lưu tài liệu không hợp lệ."), { status: 400 });
+}
+
+// Only the signed URL and a signed description cross the browser. The service role key stays on the server.
+app.post("/api/materials/direct-upload/start", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  if (isDevMockDb) return res.json({ mode: "server", maxBytes: MAX_UPLOAD_FILE_BYTES });
+  const owner = req.body?.owner as MaterialUploadOwner;
+  const destination = await directMaterialDestination(req.user!, owner);
+  const requestedType = req.body?.type;
+  const rawFileName = req.body?.fileName;
+  const sizeBytes = req.body?.sizeBytes;
+  const title = req.body?.title;
+  if (!isFileMaterialType(requestedType) || (owner.kind === "intro" && requestedType === "slide") || typeof rawFileName !== "string" || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_UPLOAD_FILE_BYTES) {
+    return res.status(400).json({ error: "Loại tài liệu, tên tệp hoặc dung lượng không hợp lệ (tối đa 50 MB)." });
+  }
+  const fileName = path.basename(rawFileName.replace(/\\/g, "/")).trim();
+  if (!fileName || fileName.length > 255) return res.status(400).json({ error: "Tên tệp không hợp lệ." });
+  if (title !== undefined && (typeof title !== "string" || title.length > 200)) return res.status(400).json({ error: "Tiêu đề tài liệu quá dài." });
+  const type = resolveUploadType(requestedType, fileName);
+  const ext = path.extname(fileName).toLowerCase();
+  if (!MATERIAL_EXTENSIONS[type].includes(ext)) return res.status(400).json({ error: MATERIAL_TYPE_ERROR[type] });
+
+  if (!materialStorage.isRemote()) return res.json({ mode: "server", maxBytes: process.env.VERCEL ? 4 * 1024 * 1024 : MAX_UPLOAD_FILE_BYTES });
+  const materialId = sessionMaterialsRepository.newId();
+  const storagePath = `${destination.storageDir}/${materialId}${ext}`;
+  const signedUrl = await materialStorage.createDirectUpload(storagePath);
+  if (!signedUrl) return res.status(503).json({ error: "Chưa cấu hình Supabase Storage để tải tệp lớn." });
+  const grant = signMaterialUploadGrant({ owner, createdBy: req.user!.id, materialId, storagePath, fileName, title: title?.trim() || undefined, sizeBytes, type, expiresAt: Date.now() + 60 * 60_000 }, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  res.json({ mode: "direct", signedUrl, grant, contentType: MATERIAL_MIME_BY_EXT[ext] });
+}));
+
+app.post("/api/materials/direct-upload/complete", requireAuth, requireRole(["teacher", "manager", "admin"]), asyncHandler(async (req, res) => {
+  const token = req.body?.grant;
+  if (typeof token !== "string" || token.length > 5000 || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(400).json({ error: "Phiên tải tệp không hợp lệ." });
+  const grant = verifyMaterialUploadGrant(token, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!grant || grant.createdBy !== req.user!.id) return res.status(403).json({ error: "Phiên tải tệp đã hết hạn hoặc không thuộc tài khoản này." });
+  const destination = await directMaterialDestination(req.user!, grant.owner);
+  if (!grant.storagePath.startsWith(`${destination.storageDir}/`) || !MATERIAL_EXTENSIONS[grant.type]?.includes(path.extname(grant.fileName).toLowerCase())) {
+    return res.status(400).json({ error: "Đường dẫn tài liệu không hợp lệ." });
+  }
+  const existing = await sessionMaterialsRepository.findRowById(pool, grant.materialId);
+  if (existing) {
+    if (existing.storage_path !== grant.storagePath || existing.created_by !== req.user!.id) return res.status(409).json({ error: "Tài liệu đã tồn tại." });
+    return res.json(sessionMaterialFromRow(existing));
+  }
+  const uploaded = await materialStorage.getDirectUploadInfo(grant.storagePath);
+  if (!uploaded || uploaded.sizeBytes !== grant.sizeBytes) return res.status(400).json({ error: "Tệp chưa được tải lên đầy đủ hoặc dung lượng không khớp." });
+  const warning = grant.type !== "data" && path.extname(grant.fileName).toLowerCase() !== ".pdf" ? NON_PDF_WARNING : undefined;
+  const material = await sessionMaterialsRepository.create(pool, {
+    ...destination.base,
+    id: grant.materialId,
+    type: grant.type,
+    title: grant.title || path.basename(grant.fileName, path.extname(grant.fileName)),
+    storagePath: grant.storagePath,
+    fileName: grant.fileName,
+    mimeType: MATERIAL_MIME_BY_EXT[path.extname(grant.fileName).toLowerCase()],
+    sizeBytes: grant.sizeBytes
+  });
+  invalidateStoreCache();
+  await audit(req, grant.owner.kind === "session" ? "create_session_material" : "create_intro_material", material.id, `${material.type}: ${material.title}`);
+  res.status(201).json({ ...material, warning });
+}));
+
 app.post("/api/sessions/:sessionId/materials", requireAuth, requireRole(["teacher", "manager", "admin"]), materialUpload.single("file"), validateBody(schemas.createSessionMaterial), asyncHandler(async (req, res) => {
   if (isDevMockDb) {
     const store = devMockStore || getInitialStore();
@@ -5032,6 +5115,42 @@ app.delete("/api/materials/:id", requireAuth, requireRole(["teacher", "manager",
 const contentDisposition = (disposition: "inline" | "attachment", fileName: string) =>
   `${disposition}; filename="${fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 
+const MATERIAL_VIEW_CHUNK_BYTES = 2 * 1024 * 1024;
+
+// Keep each Vercel Function response below its payload limit while retaining the LMS permission check.
+app.get("/api/materials/:id/view-chunk", requireAuth, asyncHandler(async (req, res) => {
+  const row = await sessionMaterialsRepository.findRowById(pool, req.params.id);
+  if (!row?.storage_path) return res.status(404).json({ error: "Không tìm thấy tệp tài liệu." });
+  const access = await materialRowAccess(req.user!, row);
+  if (!access.canView || !isPdfFile(row.mime_type, row.file_name) || (!access.canManage && learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name }) !== "view")) {
+    return res.status(403).json({ error: "Không có quyền xem tài liệu này." });
+  }
+  if (req.get("X-LMS-Viewer") !== "1" || !/^\d+$/.test(String(req.query.index ?? ""))) return res.status(400).json({ error: "Yêu cầu xem tài liệu không hợp lệ." });
+  const index = Number(req.query.index);
+  const size = Number(row.size_bytes);
+  const start = index * MATERIAL_VIEW_CHUNK_BYTES;
+  if (!Number.isSafeInteger(index) || !Number.isSafeInteger(size) || size < 1 || start >= size) return res.status(416).json({ error: "Phần tài liệu không hợp lệ." });
+  const end = Math.min(size, start + MATERIAL_VIEW_CHUNK_BYTES) - 1;
+  const download = await materialStorage.getDownload(row.storage_path, row.file_name || row.title, { inline: true });
+  let bytes: Buffer;
+  if (download.kind === "redirect") {
+    const upstream = await fetch(download.url, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(60_000) });
+    if (!upstream.ok) return res.status(502).json({ error: "Không đọc được tài liệu từ kho lưu trữ." });
+    const received = Buffer.from(await upstream.arrayBuffer());
+    bytes = upstream.status === 206 ? received : received.subarray(start, end + 1);
+  } else if (download.kind === "buffer") {
+    bytes = download.buffer.subarray(start, end + 1);
+  } else {
+    if (!fs.existsSync(download.absolutePath)) return res.status(404).json({ error: "Không tìm thấy tệp tài liệu." });
+    bytes = (await fs.promises.readFile(download.absolutePath)).subarray(start, end + 1);
+  }
+  if (bytes.length !== end - start + 1) return res.status(502).json({ error: "Tài liệu nhận được không đầy đủ." });
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(bytes);
+}));
+
 /**
  * Sends a PDF for the in-app viewer. The bytes always pass through this server (no storage link is
  * handed out) and are not cached, so a learner never receives a downloadable address.
@@ -5064,6 +5183,10 @@ app.get("/api/materials/:id/download", requireAuth, asyncHandler(async (req, res
   const fileName = row.file_name || path.basename(row.storage_path);
   const isPdf = isPdfFile(row.mime_type, row.file_name);
   const wantsInline = req.query.inline === "true" && isPdf;
+
+  if (wantsInline && Number(row.size_bytes) > 4 * 1024 * 1024 && req.get("X-LMS-Viewer") === "1") {
+    return res.status(409).json({ error: "Tài liệu lớn cần tải theo từng phần.", code: "CHUNK_REQUIRED", sizeBytes: Number(row.size_bytes) });
+  }
 
   if (!access.canManage) {
     const learnerAccess = learnerMaterialAccess({ type: row.type, mimeType: row.mime_type, fileName: row.file_name });
