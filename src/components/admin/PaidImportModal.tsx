@@ -154,8 +154,8 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
 
   const handleImport = async () => {
     if (!preview) return;
-    if (preview.summary.accountsCreated > 0 && defaultPassword.trim().length < 8) {
-      setError("Cần mật khẩu mặc định (tối thiểu 8 ký tự) cho các tài khoản mới.");
+    if (defaultPassword.trim().length > 0 && defaultPassword.trim().length < 8) {
+      setError("Mật khẩu nhập thủ công phải có ít nhất 8 ký tự; để trống để tạo mật khẩu riêng cho từng học viên.");
       return;
     }
     setBusy(true);
@@ -268,23 +268,23 @@ export default function PaidImportModal({ courses, onClose, onImported, triggerT
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label htmlFor="default-password" className="font-semibold text-slate-700">Mật khẩu mặc định cho tài khoản mới</label>
+                    <label htmlFor="default-password" className="font-semibold text-slate-700">Mật khẩu chung tùy chọn cho tài khoản mới</label>
                     <input
                       id="default-password"
-                      type="text"
+                      type="password"
                       value={defaultPassword}
                       onChange={event => setDefaultPassword(event.target.value)}
-                      placeholder="Tối thiểu 8 ký tự, ví dụ Mcna@2026"
+                      placeholder="Để trống để tạo mật khẩu riêng an toàn"
                       autoComplete="off"
                       className={`${inputClass} font-mono`}
                     />
-                    <p className="text-[11px] text-slate-500">Học viên phải đặt mật khẩu riêng ngay lần đăng nhập đầu tiên.</p>
+                    <p className="text-[11px] text-slate-500">Nên để trống; học viên mới sẽ nhận mật khẩu tạm thời riêng qua email và phải đổi khi đăng nhập.</p>
                   </div>
                   <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 cursor-pointer">
                     <input type="checkbox" checked={sendAccountEmail} onChange={event => setSendAccountEmail(event.target.checked)} className="mt-0.5 h-4 w-4 accent-indigo-600" />
                     <span>
                       <span className="font-semibold text-slate-700 block">Gửi email thông tin đăng nhập</span>
-                      <span className="text-[11px] text-slate-500">Mỗi tài khoản mới nhận một email gồm email đăng nhập và mật khẩu mặc định. Email xếp lớp được gửi riêng khi bạn xếp lớp.</span>
+                      <span className="text-[11px] text-slate-500">Mỗi tài khoản mới nhận một email gồm email đăng nhập và mật khẩu tạm thời. Email xếp lớp được gửi riêng khi bạn xếp lớp.</span>
                     </span>
                   </label>
                 </div>

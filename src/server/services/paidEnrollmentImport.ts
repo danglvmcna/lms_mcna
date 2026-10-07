@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { hashPassword } from "../../authHash";
 import { EMAIL_PATTERN, matchCourse, PaidImportRow, PaidImportRowResult, PaidImportSummary } from "../../paidImport";
 import { Course, User } from "../../types";
@@ -13,7 +14,7 @@ import { lookupCourseSchedules } from "./courseScheduleLookup";
 import { confirmCoursePayment, isServiceError, requestEnrollment } from "./enrollmentService";
 
 // Direct-sale intake: each row of the "paid customers" table (from the CRM or typed by hand) becomes a
-// learner account (personal email + default password, changed at first sign-in) and a paid enrollment
+// learner account (personal email + temporary password, changed at first sign-in) and a paid enrollment
 // waiting for class placement. Re-importing the same table is safe: existing accounts and enrollments are kept.
 
 export type PaidImportInput = {
@@ -121,7 +122,7 @@ async function createStudentAccount(input: PaidImportRow, password: string): Pro
   try {
     await client.query("BEGIN");
     await usersRepository.create(client, user);
-    // The default password is shared by the whole batch, so the learner must replace it at first sign-in.
+    // Temporary passwords must be replaced at first sign-in.
     await client.query("UPDATE users SET must_change_password = true, signup_source = 'crm' WHERE id = $1", [user.id]);
     await client.query("COMMIT");
   } catch (error) {
@@ -213,6 +214,7 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
   type AccountNotification = {
     user: { id: string; email: string; name: string; must_change_password?: boolean };
     isNew: boolean;
+    temporaryPassword?: string;
     courseTitles: string[];
     rows: PaidImportRowResult[];
   };
@@ -274,12 +276,11 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
     try {
       let studentId = plan.existingUser?.id;
       if (!studentId) {
-        const password = String(input.defaultPassword || "").trim() || "Mcna@2026";
-        if (password.length < 8) throw new Error("Chưa có mật khẩu mặc định (tối thiểu 8 ký tự) để tạo tài khoản.");
+        const password = String(input.defaultPassword || "").trim() || `Lms-${crypto.randomBytes(12).toString("base64url")}-1`;
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;
         summary.accountsCreated++;
-        notifiedAccounts.set(user.email, { user, isNew: true, courseTitles: [], rows: [] });
+        notifiedAccounts.set(user.email, { user, isNew: true, temporaryPassword: password, courseTitles: [], rows: [] });
       } else {
         result.accountCreated = false;
         if (plan.input.phone && !plan.existingUser?.phone) {
@@ -336,7 +337,7 @@ export async function importPaidEnrollments(input: PaidImportInput): Promise<{ r
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
-        password: account.isNew || account.user.must_change_password ? String(input.defaultPassword) : null,
+        password: account.isNew ? account.temporaryPassword || null : null,
         courseTitles,
         courseSchedules,
         supportPhone: getSupportPhone()

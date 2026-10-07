@@ -277,7 +277,7 @@ export const schemas = {
       note: z.string().trim().max(300).optional(),
       crmRef: z.string().trim().max(80).optional()
     })).min(1).max(500),
-    defaultPassword: z.string().min(8).max(100).optional(),
+    defaultPassword: z.string().min(8).max(100).refine(value => value !== "Mcna@2026", "Mật khẩu này đã bị lộ; hãy dùng mật khẩu khác hoặc để trống.").optional(),
     sendAccountEmail: z.boolean().default(true),
     dryRun: z.boolean().default(false)
   }),

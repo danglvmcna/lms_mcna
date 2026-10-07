@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { hashPassword } from "../../src/authHash";
 
 const fakeDb = vi.hoisted(() => ({
   courses: [
@@ -165,6 +166,46 @@ describe("paid enrollment import safety guarantees", () => {
     // crmRef must be recorded in payment reference note, NOT as a CRM deal id
     expect(fakeDb.confirmedPayments).toHaveLength(1);
     expect(fakeDb.confirmedPayments[0].options.reference).toContain("CRM revenue rev_999");
+  });
+
+  it("sends the actual random temporary password when no default is configured", async () => {
+    const { importPaidEnrollments } = await import("../../src/server/services/paidEnrollmentImport");
+    await importPaidEnrollments({
+      rows: [{ name: "Học Viên Mới", email: "new@gmail.com", course: "AI Automation", crmRef: "rev_new" }],
+      sendAccountEmail: true,
+      dryRun: false,
+      actorId: "manager_1",
+      actorName: "Quản lý lớp"
+    });
+
+    expect(fakeDb.createdUsers).toHaveLength(1);
+    expect(fakeDb.sentEmails).toHaveLength(1);
+    const password = fakeDb.sentEmails[0].password;
+    expect(password).toMatch(/^Lms-[A-Za-z0-9_-]+-1$/);
+    expect(hashPassword(password, fakeDb.createdUsers[0].passwordSalt).hash).toBe(fakeDb.createdUsers[0].passwordHash);
+  });
+
+  it("never guesses an existing student's password in the notification email", async () => {
+    const { importPaidEnrollments } = await import("../../src/server/services/paidEnrollmentImport");
+    fakeDb.users.set("existing@gmail.com", {
+      id: "user_existing",
+      email: "existing@gmail.com",
+      name: "Học Viên Cũ",
+      role: "student",
+      is_active: true,
+      must_change_password: true
+    });
+    await importPaidEnrollments({
+      rows: [{ name: "Học Viên Cũ", email: "existing@gmail.com", course: "AI Automation", crmRef: "rev_existing" }],
+      defaultPassword: "TemporaryPassword123",
+      sendAccountEmail: true,
+      dryRun: false,
+      actorId: "manager_1",
+      actorName: "Quản lý lớp"
+    });
+
+    expect(fakeDb.sentEmails).toHaveLength(1);
+    expect(fakeDb.sentEmails[0].password).toBeNull();
   });
 
   it("re-importing the same list is idempotent: skips existing enrollments and creates no duplicates", async () => {

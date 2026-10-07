@@ -7,6 +7,15 @@ export function signCrmPayload(secret: string, timestamp: string, body: string) 
   return crypto.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
 }
 
+export function verifyBearerSecret(configuredSecret: string, authorizationHeader: string | undefined): boolean {
+  const provided = authorizationHeader?.startsWith("Bearer ") ? authorizationHeader.slice("Bearer ".length) : "";
+  if (!provided) return false;
+  return crypto.timingSafeEqual(
+    crypto.createHash("sha256").update(provided).digest(),
+    crypto.createHash("sha256").update(configuredSecret).digest()
+  );
+}
+
 export type CrmSignatureFailure = { status: number; error: string };
 
 /** Returns null when the request is authentic, otherwise the HTTP status and reason to reject it with. */

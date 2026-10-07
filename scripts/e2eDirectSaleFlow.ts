@@ -20,7 +20,7 @@ const baseUrl = process.env.E2E_BASE_URL || "http://localhost:3101";
 const testBase=new URL(baseUrl),testDatabase=new URL(process.env.DATABASE_URL || 'postgresql://invalid/invalid');
 if(!['localhost','127.0.0.1'].includes(testBase.hostname) || testBase.port!=='3101' || testDatabase.hostname!=='127.0.0.1' || testDatabase.port!=='55433' || testDatabase.pathname!=='/lms_mcna_codex_test') throw new Error('Refusing to create fixtures outside the disposable local test environment.');
 const runId = Date.now().toString(36);
-const DEFAULT_PASSWORD = "Mcna@2026";
+const DEFAULT_PASSWORD = "LocalTestOnly_2026!";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);

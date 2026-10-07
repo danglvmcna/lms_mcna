@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import {signCrmPayload} from '../src/server/crm/signature';
 
 // Destructive test fixtures are allowed ONLY on the disposable local database used by this script.
+// Start the disposable test server with DEFAULT_STUDENT_PASSWORD=LocalTestOnly_2026! for CRM login checks.
 const base=process.env.E2E_BASE_URL || 'http://localhost:3101';
 const dbUrl=process.env.DATABASE_URL || '';
 const parsed=new URL(dbUrl);
@@ -63,8 +64,8 @@ async function main(){
   assert(await teacherNoticeCount()===1,'Identical class update must not resend teacher notice.');
   console.log('2. Paid learners, class scope and private briefs');
   const emails=['one','two','waiting'].map(n=>`ops.${n}.${run}@example.com`);
-  await call('/api/admin/paid-enrollments/import',manager,{rows:emails.map((email,i)=>({name:`Learner ${i+1}`,email,course:course.title,amount:1000000})),defaultPassword:'Mcna@2026',sendAccountEmail:false});
-  const learners=await Promise.all(emails.map(email=>login(email,'Mcna@2026')));for(const learner of learners)await call('/api/users/change-password',learner,{currentPassword:'Mcna@2026',newPassword:'Student@67890'});
+  await call('/api/admin/paid-enrollments/import',manager,{rows:emails.map((email,i)=>({name:`Learner ${i+1}`,email,course:course.title,amount:1000000})),defaultPassword:'LocalTestOnly_2026!',sendAccountEmail:false});
+  const learners=await Promise.all(emails.map(email=>login(email,'LocalTestOnly_2026!')));for(const learner of learners)await call('/api/users/change-password',learner,{currentPassword:'LocalTestOnly_2026!',newPassword:'Student@67890'});
   const enrollmentIds=await Promise.all(learners.map(async l=>(await db.query('SELECT id FROM enrollments WHERE student_id=$1 AND course_id=$2',[l.user.id,course.id])).rows[0].id));
   await call('/api/admin/enrollments/bulk-place',manager,{placements:[{enrollmentId:enrollmentIds[0],sectionId:a.id},{enrollmentId:enrollmentIds[1],sectionId:b.id}]});
   const sessionsA=(await db.query('SELECT * FROM attendance_sessions WHERE section_id=$1 ORDER BY date',[a.id])).rows;
@@ -147,7 +148,7 @@ async function main(){
   assert((await ops('/my-certificates',learners[2])).length===1,'Background reconciliation duplicated certificate.');
   console.log('5. CRM confirmation cannot place direct-sale learner');
   const crmLearner=await crm('/students',{name:'CRM Learner',email:`ops.crm.${run}@example.com`});
-  const crmSession=await login(crmLearner.email,'Mcna@2026');await call('/api/users/change-password',crmSession,{currentPassword:'Mcna@2026',newPassword:'Student@67890'});
+  const crmSession=await login(crmLearner.email,'LocalTestOnly_2026!');await call('/api/users/change-password',crmSession,{currentPassword:'LocalTestOnly_2026!',newPassword:'Student@67890'});
   const crmEnrollment=await crm('/enrollments',{email:crmLearner.email,courseId:course.id,sectionId:a.id,crmDealId:`deal-${run}`});
   const payment=await crm('/payments/confirm',{enrollmentId:crmEnrollment.enrollmentId,amount:1000000,sectionId:a.id});
   assert(payment.status==='pending' && payment.placedSectionId===null,'CRM incorrectly activated/placed learner.');

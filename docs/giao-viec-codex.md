@@ -12,7 +12,7 @@
 * **IP Server:** `103.57.220.141`
 * **SSH Port:** `24700`
 * **User:** `root`
-* **Mật khẩu SSH:** `yvAo&I1W@LO(jLue9Gl3`
+* **SSH:** Thông tin xác thực chỉ lưu trong kho bí mật của đơn vị vận hành; không ghi vào Git.
 * **Đường dẫn ứng dụng:** `/var/www/lms`
 * **Web Server:** Nginx reverse proxy (cổng 80/443, SSL Let's Encrypt) trỏ về `http://127.0.0.1:3002`.
 * **Process Manager:** PM2 (ID tiến trình: `3`, tên: `lms`, lệnh chạy: `node dist/server.cjs`).
@@ -25,9 +25,9 @@
 * **CRM Database (Supabase):** Kết nối qua pooler Supabase (`CRM_DATABASE_URL`).
 
 ### 1.3. Cấu hình Email & Môi trường (`/var/www/lms/.env`)
-* **SMTP:** Đã cấu hình tài khoản chính thức `cskh.mcna.247@gmail.com` qua Gmail SMTP (cổng 465 SSL, App Password: `rrrntrhlsvsmdfkl`).
+* **SMTP:** Tài khoản gửi được cấu hình qua biến môi trường trên VPS; mật khẩu ứng dụng chỉ lưu trong kho bí mật.
 * **Người gửi hiển thị:** `"Học Viện Công Nghệ MCNA" <cskh.mcna.247@gmail.com>`.
-* **Mật khẩu học viên mặc định:** `Mcna@2026`.
+* **SMTP credential:** Đã gỡ khỏi tài liệu; cần thu hồi và tạo lại nếu từng xuất hiện trong lịch sử Git.
 * **LMS Login URL:** `https://lms.mcna.vn`.
 * **Supabase Storage Bucket:** `lms-materials` (chứa tài liệu giảng dạy và bài tập lớn).
 
@@ -38,21 +38,22 @@
 ### 2.1. Tích hợp tự động CRM ↔ LMS (Realtime Webhook)
 * **Trigger:** Trên Database Supabase của CRM, trigger `trg_revenue_records_webhook` tự động kích hoạt khi có bản ghi mới/cập nhật trong bảng `revenue_records` đạt điều kiện đã thanh toán (`debt = 0`).
 * **Webhook Endpoint:** `POST https://lms.mcna.vn/api/integrations/supabase/revenue-webhook`.
+* **Xác thực Webhook:** Cấu hình `SUPABASE_REVENUE_WEBHOOK_SECRET` trên LMS và header `Authorization: Bearer <khóa>` trong Database Webhook Supabase trước khi triển khai phiên bản có kiểm tra khóa. Không lưu khóa trong Git.
 * **Nhận diện đa khóa học:** Hàm `matchCourse` và từ điển `COURSE_CODE_ALIASES` tại [`src/paidImport.ts`](../src/paidImport.ts) tự động chuẩn hóa và nhận diện chính xác các mã khóa viết tắt từ CRM:
   * `AI4WORK` ➡️ AI for Work
   * `AIAGENT` / `AI_AGENT` ➡️ AI Agent Masterclass
   * `AIAUTOMATION` / `AI_AUTO` ➡️ AI Automation
   * `AI cho lãnh đạo` / `AI for Research`
   * `PBI_LV1`, `PBI_LV2`, `PYT_LV1`, `PYT_LV2`, `SQL_LV1`, `SQL_LV2`.
-* **Gửi Email kích hoạt:** Khi đơn hàng thành công, LMS tự động tạo tài khoản và gửi email thông báo kèm link đăng nhập, mật khẩu `Mcna@2026`, lịch học và hotline hỗ trợ.
+* **Gửi Email kích hoạt:** Khi đơn hàng thành công, LMS tạo tài khoản và gửi email có mật khẩu tạm thời cho học viên mới, lịch học và hotline hỗ trợ. Nếu không cấu hình mật khẩu chung, mỗi học viên mới nhận mật khẩu riêng.
 * **Cơ chế bảo vệ (Role Guard):** LMS ngăn chặn việc ghi danh đè tài khoản của Admin (`role = 'admin'`). Khách hàng từ CRM bắt buộc phải có email khác với các tài khoản quản trị hệ thống.
 
 ### 2.2. Giao diện Quản trị & Quản lý lớp
-* **Tài khoản Admin:** `danglv.mcna.247@gmail.com` / `Mcna@2026` (vai trò: `admin`).
+* **Tài khoản quản trị:** Thông tin đăng nhập chỉ lưu trong kho bí mật; không ghi vào Git.
 * **Tính năng:**
   * Đồng bộ thủ công từ CRM: Tab "Khách đã thanh toán" có nút "Lấy dữ liệu từ CRM" để kéo đơn về xem trước và duyệt.
   * Xếp lớp & Gửi email thông báo lịch học chính thức: Gửi thông tin Zoom, nhóm Zalo, giảng viên phụ trách.
-  * Quản lý tài liệu: Upload trực tiếp file lớn (>50MB) lên private storage Supabase.
+  * Quản lý tài liệu: Upload trực tiếp tệp tối đa 50 MB lên private storage Supabase.
 
 ### 2.3. Tích hợp thanh toán MB Bank & SePay
 * **Tài khoản nhận tiền:** MB Bank `099162438104` (HỌC VIỆN CÔNG NGHỆ MCNA).

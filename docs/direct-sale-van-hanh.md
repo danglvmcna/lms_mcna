@@ -51,7 +51,7 @@ Thêm vào `.env` trên máy chủ rồi **khởi động lại ứng dụng** (
 | Biến | Giá trị | Ghi chú |
 |---|---|---|
 | `SALES_MODE` | `direct` | Mặc định đã là `direct`. Đặt `self_service` để mở lại luồng tự đăng ký cũ. |
-| `DEFAULT_STUDENT_PASSWORD` | tối thiểu 8 ký tự | Điền sẵn vào ô "Mật khẩu mặc định" khi nhập danh sách. Bỏ trống thì Quản lý lớp tự gõ mỗi lần nhập. |
+| `DEFAULT_STUDENT_PASSWORD` | tùy chọn, tối thiểu 8 ký tự | Điền sẵn mật khẩu chung khi nhập danh sách. Nên để trống để LMS tạo mật khẩu tạm thời riêng cho mỗi học viên mới và gửi qua email. |
 | `SUPPORT_PHONE` | `0939.866.825` | In trong email tài khoản, email xếp lớp và trang đăng nhập. |
 | `ALLOW_HOMEWORK_DOWNLOAD` | `false` | `true` thì học viên tải được tệp đính kèm bài tập về nhà. Đang chờ anh Sơn quyết. |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | khóa API Gemini | Dùng cho nút "Soạn bằng AI" của thư chúc mừng. Bỏ trống thì nút này trả về thư mẫu của MCNA. |

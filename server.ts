@@ -167,7 +167,7 @@ import {
 } from "./src/server/services/enrollmentService";
 import { processSepayWebhook } from "./src/server/services/sepayService";
 import { enqueueCrmEvent, enqueueEnrollmentEvent, enqueueCertificateIssuedEvent, enqueueCourseCompletedEvent } from "./src/server/crm/crmOutbox";
-import { verifyCrmSignature } from "./src/server/crm/signature";
+import { verifyBearerSecret, verifyCrmSignature } from "./src/server/crm/signature";
 import { extractYoutubeVideoId, youtubeWatchUrl } from "./src/utils";
 import { eventBus } from "./src/server/eventBus";
 import { registerEventHandlers } from "./src/server/eventHandlers";
@@ -1934,11 +1934,6 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
 // ---- MCNA CRM integration (server-to-server). Contract: docs/crm-integration.md ----
 
 function requireCrmIntegration(req: express.Request, res: express.Response, next: express.NextFunction) {
-  // Allow Supabase Database Webhook payloads (e.g. from revenue_records INSERT/UPDATE)
-  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
-    return next();
-  }
-
   const apiKey = process.env.CRM_API_KEY;
   const secret = process.env.CRM_INBOUND_SECRET;
   if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
@@ -1961,6 +1956,16 @@ function requireCrmIntegration(req: express.Request, res: express.Response, next
     Number.isFinite(configuredTolerance) && configuredTolerance > 0 ? configuredTolerance : 300
   );
   if (signatureFailure) return res.status(signatureFailure.status).json({ error: signatureFailure.error });
+  next();
+}
+
+function requireSupabaseRevenueWebhook(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const secret = process.env.SUPABASE_REVENUE_WEBHOOK_SECRET?.trim();
+  if (!secret) return res.status(503).json({ error: "Supabase revenue webhook is not configured." });
+
+  if (!verifyBearerSecret(secret, req.header("Authorization"))) {
+    return res.status(401).json({ error: "Invalid Supabase webhook secret." });
+  }
   next();
 }
 
@@ -2150,7 +2155,7 @@ async function handleSupabaseRevenueWebhook(req: express.Request, res: express.R
     dryRun: false,
     actorId: "supabase-webhook",
     actorName: "Supabase Webhook",
-    defaultPassword: getDefaultStudentPassword() || "Mcna@2026"
+    defaultPassword: getDefaultStudentPassword() || undefined
   });
 
   return res.json({
@@ -2162,16 +2167,11 @@ async function handleSupabaseRevenueWebhook(req: express.Request, res: express.R
 }
 
 // Dedicated endpoint for Supabase Database Webhook (revenue_records INSERT or UPDATE)
-app.post("/api/integrations/supabase/revenue-webhook", rateLimitCrmIntegration, asyncHandler(async (req, res) => {
+app.post("/api/integrations/supabase/revenue-webhook", rateLimitCrmIntegration, requireSupabaseRevenueWebhook, asyncHandler(async (req, res) => {
   return handleSupabaseRevenueWebhook(req, res);
 }));
 
 app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requireCrmIntegration, asyncHandler(async (req, res) => {
-  // If the payload is from a Supabase Database Webhook, delegate directly
-  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
-    return handleSupabaseRevenueWebhook(req, res);
-  }
-
   const parsed = schemas.crmConfirmPayment.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid payment confirmation payload.", details: parsed.error.issues });
@@ -2251,7 +2251,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
         await sendStudentAccountEmail({
           to: studentUser.email,
           name: studentUser.name || "Học viên",
-          password: studentUser.must_change_password ? getDefaultStudentPassword() : null,
+          password: null,
           courseTitles: [courseRow.title],
           courseSchedules: schedules,
           supportPhone: getSupportPhone()

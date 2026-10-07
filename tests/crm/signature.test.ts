@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { signCrmPayload, verifyCrmSignature } from "../../src/server/crm/signature";
+import { signCrmPayload, verifyBearerSecret, verifyCrmSignature } from "../../src/server/crm/signature";
+
+describe("Supabase webhook bearer secret", () => {
+  const secret = "test-only-revenue-webhook-secret";
+
+  it("accepts only the configured Bearer token", () => {
+    expect(verifyBearerSecret(secret, `Bearer ${secret}`)).toBe(true);
+    expect(verifyBearerSecret(secret, undefined)).toBe(false);
+    expect(verifyBearerSecret(secret, "")).toBe(false);
+    expect(verifyBearerSecret(secret, "Bearer wrong-secret")).toBe(false);
+    expect(verifyBearerSecret(secret, secret)).toBe(false);
+  });
+});
 
 describe("CRM HMAC Signature (signature.ts)", () => {
   const secret = "test_crm_webhook_secret_key_12345";

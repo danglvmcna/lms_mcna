@@ -6,7 +6,7 @@ import { ZipArchive } from "archiver";
 import ExcelJS2 from "exceljs";
 import fs5 from "fs";
 import os3 from "os";
-import crypto7 from "crypto";
+import crypto8 from "crypto";
 import dotenv2 from "dotenv";
 
 // src/utils.ts
@@ -1382,7 +1382,7 @@ var schemas = {
       note: z.string().trim().max(300).optional(),
       crmRef: z.string().trim().max(80).optional()
     })).min(1).max(500),
-    defaultPassword: z.string().min(8).max(100).optional(),
+    defaultPassword: z.string().min(8).max(100).refine((value) => value !== "Mcna@2026", "M\u1EADt kh\u1EA9u n\xE0y \u0111\xE3 b\u1ECB l\u1ED9; h\xE3y d\xF9ng m\u1EADt kh\u1EA9u kh\xE1c ho\u1EB7c \u0111\u1EC3 tr\u1ED1ng.").optional(),
     sendAccountEmail: z.boolean().default(true),
     dryRun: z.boolean().default(false)
   }),
@@ -3138,7 +3138,7 @@ var isDirectSale = () => getSalesMode() === "direct";
 var getSupportPhone = () => (process.env.SUPPORT_PHONE || "").trim() || DEFAULT_SUPPORT_PHONE;
 function getDefaultStudentPassword() {
   const value = (process.env.DEFAULT_STUDENT_PASSWORD || "").trim();
-  return value.length >= 8 ? value : "Mcna@2026";
+  return value.length >= 8 && value !== "Mcna@2026" ? value : "";
 }
 var allowHomeworkDownload = () => (process.env.ALLOW_HOMEWORK_DOWNLOAD || "").trim().toLowerCase() === "true";
 function getPublicAppConfig() {
@@ -5546,6 +5546,14 @@ import crypto3 from "crypto";
 function signCrmPayload(secret, timestamp, body2) {
   return crypto3.createHmac("sha256", secret).update(`${timestamp}.${body2}`).digest("hex");
 }
+function verifyBearerSecret(configuredSecret, authorizationHeader) {
+  const provided = authorizationHeader?.startsWith("Bearer ") ? authorizationHeader.slice("Bearer ".length) : "";
+  if (!provided) return false;
+  return crypto3.timingSafeEqual(
+    crypto3.createHash("sha256").update(provided).digest(),
+    crypto3.createHash("sha256").update(configuredSecret).digest()
+  );
+}
 function verifyCrmSignature(secret, timestampHeader, signatureHeader, rawBody, toleranceSeconds) {
   if (!timestampHeader || !signatureHeader) {
     return { status: 401, error: "Missing timestamp or signature header." };
@@ -6809,6 +6817,9 @@ async function lookupCourseSchedules(db, courseIdsOrTitles) {
   }));
 }
 
+// src/server/services/paidEnrollmentImport.ts
+import crypto6 from "crypto";
+
 // src/paidImport.ts
 function normalizeText(value) {
   return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -7183,12 +7194,11 @@ async function importPaidEnrollments(input) {
     try {
       let studentId = plan.existingUser?.id;
       if (!studentId) {
-        const password = String(input.defaultPassword || "").trim() || "Mcna@2026";
-        if (password.length < 8) throw new Error("Ch\u01B0a c\xF3 m\u1EADt kh\u1EA9u m\u1EB7c \u0111\u1ECBnh (t\u1ED1i thi\u1EC3u 8 k\xFD t\u1EF1) \u0111\u1EC3 t\u1EA1o t\xE0i kho\u1EA3n.");
+        const password = String(input.defaultPassword || "").trim() || `Lms-${crypto6.randomBytes(12).toString("base64url")}-1`;
         const user = await createStudentAccount(plan.input, password);
         studentId = user.id;
         summary.accountsCreated++;
-        notifiedAccounts.set(user.email, { user, isNew: true, courseTitles: [], rows: [] });
+        notifiedAccounts.set(user.email, { user, isNew: true, temporaryPassword: password, courseTitles: [], rows: [] });
       } else {
         result.accountCreated = false;
         if (plan.input.phone && !plan.existingUser?.phone) {
@@ -7242,7 +7252,7 @@ async function importPaidEnrollments(input) {
       const status = await sendStudentAccountEmail({
         to: account.user.email,
         name: account.user.name,
-        password: account.isNew || account.user.must_change_password ? String(input.defaultPassword) : null,
+        password: account.isNew ? account.temporaryPassword || null : null,
         courseTitles,
         courseSchedules,
         supportPhone: getSupportPhone()
@@ -7552,7 +7562,7 @@ async function uploadAccess(db, user, filename, viewer) {
 import { z as z2 } from "zod";
 
 // src/server/services/teacherAssignmentNotice.ts
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 async function sendTeacherAssignmentNotice(sectionId, force = false) {
   const db = await pool.connect();
   let row, noticeKey = "";
@@ -7564,7 +7574,7 @@ async function sendTeacherAssignmentNotice(sectionId, force = false) {
       await db.query("ROLLBACK");
       return { status: "skipped" };
     }
-    noticeKey = crypto6.createHash("sha256").update(JSON.stringify([row.teacher_id, row.section_code, row.opening_date, parseSchedule(row), row.group_chat_url, row.meeting_url])).digest("hex");
+    noticeKey = crypto7.createHash("sha256").update(JSON.stringify([row.teacher_id, row.section_code, row.opening_date, parseSchedule(row), row.group_chat_url, row.meeting_url])).digest("hex");
     if (!force && row.assignment_notice_key === noticeKey) {
       await db.query("ROLLBACK");
       return { status: row.assignment_email_status };
@@ -8166,7 +8176,7 @@ var PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET;
 var PAYMENT_WEBHOOK_SECRET_VALUE = PAYMENT_WEBHOOK_SECRET;
 if (!PAYMENT_WEBHOOK_SECRET) {
   if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") {
-    PAYMENT_WEBHOOK_SECRET_VALUE = crypto7.randomBytes(32).toString("hex");
+    PAYMENT_WEBHOOK_SECRET_VALUE = crypto8.randomBytes(32).toString("hex");
     console.warn("WARNING: PAYMENT_WEBHOOK_SECRET environment variable is not set. Using a secure random value generated at runtime; payment webhooks will be rejected.");
   } else {
     PAYMENT_WEBHOOK_SECRET_VALUE = "dev-only-payment-webhook-secret-do-not-use-in-prod";
@@ -8302,7 +8312,7 @@ async function createUserAccount(db, input, password) {
   return usersRepository.create(db, user);
 }
 function generateTemporaryPassword() {
-  return `Lms-${crypto7.randomBytes(8).toString("base64url")}-1`;
+  return `Lms-${crypto8.randomBytes(8).toString("base64url")}-1`;
 }
 async function createStudentWithTemporaryPassword(input, source, loginUrl) {
   const temporaryPassword = source === "crm" && isDirectSale() ? getDefaultStudentPassword() || generateTemporaryPassword() : generateTemporaryPassword();
@@ -8353,10 +8363,10 @@ async function createStudentWithTemporaryPassword(input, source, loginUrl) {
   return { user, temporaryPassword };
 }
 function sha256Hex2(input) {
-  return crypto7.createHash("sha256").update(input).digest("hex");
+  return crypto8.createHash("sha256").update(input).digest("hex");
 }
 function generatePasswordResetToken() {
-  return crypto7.randomBytes(32).toString("base64url");
+  return crypto8.randomBytes(32).toString("base64url");
 }
 function lmsBaseUrl(req) {
   return (process.env.LMS_LOGIN_URL || `${req.protocol}://${req.get("host") || "localhost:3000"}`).replace(/\/$/, "");
@@ -8424,7 +8434,7 @@ function signToken(user) {
     exp: Math.floor(Date.now() / 1e3) + 60 * 60 * 8
   }));
   const unsigned = `${header}.${payload}`;
-  const signature = crypto7.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
+  const signature = crypto8.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
   return `${unsigned}.${signature}`;
 }
 async function verifyToken(token) {
@@ -8432,11 +8442,11 @@ async function verifyToken(token) {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expected = crypto7.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
+  const expected = crypto8.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
   const sigBuffer = Buffer.from(signature, "base64url");
   const expBuffer = Buffer.from(expected, "base64url");
   if (sigBuffer.byteLength !== expBuffer.byteLength) return null;
-  if (!crypto7.timingSafeEqual(sigBuffer, expBuffer)) return null;
+  if (!crypto8.timingSafeEqual(sigBuffer, expBuffer)) return null;
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1e3)) return null;
   return parsed;
@@ -8632,7 +8642,7 @@ function certificateFromRow(row) {
 }
 async function generateCertificateCode(db) {
   for (let attempt = 0; attempt < 8; attempt++) {
-    const raw = crypto7.randomBytes(4).toString("hex").toUpperCase();
+    const raw = crypto8.randomBytes(4).toString("hex").toUpperCase();
     const code = `MCNA-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
     const existing = await db.query("SELECT 1 FROM certificates WHERE certificate_code = $1", [code]);
     if (existing.rowCount === 0) return code;
@@ -9188,7 +9198,7 @@ function requireInternalJobSecret(req, res, next) {
   const supplied = req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.get("x-cron-secret");
   const suppliedBuffer = Buffer.from(supplied || "");
   const configuredBuffer = Buffer.from(configured || "");
-  const matches = suppliedBuffer.length === configuredBuffer.length && crypto7.timingSafeEqual(suppliedBuffer, configuredBuffer);
+  const matches = suppliedBuffer.length === configuredBuffer.length && crypto8.timingSafeEqual(suppliedBuffer, configuredBuffer);
   if (!configured || !supplied || !matches) {
     return res.status(configured ? 401 : 503).json({ error: configured ? "Unauthorized cron request." : "CRON_SECRET is not configured." });
   }
@@ -9242,7 +9252,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
       createdAt: userItem.createdAt
     };
     setAuthCookie(res, signToken(user2));
-    const csrfToken2 = crypto7.randomBytes(24).toString("base64url");
+    const csrfToken2 = crypto8.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken2);
     return res.json({ user: user2, csrfToken: csrfToken2 });
   }
@@ -9264,7 +9274,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
   }
   const user = toPublicUser(row);
   setAuthCookie(res, signToken(user));
-  const csrfToken = crypto7.randomBytes(24).toString("base64url");
+  const csrfToken = crypto8.randomBytes(24).toString("base64url");
   setCsrfCookie(res, csrfToken);
   await auditRepository.log(pool, user.id, "authentication_login", "security", `Authenticated role ${user.role}.`);
   res.json({ user, csrfToken });
@@ -9357,7 +9367,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   const cookieToken = extractCookie(req, "mcna_lms_csrf") || extractCookie(req, "e16_lms_csrf");
   let csrfToken = cookieToken;
   if (!csrfToken) {
-    csrfToken = crypto7.randomBytes(24).toString("base64url");
+    csrfToken = crypto8.randomBytes(24).toString("base64url");
     setCsrfCookie(res, csrfToken);
   }
   res.json({
@@ -9623,17 +9633,14 @@ app.get("/api/public/courses/:id", rateLimitPublicCatalog, asyncHandler(async (r
   });
 }));
 function requireCrmIntegration(req, res, next) {
-  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
-    return next();
-  }
   const apiKey = process.env.CRM_API_KEY;
   const secret = process.env.CRM_INBOUND_SECRET;
   if (!apiKey || !secret) return res.status(503).json({ error: "CRM integration is not configured." });
   const authorization = req.header("Authorization") || "";
   const provided = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
-  const keyMatches = crypto7.timingSafeEqual(
-    crypto7.createHash("sha256").update(provided).digest(),
-    crypto7.createHash("sha256").update(apiKey).digest()
+  const keyMatches = crypto8.timingSafeEqual(
+    crypto8.createHash("sha256").update(provided).digest(),
+    crypto8.createHash("sha256").update(apiKey).digest()
   );
   if (!provided || !keyMatches) return res.status(401).json({ error: "Invalid CRM API key." });
   const configuredTolerance = Number(process.env.CRM_SIGNATURE_TOLERANCE_SECONDS || 300);
@@ -9645,6 +9652,14 @@ function requireCrmIntegration(req, res, next) {
     Number.isFinite(configuredTolerance) && configuredTolerance > 0 ? configuredTolerance : 300
   );
   if (signatureFailure) return res.status(signatureFailure.status).json({ error: signatureFailure.error });
+  next();
+}
+function requireSupabaseRevenueWebhook(req, res, next) {
+  const secret = process.env.SUPABASE_REVENUE_WEBHOOK_SECRET?.trim();
+  if (!secret) return res.status(503).json({ error: "Supabase revenue webhook is not configured." });
+  if (!verifyBearerSecret(secret, req.header("Authorization"))) {
+    return res.status(401).json({ error: "Invalid Supabase webhook secret." });
+  }
   next();
 }
 async function runIdempotentCrmCall(req, res, type, handler2) {
@@ -9806,7 +9821,7 @@ async function handleSupabaseRevenueWebhook(req, res) {
     dryRun: false,
     actorId: "supabase-webhook",
     actorName: "Supabase Webhook",
-    defaultPassword: getDefaultStudentPassword() || "Mcna@2026"
+    defaultPassword: getDefaultStudentPassword() || void 0
   });
   return res.json({
     success: true,
@@ -9815,13 +9830,10 @@ async function handleSupabaseRevenueWebhook(req, res) {
     results: result.results
   });
 }
-app.post("/api/integrations/supabase/revenue-webhook", rateLimitCrmIntegration, asyncHandler(async (req, res) => {
+app.post("/api/integrations/supabase/revenue-webhook", rateLimitCrmIntegration, requireSupabaseRevenueWebhook, asyncHandler(async (req, res) => {
   return handleSupabaseRevenueWebhook(req, res);
 }));
 app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requireCrmIntegration, asyncHandler(async (req, res) => {
-  if (req.body?.table === "revenue_records" || req.body?.record?.courseSold || req.body?.record?.customerEmail) {
-    return handleSupabaseRevenueWebhook(req, res);
-  }
   const parsed = schemas.crmConfirmPayment.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid payment confirmation payload.", details: parsed.error.issues });
@@ -9890,7 +9902,7 @@ app.post("/api/integrations/crm/payments/confirm", rateLimitCrmIntegration, requ
         await sendStudentAccountEmail({
           to: studentUser.email,
           name: studentUser.name || "H\u1ECDc vi\xEAn",
-          password: studentUser.must_change_password ? getDefaultStudentPassword() : null,
+          password: null,
           courseTitles: [courseRow.title],
           courseSchedules: schedules,
           supportPhone: getSupportPhone()
@@ -11868,11 +11880,11 @@ var paymentWebhookHandler = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Missing webhook signature header." });
   }
   const payload = req.rawBody || JSON.stringify(req.body);
-  const expectedSignature = crypto7.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
+  const expectedSignature = crypto8.createHmac("sha256", PAYMENT_WEBHOOK_SECRET_VALUE).update(payload).digest("hex");
   const receivedSignature = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
   const sigBuffer = Buffer.from(receivedSignature, "utf8");
   const expBuffer = Buffer.from(expectedSignature, "utf8");
-  if (sigBuffer.length !== expBuffer.length || !crypto7.timingSafeEqual(sigBuffer, expBuffer)) {
+  if (sigBuffer.length !== expBuffer.length || !crypto8.timingSafeEqual(sigBuffer, expBuffer)) {
     return res.status(401).json({ error: "Invalid webhook signature." });
   }
   const { eventId, timestamp, transactionId, status, notes } = req.body;
@@ -11977,7 +11989,7 @@ var sepayWebhookHandler = asyncHandler(async (req, res) => {
   const token = match?.[2]?.trim() || "";
   const supplied = Buffer.from(token);
   const expected = Buffer.from(expectedApiKey);
-  if (!token || supplied.length !== expected.length || !crypto7.timingSafeEqual(supplied, expected)) {
+  if (!token || supplied.length !== expected.length || !crypto8.timingSafeEqual(supplied, expected)) {
     return res.status(401).json({ success: false, error: "Invalid or missing SePay API key." });
   }
   const rawPayload = req.rawBody || JSON.stringify(req.body);

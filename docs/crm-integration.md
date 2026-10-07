@@ -23,11 +23,18 @@ Biến môi trường phía LMS:
 | `CRM_WEBHOOK_SECRET` | Có (chiều LMS → CRM) | Khóa bí mật LMS dùng ký webhook. CRM dùng cùng khóa để kiểm chữ ký. |
 | `CRM_API_KEY` | Có (chiều CRM → LMS) | API key CRM gửi trong header `Authorization`. |
 | `CRM_INBOUND_SECRET` | Có (chiều CRM → LMS) | Khóa bí mật CRM dùng ký request gọi vào LMS. |
+| `SUPABASE_REVENUE_WEBHOOK_SECRET` | Có nếu dùng Supabase Database Webhook | Khóa riêng cho webhook doanh thu; Supabase gửi `Authorization: Bearer <khóa>`. |
 | `CRM_SIGNATURE_TOLERANCE_SECONDS` | Không | Độ lệch thời gian cho phép, mặc định `300` giây. |
 | `CRON_SECRET` | Có khi dùng Vercel Cron | Secret cho các job `/api/internal/jobs/*` (outbox CRM và cảnh báo chuyên cần). |
 | `ATTENDANCE_QR_SECRET` | Khuyến nghị | Khóa HMAC riêng để ký QR động; nếu bỏ trống hệ thống dùng `JWT_SECRET`. |
 
 Chưa đặt `CRM_API_KEY` hoặc `CRM_INBOUND_SECRET` thì mọi endpoint `/api/integrations/crm/*` trả `503`.
+
+### Webhook doanh thu từ Supabase
+
+`POST /api/integrations/supabase/revenue-webhook` chỉ nhận request có header `Authorization: Bearer <SUPABASE_REVENUE_WEBHOOK_SECRET>`. Nếu chưa cấu hình khóa trên LMS, endpoint trả `503`; nếu thiếu hoặc sai header, trả `401`. Nội dung JSON tự khai là `revenue_records` không thay thế xác thực. Endpoint `/api/integrations/crm/payments/confirm` luôn yêu cầu API key và chữ ký HMAC CRM, kể cả khi body giống payload Supabase.
+
+Trước khi triển khai phiên bản này, tạo khóa ngẫu nhiên riêng, đặt cùng giá trị vào biến môi trường của LMS và header `Authorization` trong cấu hình Database Webhook của Supabase, rồi gửi một bản ghi thử từ môi trường kiểm thử. Không lưu giá trị khóa trong Git. Khởi động lại tiến trình LMS với biến môi trường mới sau khi build trên máy local và chuyển `dist/` lên VPS.
 
 ## 2. Cách ký (dùng chung hai chiều)
 

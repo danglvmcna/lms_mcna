@@ -13,10 +13,11 @@ export const isDirectSale = () => getSalesMode() === "direct";
 
 export const getSupportPhone = () => (process.env.SUPPORT_PHONE || "").trim() || DEFAULT_SUPPORT_PHONE;
 
-/** Password given to accounts created from the paid list; empty when none is configured. */
+/** Optional password for staff-managed imports; empty when none is configured. */
 export function getDefaultStudentPassword() {
   const value = (process.env.DEFAULT_STUDENT_PASSWORD || "").trim();
-  return value.length >= 8 ? value : "Mcna@2026";
+  // This former default appeared in the public repository and must never be assigned to new accounts.
+  return value.length >= 8 && value !== "Mcna@2026" ? value : "";
 }
 
 export const allowHomeworkDownload = () => (process.env.ALLOW_HOMEWORK_DOWNLOAD || "").trim().toLowerCase() === "true";
