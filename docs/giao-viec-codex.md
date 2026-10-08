@@ -9,10 +9,9 @@
 ## 1. Tổng quan Kiến trúc & Hạ tầng Production
 
 ### 1.1. Máy chủ Production (VPS)
-* **IP Server:** `103.57.220.141`
-* **SSH Port:** `24700`
-* **User:** `root`
-* **Mật khẩu SSH:** `yvAo&I1W@LO(jLue9Gl3`
+* **IP Server:** (lưu trong kho mật khẩu của MCNA, không ghi vào repo)
+* **SSH Port:** (lưu trong kho mật khẩu của MCNA, không ghi vào repo)
+* **User SSH:** tài khoản riêng của người được giao, đăng nhập bằng SSH key (không dùng mật khẩu root)
 * **Đường dẫn ứng dụng:** `/var/www/lms`
 * **Web Server:** Nginx reverse proxy (cổng 80/443, SSL Let's Encrypt) trỏ về `http://127.0.0.1:3002`.
 * **Process Manager:** PM2 (ID tiến trình: `3`, tên: `lms`, lệnh chạy: `node dist/server.cjs`).
@@ -25,9 +24,9 @@
 * **CRM Database (Supabase):** Kết nối qua pooler Supabase (`CRM_DATABASE_URL`).
 
 ### 1.3. Cấu hình Email & Môi trường (`/var/www/lms/.env`)
-* **SMTP:** Đã cấu hình tài khoản chính thức `cskh.mcna.247@gmail.com` qua Gmail SMTP (cổng 465 SSL, App Password: `rrrntrhlsvsmdfkl`).
+* **SMTP:** Đã cấu hình tài khoản chính thức `cskh.mcna.247@gmail.com` qua Gmail SMTP (cổng 465 SSL, App Password: lưu trong kho mật khẩu của MCNA, không ghi vào repo).
 * **Người gửi hiển thị:** `"Học Viện Công Nghệ MCNA" <cskh.mcna.247@gmail.com>`.
-* **Mật khẩu học viên mặc định:** `Mcna@2026`.
+* **Mật khẩu học viên mặc định:** đặt qua biến môi trường trên máy chủ (lưu trong kho mật khẩu của MCNA, không ghi vào repo). Học viên bị buộc đổi mật khẩu ở lần đăng nhập đầu.
 * **LMS Login URL:** `https://lms.mcna.vn`.
 * **Supabase Storage Bucket:** `lms-materials` (chứa tài liệu giảng dạy và bài tập lớn).
 
@@ -44,11 +43,11 @@
   * `AIAUTOMATION` / `AI_AUTO` ➡️ AI Automation
   * `AI cho lãnh đạo` / `AI for Research`
   * `PBI_LV1`, `PBI_LV2`, `PYT_LV1`, `PYT_LV2`, `SQL_LV1`, `SQL_LV2`.
-* **Gửi Email kích hoạt:** Khi đơn hàng thành công, LMS tự động tạo tài khoản và gửi email thông báo kèm link đăng nhập, mật khẩu `Mcna@2026`, lịch học và hotline hỗ trợ.
+* **Gửi Email kích hoạt:** Khi đơn hàng thành công, LMS tự động tạo tài khoản và gửi email thông báo kèm link đăng nhập, mật khẩu mặc định, lịch học và hotline hỗ trợ.
 * **Cơ chế bảo vệ (Role Guard):** LMS ngăn chặn việc ghi danh đè tài khoản của Admin (`role = 'admin'`). Khách hàng từ CRM bắt buộc phải có email khác với các tài khoản quản trị hệ thống.
 
 ### 2.2. Giao diện Quản trị & Quản lý lớp
-* **Tài khoản Admin:** `danglv.mcna.247@gmail.com` / `Mcna@2026` (vai trò: `admin`).
+* **Tài khoản Admin:** `danglv.mcna.247@gmail.com` (mật khẩu lưu trong kho mật khẩu của MCNA, không ghi vào repo) (vai trò: `admin`).
 * **Tính năng:**
   * Đồng bộ thủ công từ CRM: Tab "Khách đã thanh toán" có nút "Lấy dữ liệu từ CRM" để kéo đơn về xem trước và duyệt.
   * Xếp lớp & Gửi email thông báo lịch học chính thức: Gửi thông tin Zoom, nhóm Zalo, giảng viên phụ trách.
