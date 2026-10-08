@@ -843,8 +843,10 @@ export default function CourseBuilder(props: ComponentProps) {
         {activeSubTab === "courses" && !selectedCourseId && (
           <div className="space-y-6">
             <PageHeader
-              title="Khóa học của tôi"
-              subtitle={myCourses.length ? `${myCourses.length} khóa học bạn phụ trách. Chọn một khóa để quản lý buổi học, tài liệu và lớp.` : undefined}
+              title={contentOnly ? "Nội dung lớp học" : "Khóa học của tôi"}
+              subtitle={contentOnly
+                ? "Chọn khóa học, rồi chọn lớp và buổi học để tải slide, file data và giao bài tập. Tài liệu mở đầu đặt ở cấp khóa học."
+                : myCourses.length ? `${myCourses.length} khóa học bạn phụ trách. Chọn một khóa để quản lý buổi học, tài liệu và lớp.` : undefined}
               actions={
                 <>
                   <SearchField value={courseSearch} onChange={setCourseSearch} placeholder="Tìm khóa học…" className="w-full sm:w-64" />

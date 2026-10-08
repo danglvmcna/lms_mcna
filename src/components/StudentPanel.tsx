@@ -9,7 +9,7 @@ import PaymentQrModal from "./student/PaymentQrModal";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
 import { AppStore } from "../store";
-import { useToast } from "./ui";
+import { PageHeader, useToast } from "./ui";
 import { StudentTab, StudentViewProps } from "./student/types";
 import { supportsVietQr } from "./student/learning";
 import { useAppConfig } from "../appConfig";
@@ -189,7 +189,12 @@ export default function StudentPanel({ currentUser, onRefreshData, activeSubTab,
         />
       )}
       {tab === "orders" && !isDirectSale && <StudentOrders {...view} />}
-      {tab === "extras" && <StudentExtras />}
+      {tab === "extras" && (
+        <div className="space-y-6">
+          <PageHeader title="Chứng chỉ & Ưu đãi" subtitle="Chứng chỉ của các khóa bạn đã học xong, ưu đãi cho khóa tiếp theo và yêu cầu tư vấn." />
+          <StudentExtras />
+        </div>
+      )}
       {tab === "notifications" && <NotificationInbox store={store} currentUser={currentUser} onRefreshData={onRefreshData} title="Thông báo" />}
 
       {paymentGuideTx && !isDirectSale && (

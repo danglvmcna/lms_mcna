@@ -542,8 +542,18 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
       )}
 
       {activeSubTab === "placement" && <ClassPlacementManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />}
-      {activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />}
-      {activeSubTab === "sales" && (isSystemAdmin || currentUser.canManageSales) && <SalesWorkspace store={store} onChanged={onRefreshData} />}
+      {activeSubTab === "operations" && (
+        <div className="space-y-6">
+          <PageHeader title="Vận hành lớp học" subtitle="Điểm danh, chấm bài, giáo án, giờ dạy, giảng viên và chứng chỉ của từng lớp." />
+          <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />
+        </div>
+      )}
+      {activeSubTab === "sales" && (isSystemAdmin || currentUser.canManageSales) && (
+        <div className="space-y-6">
+          <PageHeader title="Tư vấn & Ưu đãi" subtitle="Yêu cầu tư vấn của học viên, voucher và thông báo, gợi ý khóa tiếp theo và đơn upsell." />
+          <SalesWorkspace store={store} onChanged={onRefreshData} />
+        </div>
+      )}
       {activeSubTab === "content" && <React.Suspense fallback={<Spinner />}><ClassContentManager currentUser={currentUser} onLogout={() => {}} onRefreshData={onRefreshData} embedded activeSubTab={contentTab} setActiveSubTab={setContentTab} navNonce={0} /></React.Suspense>}
       {activeSubTab === "orders" && isSystemAdmin && !isDirectSale && (
         <AdminOrdersManager store={store} currentUser={currentUser} onRefreshData={onRefreshData} triggerToast={triggerToast} />
@@ -598,16 +608,19 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
           />
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <Segmented<StaffRole>
-              value={userDirTab}
-              onChange={value => { setUserDirTab(value); setUserPage(1); }}
-              options={[
-                { value: "student", label: "Học viên" },
-                { value: "teacher", label: "Giảng viên" },
-                { value: "manager", label: "Quản lý lớp" },
-                { value: "admin", label: "Quản trị" }
-              ]}
-            />
+            {/* Four roles do not fit a phone row; let the switch scroll instead of widening the page. */}
+            <div className="no-scrollbar -mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+              <Segmented<StaffRole>
+                value={userDirTab}
+                onChange={value => { setUserDirTab(value); setUserPage(1); }}
+                options={[
+                  { value: "student", label: "Học viên" },
+                  { value: "teacher", label: "Giảng viên" },
+                  { value: "manager", label: "Quản lý lớp" },
+                  { value: "admin", label: "Quản trị" }
+                ]}
+              />
+            </div>
             <SearchField value={userSearch} onChange={value => { setUserSearch(value); setUserPage(1); }} placeholder="Tìm theo tên, email…" className="md:w-80" />
           </div>
 
@@ -623,9 +636,9 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                   <Badge tone={usr.isActive ? "success" : "danger"} dot>{usr.isActive ? "Hoạt động" : "Đã khóa"}</Badge>
                 </div>
                 {userDirTab === "student" && <p className="text-sm text-slate-600">{usr.phone || "Chưa có số điện thoại"}</p>}
-                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                  <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label="Vai trò" className="mcna-select !h-9 !w-auto text-sm">
-                    <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                  <select value={usr.role} onChange={event => handleUpdateUserRole(usr.id, event.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label="Vai trò" className="mcna-select !h-9 !w-auto min-w-0 text-sm">
+                    <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="manager">Quản lý lớp</option><option value="admin">Quản trị viên</option>
                   </select>
                   {usr.id !== currentUser.id && (
                     <div className="flex items-center gap-2">
@@ -666,7 +679,7 @@ export default function AdminPanel({ currentUser, onRefreshData, activeSubTab, s
                     )}
                     <td className="mcna-td">
                       <select value={usr.role} onChange={e => handleUpdateUserRole(usr.id, e.target.value as User["role"])} disabled={usr.id === currentUser.id} aria-label={`Vai trò của ${usr.name}`} className="mcna-select !h-9 !w-auto text-sm">
-                        <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="admin">Quản trị viên</option>
+                        <option value="student">Học viên</option><option value="teacher">Giảng viên</option><option value="manager">Quản lý lớp</option><option value="admin">Quản trị viên</option>
                       </select>
                     </td>
                     <td className="mcna-td"><Badge tone={usr.isActive ? "success" : "danger"} dot>{usr.isActive ? "Hoạt động" : "Đã khóa"}</Badge></td>

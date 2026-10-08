@@ -15,7 +15,6 @@ export default function SalesWorkspace({store,onChanged}:{store:LMSDataStore;onC
   const run=async(fn:()=>Promise<any>,success='Đã lưu.')=>{setBusy(true);setMessage('');try{await fn();await load();onChanged();setMessage(success);}catch(e:any){setMessage(e.message);}finally{setBusy(false);}};
   const students=store.users.filter(u=>u.role==='student' && u.isActive),courses=store.courses.filter(c=>c.status==='published');
   return <div className="space-y-5">
-    <h2 className="text-xl font-semibold">Tư vấn & Ưu đãi</h2>
     {message && <p role="status" className="rounded-lg bg-indigo-50 p-3 text-sm text-indigo-800">{message}</p>}
     {!data?<p className="text-sm text-slate-500">Chức năng dành cho admin hoặc Quản lý lớp được cấp quyền tư vấn.</p>:<>
       <nav aria-label="Tư vấn và ưu đãi" className="flex flex-wrap gap-2">{[['leads','Yêu cầu tư vấn'],['vouchers','Voucher & Thông báo'],['recommendations','Gợi ý học tiếp'],['orders','Đơn upsell']].map(([key,label])=><button key={key} className={`px-3 py-2 rounded-lg text-sm ${tab===key?'bg-indigo-50 text-indigo-700':'text-slate-600'}`} onClick={()=>setTab(key)}>{label}</button>)}</nav>

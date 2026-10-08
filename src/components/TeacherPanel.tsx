@@ -34,7 +34,7 @@ import OperationsWorkspace from "./operations/OperationsWorkspace";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
-import { Button, Callout, Spinner, useToast } from "./ui";
+import { Button, Callout, PageHeader, Spinner, useToast } from "./ui";
 
 interface TeacherPanelProps {
   currentUser: User;
@@ -567,15 +567,8 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
   };
 
   if (embedded) {
-    return (
-      <div className="space-y-5">
-        <div>
-          <h3 className="text-xl font-bold tracking-tight text-slate-900">Nội dung lớp học</h3>
-          <p className="text-sm text-slate-500 mt-1">Chọn khóa học, rồi chọn lớp và buổi học để tải slide, file data và giao bài tập. Tài liệu mở đầu đặt ở cấp khóa học.</p>
-        </div>
-        <CourseBuilder {...teacherPanelProps} />
-      </div>
-    );
+    // CourseBuilder titles the page "Nội dung lớp học" when embedded (contentOnly).
+    return <CourseBuilder {...teacherPanelProps} />;
   }
 
   return (
@@ -584,7 +577,12 @@ export default function TeacherPanel({ currentUser, onRefreshData, activeSubTab,
       {isError && <Callout tone="danger" title="Không thể tải dữ liệu lớp học." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Thử lại</Button>} />}
 
       <CourseBuilder {...teacherPanelProps} contentOnly={embedded} />
-      {!embedded && activeSubTab === "operations" && <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />}
+      {!embedded && activeSubTab === "operations" && (
+        <div className="space-y-6">
+          <PageHeader title="Vận hành lớp học" subtitle="Điểm danh, chấm bài, giáo án, giờ dạy và bậc giảng viên của các lớp bạn phụ trách." />
+          <OperationsWorkspace store={store} currentUser={currentUser} onChanged={onRefreshData} />
+        </div>
+      )}
 
       {activeSubTab === "notifications" && (
         <NotificationInbox
